@@ -34,9 +34,9 @@ export default function Footer() {
       </div>
       <div className="relative border-t border-white/10">
         <div className="container py-5 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-white/55">
-          <div className="flex items-center gap-2"><MapPin className="size-3.5" /> Srinagar, Jammu & Kashmir, India</div>
-          <div>© {new Date().getFullYear()} Safar Travel Pvt. Ltd. — Crafted in the Valley.</div>
-          <div className="flex items-center gap-2"><Mail className="size-3.5" /> hello@safar.travel</div>
+          <div className="flex items-center gap-2"><MapPin className="size-3.5" /><span>Srinagar, Jammu &amp; Kashmir, India</span></div>
+          <div><span>© 2026 Safar Travel Pvt. Ltd. — Crafted in the Valley.</span></div>
+          <div className="flex items-center gap-2"><Mail className="size-3.5" /><span>hello@safar.travel</span></div>
         </div>
       </div>
     </footer>
