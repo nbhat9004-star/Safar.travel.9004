@@ -2,16 +2,17 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Menu, Search, Globe, User, Heart, Sparkles, X } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 const NAV = [
-  { href: '/explore', label: 'Explore' },
-  { href: '/ai-planner', label: 'AI Planner' },
-  { href: '/wishlist', label: 'Wishlist' },
-  { href: '/about', label: 'About' },
-  { href: '/contact', label: 'Contact' },
+  { href: '/explore?cat=all',         label: 'Stays' },
+  { href: '/explore?cat=experience',  label: 'Experiences' },
+  { href: '/explore?cat=transport',   label: 'Bikes & Cars' },
+  { href: '/explore?cat=tour',        label: 'Tour Guides' },
+  { href: '/ai-planner',              label: 'AI Planner' },
+  { href: '/add-listing',             label: 'Become a Host' },
 ];
 
 export default function Navbar({ transparent = false }) {
@@ -29,61 +30,67 @@ export default function Navbar({ transparent = false }) {
       initial={{ y: -24, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${solid ? 'bg-white/85 backdrop-blur-xl border-b border-border/60 shadow-[0_4px_30px_-12px_rgba(15,20,25,0.18)]' : 'bg-transparent'}`}
+      className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${solid ? 'glass-nav border-b border-border/60 shadow-[0_4px_30px_-12px_rgba(15,20,25,0.18)]' : 'bg-transparent'}`}
     >
       <div className="container flex h-16 lg:h-20 items-center justify-between gap-4">
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="size-9 rounded-xl bg-gradient-emerald grid place-items-center shadow-lg shadow-emerald-900/20">
-            <Sparkles className="size-5 text-white" strokeWidth={2.4} />
+        <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+          <div className="size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-lg shadow-emerald2/25 ring-1 ring-white/20">
+            <MapPin className="size-5 text-gold" strokeWidth={2.4} />
           </div>
           <div className="flex flex-col leading-tight">
-            <span className={`font-display font-bold text-xl ${solid ? 'text-charcoal' : 'text-white'}`}>Safar</span>
-            <span className={`text-[10px] uppercase tracking-[0.18em] -mt-0.5 ${solid ? 'text-muted-foreground' : 'text-white/70'}`}>Kashmir, Reimagined</span>
+            <span className={`font-display font-bold text-xl tracking-tight ${solid ? 'text-charcoal' : 'text-white'}`}>Safar</span>
+            <span className={`text-[10px] uppercase tracking-[0.22em] -mt-0.5 ${solid ? 'text-muted-foreground' : 'text-white/70'}`}>Kashmir · Curated</span>
           </div>
         </Link>
 
-        <nav className="hidden lg:flex items-center gap-1">
+        <nav className="hidden xl:flex items-center gap-0.5">
           {NAV.map((n) => (
             <Link key={n.href} href={n.href}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}>
+              className={`px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}>
               {n.label}
             </Link>
           ))}
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link href="/add-listing" className={`hidden md:inline-flex text-sm font-medium px-4 py-2 rounded-full transition ${solid ? 'text-charcoal hover:bg-secondary' : 'text-white hover:bg-white/10'}`}>Become a Host</Link>
-          <Button asChild size="sm" className="hidden md:inline-flex rounded-full bg-gradient-emerald hover:opacity-95 shadow-lg shadow-emerald-900/20 px-4">
-            <Link href="/dashboard/traveler"><User className="size-4 mr-1.5" /> Account</Link>
+          <Button asChild variant="ghost" size="sm" className={`hidden md:inline-flex rounded-full px-4 h-10 font-medium ${solid ? 'text-charcoal hover:bg-secondary' : 'text-white hover:bg-white/10'}`}>
+            <Link href="/dashboard/traveler">Sign in</Link>
+          </Button>
+          <Button asChild size="sm" className="hidden md:inline-flex rounded-full bg-emerald2 hover:bg-emerald2-deep shadow-lg shadow-emerald2/25 px-5 h-10 font-semibold text-white">
+            <Link href="/dashboard/traveler"><UserPlus className="size-4 mr-1.5" /> Sign up</Link>
           </Button>
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className={`lg:hidden rounded-full ${solid ? '' : 'text-white hover:bg-white/10'}`}>
+              <Button variant="ghost" size="icon" className={`xl:hidden rounded-full ${solid ? '' : 'text-white hover:bg-white/10'}`}>
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[88vw] sm:w-96 p-0">
+            <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background">
               <div className="p-6 border-b">
-                <div className="flex items-center gap-2">
-                  <div className="size-9 rounded-xl bg-gradient-emerald grid place-items-center"><Sparkles className="size-5 text-white" /></div>
+                <div className="flex items-center gap-2.5">
+                  <div className="size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-md"><MapPin className="size-5 text-gold" /></div>
                   <div>
                     <div className="font-display font-bold text-lg">Safar</div>
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Kashmir, Reimagined</div>
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Kashmir · Curated</div>
                   </div>
                 </div>
               </div>
-              <div className="p-3">
+              <div className="p-3 max-h-[calc(100vh-180px)] overflow-y-auto">
                 {NAV.map((n) => (
-                  <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm font-medium">
+                  <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
                     {n.label}
                   </Link>
                 ))}
                 <div className="my-3 h-px bg-border" />
-                <Link href="/add-listing" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm font-medium">Become a Host</Link>
-                <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm font-medium">Host Dashboard</Link>
-                <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm font-medium">Admin</Link>
-                <Button asChild className="w-full mt-3 rounded-full bg-gradient-emerald">
+                <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Host Dashboard</Link>
+                <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Admin</Link>
+              </div>
+              <div className="p-4 border-t flex flex-col gap-2 safe-bottom">
+                <Button asChild variant="outline" className="w-full h-11 rounded-full font-semibold">
                   <Link href="/dashboard/traveler" onClick={() => setOpen(false)}><User className="size-4 mr-2" /> Sign in</Link>
+                </Button>
+                <Button asChild className="w-full h-11 rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold">
+                  <Link href="/dashboard/traveler" onClick={() => setOpen(false)}><UserPlus className="size-4 mr-2" /> Sign up</Link>
                 </Button>
               </div>
             </SheetContent>

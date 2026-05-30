@@ -53,19 +53,19 @@ module.exports = {
           foreground: 'hsl(var(--card-foreground))',
         },
         emerald2: {
-          DEFAULT: '#0E6B5A',
-          deep: '#08453B',
-          glow: '#10B981',
+          DEFAULT: '#0F3D2E',
+          deep: '#0A2C21',
+          glow: '#1A6A50',
         },
         gold: {
-          DEFAULT: '#C9A24B',
-          warm: '#E0B968',
-          deep: '#8C6A1F',
+          DEFAULT: '#D4AF37',
+          warm: '#E5C158',
+          deep: '#9C8024',
         },
         charcoal: {
-          DEFAULT: '#0F1419',
-          soft: '#1A2028',
-          muted: '#3B4452',
+          DEFAULT: '#1A1A1A',
+          soft: '#262626',
+          muted: '#6B7280',
         },
         mountain: {
           DEFAULT: '#2B5275',
@@ -80,9 +80,9 @@ module.exports = {
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-emerald': 'linear-gradient(135deg, #0E6B5A 0%, #08453B 100%)',
-        'gradient-gold': 'linear-gradient(135deg, #E0B968 0%, #C9A24B 60%, #8C6A1F 100%)',
-        'gradient-hero': 'linear-gradient(180deg, rgba(15,20,25,0.1) 0%, rgba(15,20,25,0.55) 50%, rgba(15,20,25,0.95) 100%)',
+        'gradient-emerald': 'linear-gradient(135deg, #0F3D2E 0%, #0A2C21 100%)',
+        'gradient-gold': 'linear-gradient(135deg, #E5C158 0%, #D4AF37 60%, #9C8024 100%)',
+        'gradient-hero': 'linear-gradient(180deg, rgba(15,20,25,0.15) 0%, rgba(15,20,25,0.55) 55%, rgba(15,20,25,0.92) 100%)',
       },
       keyframes: {
         'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },

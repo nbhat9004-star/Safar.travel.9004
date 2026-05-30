@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight } from 'lucide-react';
+import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -35,69 +35,83 @@ function App() {
       <Navbar transparent />
 
       {/* HERO */}
-      <section className="relative h-[100svh] min-h-[640px] w-full overflow-hidden">
-        <img src={IMG.dal1} alt="Kashmir" className="absolute inset-0 size-full object-cover scale-105 animate-[float_8s_ease-in-out_infinite]" />
-        <div className="absolute inset-0 bg-gradient-hero" />
-        <div className="absolute inset-0 bg-gradient-to-r from-charcoal/55 via-transparent to-charcoal/30" />
+      <section className="relative h-[100svh] min-h-[680px] w-full overflow-hidden">
+        <img src={IMG.dal2} alt="Dal Lake, Kashmir" className="absolute inset-0 size-full object-cover scale-[1.04]" />
+        {/* Soft top-to-bottom dark gradient for premium readability */}
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.25),transparent_60%)]" />
 
         <div className="relative h-full container flex flex-col justify-end pb-16 md:pb-24">
           <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, ease: 'easeOut' }}
             className="max-w-3xl text-white">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-xs uppercase tracking-[0.18em] font-medium">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold">
               <Sparkles className="size-3.5 text-gold" /> Curated by locals · Trusted by travelers
             </div>
-            <h1 className="font-display font-bold mt-5 text-5xl md:text-7xl lg:text-8xl leading-[0.95] text-balance">
-              Experience <span className="gradient-text-gold">Kashmir</span><br/> Like a Local.
+            <h1 className="font-display font-bold mt-6 text-[clamp(2.6rem,6.4vw,5.6rem)] leading-[1.02] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
+              Experience Kashmir<br/>Like a Local.
             </h1>
-            <p className="mt-5 text-lg md:text-xl text-white/80 max-w-2xl text-balance">
-              Book authentic stays, local experiences, transport and AI-powered travel planning — all in one immersive marketplace.
+            <p className="mt-5 text-lg md:text-xl text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
+              Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg" className="rounded-full bg-white text-charcoal hover:bg-white/90 shadow-xl px-7 h-12 font-semibold">
+              <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-7 h-14 font-semibold text-base">
                 <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
               </Button>
-              <Button asChild size="lg" className="rounded-full bg-gradient-emerald hover:opacity-95 shadow-xl px-7 h-12 font-semibold text-white">
-                <Link href="/ai-planner"><Wand2 className="mr-2 size-4" /> Plan My Trip with AI</Link>
+              <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg hover:-translate-y-0.5 transition-all px-7 h-14 font-semibold text-base">
+                <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
               </Button>
             </div>
           </motion.div>
 
           {/* Search Card */}
           <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, delay: 0.3 }}
-            className="mt-10 md:mt-14 glass rounded-3xl shadow-2xl p-3 md:p-2.5 flex flex-col md:flex-row items-stretch md:items-center gap-2 max-w-4xl">
+            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 md:p-2.5 flex flex-col md:flex-row items-stretch md:items-center gap-2 max-w-4xl">
             <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <MapPin className="size-5 text-emerald2" />
+              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center"><MapPin className="size-4 text-emerald2" /></div>
               <div>
                 <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Where</div>
                 <div className="text-sm text-charcoal/70">Srinagar, Gulmarg, Pahalgam...</div>
               </div>
             </div>
-            <div className="hidden md:block h-9 w-px bg-border" />
+            <div className="hidden md:block h-10 w-px bg-border/80" />
             <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <CalendarRange className="size-5 text-emerald2" />
+              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center"><CalendarRange className="size-4 text-emerald2" /></div>
               <div>
                 <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">When</div>
                 <div className="text-sm text-charcoal/70">Add dates</div>
               </div>
             </div>
-            <div className="hidden md:block h-9 w-px bg-border" />
+            <div className="hidden md:block h-10 w-px bg-border/80" />
             <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <Users className="size-5 text-emerald2" />
+              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center"><Users className="size-4 text-emerald2" /></div>
               <div>
                 <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Guests</div>
                 <div className="text-sm text-charcoal/70">2 adults</div>
               </div>
             </div>
-            <Button asChild size="lg" className="rounded-2xl bg-gradient-emerald hover:opacity-95 h-14 px-7 font-semibold">
+            <Button asChild size="lg" className="rounded-2xl bg-emerald2 hover:bg-emerald2-deep h-14 px-7 font-semibold shadow-lg shadow-emerald2/30">
               <Link href="/explore"><Search className="size-5 md:mr-2" /> <span className="hidden md:inline">Search</span></Link>
             </Button>
           </motion.div>
 
-          <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 text-white/85 text-sm">
-            <div className="flex items-center gap-2"><ShieldCheck className="size-4 text-gold" /> Verified hosts & secure payments</div>
-            <div className="flex items-center gap-2"><BadgeCheck className="size-4 text-gold" /> Free cancellation up to 48h</div>
-            <div className="flex items-center gap-2"><Star className="size-4 text-gold fill-gold" /> 4.92 average rating</div>
-          </div>
+          {/* Trust strip */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.6 }}
+            className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-white/90 text-[13px]">
+            {[
+              {t:'Verified Hosts'},
+              {t:'Secure Payments'},
+              {t:'Free Cancellation'},
+              {t:'Local Support'},
+              {t:'Real Reviews'},
+            ].map((tr) => (
+              <div key={tr.t} className="flex items-center gap-2">
+                <div className="size-5 rounded-full bg-gold/20 ring-1 ring-gold/50 grid place-items-center backdrop-blur-sm">
+                  <Check className="size-3 text-gold" strokeWidth={3} />
+                </div>
+                <span className="font-medium drop-shadow">{tr.t}</span>
+              </div>
+            ))}
+          </motion.div>
         </div>
       </section>
 

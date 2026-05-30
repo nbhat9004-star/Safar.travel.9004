@@ -4,25 +4,25 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 210 30% 8%;
+    --background: 72 21% 96%;
+    --foreground: 0 0% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 210 30% 8%;
+    --card-foreground: 0 0% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 30% 8%;
-    --primary: 165 77% 23%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 160 61% 15%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 210 30% 12%;
-    --muted: 210 16% 95%;
-    --muted-foreground: 215 16% 42%;
-    --accent: 41 53% 54%;
-    --accent-foreground: 210 30% 8%;
+    --secondary: 72 14% 93%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 72 14% 93%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 46 65% 52%;
+    --accent-foreground: 0 0% 10%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 165 77% 23%;
+    --border: 72 10% 87%;
+    --input: 72 10% 87%;
+    --ring: 160 61% 15%;
     --radius: 1rem;
   }
   .dark {
@@ -52,16 +52,19 @@
 }
 
 @layer utilities {
-  .glass { background: rgba(255,255,255,0.65); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,0.5); }
-  .glass-dark { background: rgba(15,20,25,0.55); backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%); border: 1px solid rgba(255,255,255,0.10); }
+  .glass { background: rgba(255,255,255,0.72); backdrop-filter: blur(28px) saturate(200%); -webkit-backdrop-filter: blur(28px) saturate(200%); border: 1px solid rgba(255,255,255,0.55); }
+  .glass-dark { background: rgba(15,20,25,0.45); backdrop-filter: blur(28px) saturate(180%); -webkit-backdrop-filter: blur(28px) saturate(180%); border: 1px solid rgba(255,255,255,0.14); }
+  .glass-nav { background: rgba(246,247,243,0.78); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); }
   .text-balance { text-wrap: balance; }
-  .gradient-text-gold { background: linear-gradient(135deg,#E0B968 0%,#C9A24B 60%,#8C6A1F 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .gradient-text-emerald { background: linear-gradient(135deg,#10B981 0%,#0E6B5A 60%,#08453B 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .gradient-text-gold { background: linear-gradient(135deg,#E5C158 0%,#D4AF37 60%,#9C8024 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .gradient-text-emerald { background: linear-gradient(135deg,#1A6A50 0%,#0F3D2E 60%,#0A2C21 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .scroll-hide::-webkit-scrollbar { display: none; }
   .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
   .mask-fade-r { mask-image: linear-gradient(to right, black 80%, transparent 100%); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-right { padding-right: env(safe-area-inset-right); }
 }
 
 .aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.aurora::before { content:''; position:absolute; width:60vw; height:60vw; left:-10vw; top:-20vw; background: radial-gradient(closest-side, rgba(16,185,129,0.18), transparent 70%); filter: blur(40px); }
-.aurora::after { content:''; position:absolute; width:50vw; height:50vw; right:-10vw; bottom:-20vw; background: radial-gradient(closest-side, rgba(201,162,75,0.22), transparent 70%); filter: blur(40px); }
+.aurora::before { content:''; position:absolute; width:60vw; height:60vw; left:-10vw; top:-20vw; background: radial-gradient(closest-side, rgba(15,61,46,0.16), transparent 70%); filter: blur(40px); }
+.aurora::after { content:''; position:absolute; width:50vw; height:50vw; right:-10vw; bottom:-20vw; background: radial-gradient(closest-side, rgba(212,175,55,0.22), transparent 70%); filter: blur(40px); }
