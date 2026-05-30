@@ -35,13 +35,13 @@ function App() {
       <Navbar transparent />
 
       {/* HERO */}
-      <section className="relative h-[100svh] min-h-[680px] w-full overflow-hidden">
+      <section className="relative min-h-[100svh] w-full overflow-hidden">
         <img src={IMG.dal2} alt="Dal Lake, Kashmir" className="absolute inset-0 size-full object-cover scale-[1.04]" />
         {/* Soft top-to-bottom dark gradient for premium readability */}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.25),transparent_60%)]" />
 
-        <div className="relative h-full container flex flex-col justify-end pb-16 md:pb-24">
+        <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
           <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, ease: 'easeOut' }}
             className="max-w-3xl text-white">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold">
