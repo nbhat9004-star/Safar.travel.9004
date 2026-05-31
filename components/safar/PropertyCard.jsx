@@ -7,7 +7,11 @@ import { useState } from 'react';
 export default function PropertyCard({ item, index = 0 }) {
   const [liked, setLiked] = useState(false);
   const [imgIdx, setImgIdx] = useState(0);
-  const gallery = item.gallery || [item.image];
+  // Support both demo-data shape (image+gallery+host{}) and API shape (images[]+hostName+superhost)
+  const gallery = (item.gallery && item.gallery.length ? item.gallery : null)
+    || (Array.isArray(item.images) && item.images.length ? item.images : null)
+    || [item.image].filter(Boolean);
+  const isSuperhost = item.host?.superhost ?? item.superhost;
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -59,7 +63,7 @@ export default function PropertyCard({ item, index = 0 }) {
               <span className="font-display font-bold text-charcoal text-lg">₹{item.price.toLocaleString('en-IN')}</span>
               <span className="text-xs text-muted-foreground ml-1">/ {item.duration ? item.duration : 'night'}</span>
             </div>
-            {item.host?.superhost && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald2 bg-emerald-50 px-2 py-0.5 rounded-full">Superhost</span>}
+            {isSuperhost && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald2 bg-emerald-50 px-2 py-0.5 rounded-full">Superhost</span>}
           </div>
         </div>
       </Link>

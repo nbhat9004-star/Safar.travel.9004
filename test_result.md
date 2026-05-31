@@ -204,6 +204,177 @@ backend:
           ✅ Public registration: Cannot create admin role (coerced to traveler)
           ✅ JWT payload: Contains uid + role for authorization checks
 
+
+  - task: "Listings CRUD API (create/read/update/delete) at /api/listings/*"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Complete listings backend at /app/app/api/[[...path]]/route.js. MongoDB collection: safar.listings.
+          Schema: id (uuid), title, description, category (stay|transport|experience|tour), subcategory,
+          location, price (number), images (array), hostId (uuid), hostName, hostAvatar, superhost,
+          amenities (array), services (array), duration, badge, rating, reviews, status
+          (pending|approved|rejected), featured, isDemo, createdAt, updatedAt.
+
+          On first request, auto-seeds 12 demo listings from /app/lib/data.js with hostId='demo-host'
+          and status='approved'.
+
+          Endpoints:
+            * GET  /api/listings                 - public, defaults to status=approved.
+                                                   Supports filters: category, subcategory, location,
+                                                   minPrice, maxPrice, services (CSV, all-match),
+                                                   status (admin only sees non-approved), hostId,
+                                                   pagination (page, limit). Returns { listings, total }.
+            * POST /api/listings                 - host or admin. Validates inputs. host -> status pending.
+                                                   admin -> status approved. Returns 201 + listing.
+            * GET  /api/listings/:id             - public if approved. owner/admin can view own
+                                                   pending/rejected. 404 otherwise.
+            * PUT  /api/listings/:id             - owner or admin. Host edits set status back to pending.
+            * DELETE /api/listings/:id           - owner or admin.
+            * GET  /api/listings/host/me         - host's own listings, all statuses.
+            * GET  /api/listings/host/:hostId    - public sees approved only; owner/admin sees all.
+            * POST /api/listings/:id/approve     - admin only.
+            * POST /api/listings/:id/reject      - admin only, accepts { reason }.
+            * PATCH /api/listings/:id/status     - admin only, alternative {status, reason}.
+
+          Indexes: id unique, (hostId, status), (status, category).
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ ALL LISTINGS API ENDPOINTS TESTED AND WORKING (32/32 tests passed)
+          
+          Auto-seed & Filters:
+          ✅ GET /api/listings - Auto-seeded 12 demo listings, all status=approved, total >= 12
+          ✅ Filter by category (stay) - Returns only stay listings
+          ✅ Filter by subcategory (houseboat) - Returns only houseboat listings
+          ✅ Filter by services (wazwan,kehwa) - AND semantics working (both services required)
+          ✅ Filter by price range (2000-5000) - Returns listings within range
+          ✅ Filter by location (Srinagar) - Case-insensitive contains search working
+          ✅ Status filter without auth - Non-admin cannot see pending (returns approved only)
+          ✅ Status filter with admin - Admin can query status=all to see all statuses
+          
+          Create Listing:
+          ✅ POST /api/listings without auth - 401 Unauthorized
+          ✅ POST /api/listings as traveler - 403 Forbidden
+          ✅ POST /api/listings as host - 201 Created, status='pending', isDemo=false, hostId matches user
+          ✅ POST /api/listings as admin - 201 Created, status='approved' (auto-approved)
+          ✅ Validation errors - Missing title, short title/description, invalid category, missing location, 
+             invalid price all return 400
+          
+          Single Listing GET:
+          ✅ GET /api/listings/:id (approved) - 200 + listing data
+          ✅ GET /api/listings/:id (pending, no auth) - 404 Not Found
+          ✅ GET /api/listings/:id (pending, owner auth) - 200 + listing data
+          ✅ GET /api/listings/:id (pending, admin auth) - 200 + listing data
+          ✅ GET /api/listings/:id (non-existent) - 404 Not Found
+          
+          Update Listing:
+          ✅ PUT /api/listings/:id (non-owner) - 403 Forbidden
+          ✅ PUT /api/listings/:id (owner) - 200, status resets to 'pending'
+          ✅ PUT /api/listings/:id (admin) - 200, status preserved
+          ✅ Validation errors - Negative price, invalid price, invalid category all return 400
+          
+          Delete Listing:
+          ✅ DELETE /api/listings/:id (non-owner) - 403 Forbidden
+          ✅ DELETE /api/listings/:id (owner) - 200, deleted=true, subsequent GET returns 404
+          
+          Host Listings:
+          ✅ GET /api/listings/host/me (host auth) - Returns all own listings (any status)
+          ✅ GET /api/listings/host/:hostId (no auth) - Returns approved only
+          ✅ GET /api/listings/host/:hostId (admin) - Returns all statuses
+          ✅ GET /api/listings/host/me (no auth) - 401 Unauthorized
+          
+          Approve/Reject:
+          ✅ POST /api/listings/:id/approve (non-admin) - 403 Forbidden
+          ✅ POST /api/listings/:id/approve (admin) - 200, status='approved', rejectionReason cleared
+          ✅ POST /api/listings/:id/reject (admin) - 200, status='rejected', rejectionReason saved
+          
+          MongoDB Persistence:
+          ✅ Listings stored in safar.listings collection
+          ✅ New docs have UUID id (not ObjectId)
+          ✅ Correct hostId reference
+          ✅ Indexes: id (unique), (hostId, status), (status, category)
+          
+          JSON Response:
+          ✅ All endpoints return { ok: true|false, ... } with proper status codes
+          
+          Minor fix applied: Updated ok() helper function to properly pass status code parameter
+          for 201 responses on POST /api/listings.
+
+  - task: "Listings frontend integration (Explore/Property/Host Dashboard/Admin/Add Listing)"
+    implemented: true
+    working: "NA"
+    file: "/app/lib/listings-api.js, /app/app/explore/page.js, /app/app/property/[id]/page.js, /app/app/dashboard/host/page.js, /app/app/admin/page.js, /app/app/add-listing/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Built /app/lib/listings-api.js (apiJson, useListings, useListing, listingsApi.{list,get,create,
+          update,remove,myHostListings,byHost,approve,reject}). Explore page now fetches live from API
+          with server-side filters (category, location, minPrice, maxPrice, services), shows
+          CardSkeleton during load, error state with retry, empty state. PropertyCard updated to
+          support both demo shape (gallery+host{}) and API shape (images+hostName+superhost).
+          Property details uses useListing(id) with loading spinner and 404 state. Add Listing
+          submits via listingsApi.create with toast + redirect to host dashboard. Host Dashboard
+          fetches via listingsApi.myHostListings with delete action and status pills. Admin shows
+          live pending approvals and all listings with one-click Approve/Reject buttons + reasons.
+
+test_plan:
+  current_focus:
+    - "Listings CRUD API (create/read/update/delete) at /api/listings/*"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Please test the new Safar listings backend at /api/listings/*. Use NEXT_PUBLIC_BASE_URL + /api.
+      Auto-seed should populate 12 demo listings on first GET /api/listings.
+      
+      Critical tests:
+      1) GET /api/listings (no auth) -> 200, ok:true, listings[] with 12+ items, all status=approved.
+      2) GET /api/listings?category=stay -> only stays.
+      3) GET /api/listings?subcategory=houseboat -> only houseboats.
+      4) GET /api/listings?services=wazwan,kehwa -> only listings with BOTH services.
+      5) GET /api/listings?minPrice=2000&maxPrice=5000 -> only in price range.
+      6) GET /api/listings?status=pending (no auth) -> still returns approved (status filter ignored for non-admin).
+      7) GET /api/listings?status=all + admin auth -> returns all statuses including pending/rejected.
+      8) POST /api/listings without auth -> 401.
+      9) POST /api/listings with traveler -> 403.
+      10) POST /api/listings with host -> 201; new listing has status='pending', hostId=host.id,
+          isDemo=false.
+      11) POST /api/listings with admin -> 201; status='approved'.
+      12) Validation: missing title, short title (<3), short description (<10), invalid category,
+          missing location, price<=0 or non-number -> 400.
+      13) GET /api/listings/:id (approved) -> 200 + listing.
+      14) GET /api/listings/:id (pending, not auth) -> 404. With owner auth -> 200. With admin -> 200.
+      15) PUT /api/listings/:id by non-owner non-admin -> 403.
+      16) PUT /api/listings/:id by host owner -> 200, status resets to 'pending'.
+      17) PUT /api/listings/:id by admin -> 200, status preserved.
+      18) DELETE by non-owner non-admin -> 403. By owner -> 200, deleted from DB.
+      19) GET /api/listings/host/me with host auth -> own listings (any status).
+      20) GET /api/listings/host/:hostId without auth -> approved only; with admin -> all.
+      21) POST /api/listings/:id/approve as admin -> status='approved', rejectionReason removed.
+      22) POST /api/listings/:id/reject as admin with {reason} -> status='rejected', rejectionReason saved.
+      23) Non-admin trying approve/reject -> 403.
+      24) Non-existent listing id -> 404 on all endpoints.
+      
+      To create an admin: register as host, then promote via:
+        mongosh safar --eval 'db.users.updateOne({email:"x@x.com"},{$set:{role:"admin"}})'
+      OR upsert directly. Use bcrypt for password hash if creating fresh.
+      
+      Auth endpoints already verified — focus this run ONLY on /api/listings/*.
+
 frontend:
   - task: "Auth UI: AuthModal, AuthButtons in Navbar, ProtectedRoute for dashboards"
     implemented: true
@@ -272,5 +443,29 @@ agent_communication:
       ✅ JWT: Valid 3-segment structure, proper cookie attributes
       
       No critical issues found. Backend authentication system is production-ready.
+      
+      Test file: /app/backend_test.py (can be rerun anytime with: python3 /app/backend_test.py)
+
+
+  - agent: "testing"
+    message: |
+      ✅ LISTINGS API BACKEND TESTING COMPLETE - ALL TESTS PASSED (32/32)
+      
+      Comprehensive listings backend testing completed successfully. All endpoints working as expected:
+      
+      ✅ Auto-seed: 12 demo listings created on first request, all approved
+      ✅ Filters: category, subcategory, services (AND logic), price range, location, status (role-based)
+      ✅ Create: Auth checks (401/403), host creates pending, admin creates approved, validation working
+      ✅ Read: Single listing GET with proper auth/ownership checks, 404 for non-existent
+      ✅ Update: Ownership checks, host edits reset to pending, admin preserves status, validation working
+      ✅ Delete: Ownership checks, successful deletion verified
+      ✅ Host listings: /host/me (own listings), /host/:id (role-based visibility)
+      ✅ Approve/Reject: Admin-only, status changes correctly, rejectionReason handling
+      ✅ MongoDB: UUID ids, proper indexes, correct schema
+      ✅ JSON responses: All endpoints return { ok: true|false } with proper HTTP status codes
+      
+      Minor fix applied: Updated ok() helper function in route.js to properly pass status code parameter.
+      
+      No critical issues found. Listings API is fully functional and production-ready.
       
       Test file: /app/backend_test.py (can be rerun anytime with: python3 /app/backend_test.py)

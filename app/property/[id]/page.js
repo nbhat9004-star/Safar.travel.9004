@@ -1,25 +1,55 @@
 'use client';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Star, MapPin, Heart, Share2, ShieldCheck, Wifi, Coffee, Wind, ParkingCircle, MessageCircle, ChevronRight, BadgeCheck, CalendarRange, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Star, MapPin, Heart, Share2, ShieldCheck, Wifi, Coffee, Wind, ParkingCircle, MessageCircle, ChevronRight, BadgeCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
 import ServiceBadges from '@/components/safar/ServiceBadges';
 import { Button } from '@/components/ui/button';
-import { LISTINGS } from '@/lib/data';
+import { useListing } from '@/lib/listings-api';
 import { SERVICE_GROUPS, SERVICE_INDEX } from '@/lib/services';
 
 const AMENITY_ICONS = { 'Wi-Fi': Wifi, 'Heater': Wind, 'Kahwa': Coffee, 'Parking': ParkingCircle };
 
 function App() {
   const { id } = useParams();
-  const router = useRouter();
-  const item = useMemo(() => LISTINGS.find(l => l.id === id) || LISTINGS[0], [id]);
+  const { listing, loading, error } = useListing(id);
   const [liked, setLiked] = useState(false);
   const [guests, setGuests] = useState(2);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar />
+        <div className="pt-24 min-h-[60vh] grid place-items-center">
+          <Loader2 className="size-7 animate-spin text-emerald2" />
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+  if (error || !listing) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar />
+        <div className="pt-24 container min-h-[60vh] grid place-items-center text-center">
+          <div className="max-w-md">
+            <AlertTriangle className="size-7 mx-auto text-rose-500" />
+            <h2 className="font-display text-2xl font-bold mt-3">Listing not available</h2>
+            <p className="text-sm text-muted-foreground mt-1">{error || 'This listing could not be found, or is pending approval.'}</p>
+            <Button asChild className="rounded-full mt-5 bg-emerald2 hover:bg-emerald2-deep"><Link href="/explore">Back to Explore</Link></Button>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
+  const item = listing;
+  const gallery = (item.images && item.images.length) ? item.images : [];
   const nights = 4;
   const subtotal = item.price * nights;
   const tax = Math.round(subtotal * 0.12);
@@ -41,9 +71,9 @@ function App() {
           <div>
             <h1 className="font-display text-3xl md:text-5xl font-bold leading-tight">{item.title}</h1>
             <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><Star className="size-4 text-gold fill-gold" /> {item.rating} · {item.reviews} reviews</span>
+              <span className="flex items-center gap-1"><Star className="size-4 text-gold fill-gold" /> {item.rating || '—'} · {item.reviews || 0} reviews</span>
               <span className="flex items-center gap-1"><MapPin className="size-4" /> {item.location}</span>
-              {item.host?.superhost && <span className="flex items-center gap-1 text-emerald2"><BadgeCheck className="size-4" /> Superhost</span>}
+              {item.superhost && <span className="flex items-center gap-1 text-emerald2"><BadgeCheck className="size-4" /> Superhost</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -52,27 +82,27 @@ function App() {
           </div>
         </div>
 
-        {/* Gallery */}
-        <div className="mt-6 grid grid-cols-4 grid-rows-2 gap-3 h-[60vh] min-h-[420px] rounded-3xl overflow-hidden">
-          <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} src={item.gallery[0]} alt="" className="col-span-2 row-span-2 size-full object-cover" />
-          {[1,2,3,4].map((i) => (
-            <motion.img key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i*0.05 }}
-              src={item.gallery[i % item.gallery.length]} alt="" className="size-full object-cover" />
-          ))}
-        </div>
+        {gallery.length > 0 && (
+          <div className="mt-6 grid grid-cols-4 grid-rows-2 gap-3 h-[60vh] min-h-[420px] rounded-3xl overflow-hidden">
+            <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} src={gallery[0]} alt="" className="col-span-2 row-span-2 size-full object-cover" />
+            {[1,2,3,4].map((i) => (
+              <motion.img key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i*0.05 }}
+                src={gallery[i % gallery.length]} alt="" className="size-full object-cover" />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="container mt-10 grid lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 space-y-10">
-          {/* Host */}
           <div className="flex items-center justify-between gap-4">
             <div>
               <div className="text-xs uppercase tracking-wider text-emerald2 font-semibold">Hosted by</div>
               <div className="flex items-center gap-3 mt-2">
-                <img src={item.host.avatar} alt="" className="size-12 rounded-full object-cover" />
+                {item.hostAvatar && <img src={item.hostAvatar} alt="" className="size-12 rounded-full object-cover" />}
                 <div>
-                  <div className="font-display font-semibold">{item.host.name}</div>
-                  <div className="text-xs text-muted-foreground">{item.host.superhost ? 'Superhost · Local for 12 yrs' : 'Local host · Verified'}</div>
+                  <div className="font-display font-semibold">{item.hostName || 'Safar Host'}</div>
+                  <div className="text-xs text-muted-foreground">{item.superhost ? 'Superhost · Local host' : 'Local host · Verified'}</div>
                 </div>
               </div>
             </div>
@@ -84,32 +114,31 @@ function App() {
             </div>
           </div>
 
-          {/* Description */}
           <div className="prose prose-zinc max-w-none">
             <h3 className="font-display text-2xl font-bold">A signature Kashmir experience</h3>
-            <p className="text-charcoal/80 leading-relaxed">{item.title} sits at the heart of {item.location}, lovingly curated by {item.host.name}. Wake up to mountain mist, sip warm kahwa and step into authentic Kashmiri hospitality. From hand-carved walnut interiors to floor heating and Wazwan dinners on request — every detail is designed for unforgettable travel.</p>
+            <p className="text-charcoal/80 leading-relaxed">{item.description || `${item.title} sits in ${item.location}, ready to deliver an unforgettable Kashmir experience.`}</p>
           </div>
 
-          {/* Amenities */}
-          <div>
-            <h3 className="font-display text-2xl font-bold mb-4">What this place offers</h3>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {item.amenities.map((a) => {
-                const Ico = AMENITY_ICONS[a] || ShieldCheck;
-                return <div key={a} className="flex items-center gap-3 p-4 rounded-2xl border bg-white"><Ico className="size-5 text-emerald2" /><span className="font-medium">{a}</span></div>;
-              })}
+          {item.amenities && item.amenities.length > 0 && (
+            <div>
+              <h3 className="font-display text-2xl font-bold mb-4">What this place offers</h3>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {item.amenities.map((a) => {
+                  const Ico = AMENITY_ICONS[a] || ShieldCheck;
+                  return <div key={a} className="flex items-center gap-3 p-4 rounded-2xl border bg-white"><Ico className="size-5 text-emerald2" /><span className="font-medium">{a}</span></div>;
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Services offered */}
           {item.services && item.services.length > 0 && (
             <div>
               <div className="flex items-end justify-between flex-wrap gap-2 mb-4">
                 <div>
                   <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">All-in-one host</div>
-                  <h3 className="font-display text-2xl font-bold">Services offered by {item.host.name}</h3>
+                  <h3 className="font-display text-2xl font-bold">Services offered by {item.hostName}</h3>
                 </div>
-                <div className="text-xs text-muted-foreground">{item.services.length} services · across {new Set(item.services.map(id => SERVICE_INDEX[id]?.group).filter(Boolean)).size} categories</div>
+                <div className="text-xs text-muted-foreground">{item.services.length} services</div>
               </div>
               <div className="space-y-4">
                 {SERVICE_GROUPS.map((g) => {
@@ -128,44 +157,13 @@ function App() {
               </div>
             </div>
           )}
-
-          {/* Reviews */}
-          <div>
-            <h3 className="font-display text-2xl font-bold mb-4 flex items-center gap-2"><Star className="size-5 text-gold fill-gold" /> {item.rating} · {item.reviews} reviews</h3>
-            <div className="grid md:grid-cols-2 gap-4">
-              {[
-                { n: 'Pooja R.', t: 'Absolutely magical. The host arranged a private shikara at sunset. We will be back!' },
-                { n: 'Karan M.', t: 'Cleanest stay we’ve had in Kashmir. Loved the wazwan dinner experience.' },
-                { n: 'Aisha K.', t: 'Cozy, beautiful and authentic. The kahwa every morning was unforgettable.' },
-                { n: 'Nikhil S.', t: 'Worth every rupee. Felt like a heritage retreat with modern luxury.' },
-              ].map((r) => (
-                <div key={r.n} className="p-5 rounded-2xl border bg-white">
-                  <div className="flex items-center gap-2 text-gold">{Array.from({length:5}).map((_,i)=><Star key={i} className="size-3.5 fill-gold" />)}</div>
-                  <p className="mt-2 text-sm text-charcoal/80">“{r.t}”</p>
-                  <div className="mt-3 text-xs font-semibold">{r.n}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Location */}
-          <div>
-            <h3 className="font-display text-2xl font-bold mb-4">Where you’ll be</h3>
-            <div className="aspect-[16/8] rounded-3xl overflow-hidden border relative">
-              <img src={item.gallery[1] || item.image} alt="" className="size-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-charcoal/40 to-transparent" />
-              <div className="absolute bottom-4 left-4 px-4 py-2.5 rounded-2xl glass text-sm font-semibold flex items-center gap-2"><MapPin className="size-4 text-emerald2" /> {item.location}</div>
-            </div>
-            <p className="mt-3 text-sm text-muted-foreground">Nearby: Dal Lake (1.2 km), Mughal Gardens (4 km), Hazratbal Shrine (6 km).</p>
-          </div>
         </div>
 
-        {/* Sticky booking */}
         <aside className="lg:col-span-1">
           <div className="lg:sticky lg:top-28 rounded-3xl border bg-white shadow-xl p-6">
             <div className="flex items-baseline justify-between">
               <div><span className="font-display text-3xl font-bold">₹{item.price.toLocaleString('en-IN')}</span><span className="text-sm text-muted-foreground"> / {item.duration ? item.duration : 'night'}</span></div>
-              <div className="text-xs flex items-center gap-1 text-muted-foreground"><Star className="size-3.5 fill-gold text-gold" /> {item.rating}</div>
+              <div className="text-xs flex items-center gap-1 text-muted-foreground"><Star className="size-3.5 fill-gold text-gold" /> {item.rating || '—'}</div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <div className="p-3 rounded-2xl border"><div className="text-[10px] uppercase tracking-wider font-semibold">Check-in</div><div className="text-sm mt-0.5">12 Jul 2025</div></div>
@@ -178,17 +176,16 @@ function App() {
                 </div>
               </div>
             </div>
-            <Button asChild className="w-full mt-4 h-12 rounded-2xl bg-gradient-emerald hover:opacity-95 font-semibold">
+            <Button asChild className="w-full mt-4 h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep font-semibold">
               <Link href={`/booking?id=${item.id}&guests=${guests}`}>Reserve <ChevronRight className="size-4 ml-1" /></Link>
             </Button>
             <Button variant="outline" className="w-full mt-2 h-11 rounded-2xl" asChild>
-              <a href={`https://wa.me/911234567890?text=Hi%20${encodeURIComponent(item.host.name)}%2C%20I%27m%20interested%20in%20%22${encodeURIComponent(item.title)}%22%20on%20Safar.`} target="_blank" rel="noreferrer"><MessageCircle className="size-4 mr-2" /> Chat with Host on WhatsApp</a>
+              <a href={`https://wa.me/911234567890?text=Hi%20${encodeURIComponent(item.hostName||'host')}%2C%20I%27m%20interested%20in%20%22${encodeURIComponent(item.title)}%22%20on%20Safar.`} target="_blank" rel="noreferrer"><MessageCircle className="size-4 mr-2" /> Chat with Host on WhatsApp</a>
             </Button>
-            <p className="text-[11px] text-center text-muted-foreground mt-3">You won’t be charged yet</p>
             <div className="mt-5 pt-5 border-t space-y-2 text-sm">
               <div className="flex justify-between"><span>₹{item.price.toLocaleString('en-IN')} × {nights} nights</span><span>₹{subtotal.toLocaleString('en-IN')}</span></div>
               <div className="flex justify-between text-muted-foreground"><span>Cleaning fee</span><span>₹800</span></div>
-              <div className="flex justify-between text-muted-foreground"><span>Service & taxes</span><span>₹{tax.toLocaleString('en-IN')}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Service &amp; taxes</span><span>₹{tax.toLocaleString('en-IN')}</span></div>
               <div className="flex justify-between font-semibold pt-2 border-t"><span>Total</span><span>₹{total.toLocaleString('en-IN')}</span></div>
             </div>
           </div>

@@ -1,13 +1,15 @@
 'use client';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight } from 'lucide-react';
+import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
-import { LISTINGS } from '@/lib/data';
 import { useAuth } from '@/lib/auth-context';
+import { listingsApi } from '@/lib/listings-api';
 
 function Bars({ data }) {
   const max = Math.max(...data);
@@ -21,10 +23,46 @@ function Bars({ data }) {
   );
 }
 
-function App() {
+const StatusPill = ({ s }) => {
+  const map = {
+    approved: 'bg-emerald-50 text-emerald2 border-emerald-200',
+    pending:  'bg-amber-50 text-amber-700 border-amber-200',
+    rejected: 'bg-rose-50 text-rose-600 border-rose-200',
+  };
+  return <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${map[s]||'bg-secondary'}`}>{s}</span>;
+};
+
+function HostDashboardInner() {
   const { user } = useAuth();
-  const myListings = LISTINGS.slice(0,4);
+  const [myListings, setMyListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const earnings = [12,18,9,22,28,31,26,38,33,42,46,52];
+
+  const load = async () => {
+    setLoading(true); setError(null);
+    const { ok, data, status } = await listingsApi.myHostListings();
+    if (ok && data?.ok) setMyListings(data.listings || []);
+    else setError(data?.error || `Failed (${status})`);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const onDelete = async (id) => {
+    if (!confirm('Delete this listing?')) return;
+    const { ok, data } = await listingsApi.remove(id);
+    if (!ok) return toast.error(data?.error || 'Delete failed');
+    toast.success('Listing deleted');
+    load();
+  };
+
+  const counts = {
+    total: myListings.length,
+    approved: myListings.filter(l => l.status === 'approved').length,
+    pending:  myListings.filter(l => l.status === 'pending').length,
+    rejected: myListings.filter(l => l.status === 'rejected').length,
+  };
+
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
@@ -34,12 +72,17 @@ function App() {
             <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Host Studio</div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Salaam, {user?.name?.split(' ')[0] || 'Host'} 👋</h1>
           </div>
-          <Button asChild className="rounded-full bg-gradient-emerald font-semibold"><Link href="/add-listing"><Plus className="size-4 mr-2" /> Add new listing</Link></Button>
+          <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold"><Link href="/add-listing"><Plus className="size-4 mr-2" /> Add new listing</Link></Button>
         </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-          {[{l:'Earnings (mo)',v:'₹ 4,82,400',d:'+18%',i:Wallet},{l:'Bookings',v:'34',d:'+6',i:Calendar},{l:'Listing views',v:'12,890',d:'+22%',i:Eye},{l:'Avg rating',v:'4.94',d:'+0.04',i:Star}].map((k,i)=>{const Ico=k.i;return(
+          {[
+            {l:'Listings',     v: counts.total,    d:`+${counts.pending} pending`, i: BarChart3},
+            {l:'Approved',     v: counts.approved, d:`live`, i: Eye},
+            {l:'Avg rating',   v: '4.94',          d:'+0.04', i: Star},
+            {l:'Earnings (mo)',v: '₹ 4,82,400',   d:'+18%', i: Wallet},
+          ].map((k,i)=>{const Ico=k.i;return(
             <motion.div key={k.l} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }} className="rounded-3xl border bg-white p-5">
               <div className="flex items-center justify-between"><Ico className="size-5 text-emerald2" /><div className="text-xs text-emerald-600 font-semibold flex items-center gap-1">{k.d} <ArrowUpRight className="size-3" /></div></div>
               <div className="font-display text-2xl font-bold mt-3">{k.v}</div>
@@ -67,20 +110,35 @@ function App() {
         {/* My Listings */}
         <section className="mt-10">
           <h2 className="font-display text-2xl font-bold">My listings</h2>
-          <div className="mt-4 rounded-3xl border bg-white overflow-hidden">
-            <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
-              <div className="col-span-5">Listing</div><div className="col-span-2">Price</div><div className="col-span-2">Bookings</div><div className="col-span-2">Rating</div><div className="col-span-1"></div>
+          {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+          {error && <div className="mt-4 p-6 border rounded-3xl bg-rose-50/40 border-rose-200 text-center"><AlertTriangle className="size-6 mx-auto text-rose-500" /><div className="mt-2 text-sm">{error}</div></div>}
+          {!loading && !error && myListings.length === 0 && (
+            <div className="mt-4 p-10 border rounded-3xl bg-white text-center">
+              <Plus className="size-7 mx-auto text-emerald2" />
+              <div className="font-display text-lg font-bold mt-3">No listings yet</div>
+              <p className="text-sm text-muted-foreground mt-1">Create your first listing — it&#39;ll appear here once submitted.</p>
+              <Button asChild className="rounded-full mt-4 bg-emerald2 hover:bg-emerald2-deep"><Link href="/add-listing">Add new listing</Link></Button>
             </div>
-            {myListings.map((l)=>(
-              <div key={l.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
-                <div className="col-span-5 flex items-center gap-3"><img src={l.image} className="size-12 rounded-xl object-cover" alt="" /><div><div className="font-semibold text-sm line-clamp-1">{l.title}</div><div className="text-xs text-muted-foreground">{l.location}</div></div></div>
-                <div className="col-span-2 text-sm font-semibold">₹{l.price.toLocaleString('en-IN')}</div>
-                <div className="col-span-2 text-sm">{l.reviews}</div>
-                <div className="col-span-2 text-sm flex items-center gap-1"><Star className="size-3.5 text-gold fill-gold" /> {l.rating}</div>
-                <div className="col-span-1 text-right"><Link href={`/property/${l.id}`} className="text-xs font-semibold text-emerald2 hover:underline">Edit</Link></div>
+          )}
+          {!loading && myListings.length > 0 && (
+            <div className="mt-4 rounded-3xl border bg-white overflow-hidden">
+              <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                <div className="col-span-5">Listing</div><div className="col-span-2">Price</div><div className="col-span-2">Status</div><div className="col-span-2">Rating</div><div className="col-span-1"></div>
               </div>
-            ))}
-          </div>
+              {myListings.map((l)=>(
+                <div key={l.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                  <div className="col-span-5 flex items-center gap-3"><img src={(l.images && l.images[0]) || ''} className="size-12 rounded-xl object-cover bg-secondary" alt="" /><div><div className="font-semibold text-sm line-clamp-1">{l.title}</div><div className="text-xs text-muted-foreground">{l.location}</div></div></div>
+                  <div className="col-span-2 text-sm font-semibold">₹{l.price.toLocaleString('en-IN')}</div>
+                  <div className="col-span-2"><StatusPill s={l.status} /></div>
+                  <div className="col-span-2 text-sm flex items-center gap-1"><Star className="size-3.5 text-gold fill-gold" /> {l.rating || '—'}</div>
+                  <div className="col-span-1 flex items-center gap-2 justify-end">
+                    <Link href={`/property/${l.id}`} className="text-xs font-semibold text-emerald2 hover:underline">View</Link>
+                    <button onClick={()=>onDelete(l.id)} className="text-rose-500 hover:text-rose-700" title="Delete"><Trash2 className="size-4" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="h-12" />
@@ -89,5 +147,7 @@ function App() {
     </main>
   );
 }
-const ProtectedHost = () => <ProtectedRoute roles={['host','admin']}><App /></ProtectedRoute>;
-export default ProtectedHost;
+
+export default function App() {
+  return <ProtectedRoute roles={['host','admin']}><HostDashboardInner /></ProtectedRoute>;
+}

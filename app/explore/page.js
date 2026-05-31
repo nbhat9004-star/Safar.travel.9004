@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, SlidersHorizontal, Map, X, Star, ListChecks } from 'lucide-react';
+import { Search, SlidersHorizontal, Map, X, Star, ListChecks, AlertTriangle } from 'lucide-react';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import PropertyCard from '@/components/safar/PropertyCard';
@@ -9,11 +9,12 @@ import CategoryPills from '@/components/safar/CategoryPills';
 import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
 import ServiceSelector from '@/components/safar/ServiceSelector';
 import ServiceBadges from '@/components/safar/ServiceBadges';
+import CardSkeleton from '@/components/safar/CardSkeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
-import { LISTINGS, IMG } from '@/lib/data';
-import { SERVICE_INDEX } from '@/lib/services';
+import { IMG } from '@/lib/data';
+import { useListings } from '@/lib/listings-api';
 
 function App() {
   const [cat, setCat] = useState('all');
@@ -24,19 +25,27 @@ function App() {
   const [mapView, setMapView] = useState(false);
   const [selectedServices, setSelectedServices] = useState([]);
 
-  const list = useMemo(() => {
-    let r = [...LISTINGS];
-    if (cat !== 'all') r = r.filter(l => l.category === cat);
-    if (q) r = r.filter(l => `${l.title} ${l.location}`.toLowerCase().includes(q.toLowerCase()));
-    r = r.filter(l => l.price >= price[0] && l.price <= price[1]);
-    if (selectedServices.length) {
-      r = r.filter(l => selectedServices.every(s => (l.services || []).includes(s)));
+  // Map UI category -> API filter (subcategory for stays; category for transport/tour/experience)
+  const apiParams = useMemo(() => {
+    const p = { minPrice: price[0], maxPrice: price[1], limit: 60 };
+    if (q) p.location = q;
+    if (selectedServices.length) p.services = selectedServices;
+    if (cat !== 'all') {
+      if (['houseboat','cabin','cottage','home','camp'].includes(cat)) { p.category = 'stay'; p.subcategory = cat; }
+      else { p.category = cat; }
     }
-    if (sort === 'price-asc') r.sort((a,b)=>a.price-b.price);
-    if (sort === 'price-desc') r.sort((a,b)=>b.price-a.price);
-    if (sort === 'rating') r.sort((a,b)=>b.rating-a.rating);
-    return r;
-  }, [cat, q, price, sort, selectedServices]);
+    return p;
+  }, [cat, q, price, selectedServices]);
+
+  const { listings, total, loading, error, refresh } = useListings(apiParams, [JSON.stringify(apiParams)]);
+
+  const list = useMemo(() => {
+    const arr = [...listings];
+    if (sort === 'price-asc') arr.sort((a,b)=>a.price-b.price);
+    if (sort === 'price-desc') arr.sort((a,b)=>b.price-a.price);
+    if (sort === 'rating') arr.sort((a,b)=>b.rating-a.rating);
+    return arr;
+  }, [listings, sort]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -65,7 +74,6 @@ function App() {
           </motion.div>
           <div className="mt-5"><CategoryPills value={cat} onChange={setCat} /></div>
 
-          {/* Active service filters */}
           {selectedServices.length > 0 && (
             <div className="mt-4 flex items-center gap-3 flex-wrap">
               <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider flex items-center gap-1.5"><ListChecks className="size-3.5" /> Filtering by services</div>
@@ -78,38 +86,53 @@ function App() {
         {/* Results */}
         <section className="container py-8">
           <div className="flex items-center justify-between mb-4">
-            <div className="text-sm text-muted-foreground"><span className="font-semibold text-charcoal">{list.length}</span> stays &amp; experiences in Kashmir</div>
+            <div className="text-sm text-muted-foreground">
+              {loading ? 'Loading stays…' : <><span className="font-semibold text-charcoal">{total}</span> stays &amp; experiences in Kashmir</>}
+            </div>
             <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground"><Star className="size-3.5 text-gold fill-gold" /> Avg 4.9 · Verified hosts</div>
           </div>
 
-          {mapView ? (
-            <div className="grid lg:grid-cols-2 gap-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-h-[78vh] overflow-y-auto pr-1">
-                {list.map((l, i) => <PropertyCard key={l.id} item={l} index={i} />)}
-              </div>
-              <div className="sticky top-28 h-[78vh] rounded-3xl overflow-hidden border bg-secondary relative">
-                <img src={IMG.dal2} alt="map" className="size-full object-cover opacity-90" />
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal/40 to-transparent" />
-                {list.slice(0,8).map((l, i) => (
-                  <div key={l.id} style={{ left: `${10 + (i*9)%75}%`, top: `${15 + (i*13)%65}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
-                    <div className="px-3 py-1.5 rounded-full bg-white shadow-lg text-xs font-semibold text-charcoal hover:bg-charcoal hover:text-white transition cursor-pointer">₹{l.price.toLocaleString('en-IN')}</div>
-                  </div>
-                ))}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full glass text-xs">Map view · demo</div>
-              </div>
+          {error && (
+            <div className="text-center py-16 border rounded-3xl bg-rose-50/40 border-rose-200">
+              <AlertTriangle className="size-7 mx-auto text-rose-500" />
+              <div className="font-display text-lg font-bold mt-3">Could not load listings</div>
+              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+              <Button variant="outline" className="rounded-full mt-5" onClick={refresh}>Try again</Button>
             </div>
-          ) : (
-            list.length === 0 ? (
-              <div className="text-center py-20 border rounded-3xl bg-white">
-                <div className="size-14 mx-auto rounded-2xl bg-secondary grid place-items-center"><Search className="size-6 text-muted-foreground" /></div>
-                <div className="font-display text-xl font-bold mt-4">No matches found</div>
-                <p className="text-sm text-muted-foreground mt-1">Try removing some service filters or widening your price range.</p>
-                <Button variant="outline" className="rounded-full mt-5" onClick={()=>{setSelectedServices([]); setPrice([500,15000]); setCat('all');}}>Reset filters</Button>
+          )}
+
+          {!error && loading && <CardSkeleton count={8} />}
+
+          {!error && !loading && (
+            mapView ? (
+              <div className="grid lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-h-[78vh] overflow-y-auto pr-1">
+                  {list.map((l, i) => <PropertyCard key={l.id} item={l} index={i} />)}
+                </div>
+                <div className="sticky top-28 h-[78vh] rounded-3xl overflow-hidden border bg-secondary relative">
+                  <img src={IMG.dal2} alt="map" className="size-full object-cover opacity-90" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal/40 to-transparent" />
+                  {list.slice(0,8).map((l, i) => (
+                    <div key={l.id} style={{ left: `${10 + (i*9)%75}%`, top: `${15 + (i*13)%65}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
+                      <div className="px-3 py-1.5 rounded-full bg-white shadow-lg text-xs font-semibold text-charcoal hover:bg-charcoal hover:text-white transition cursor-pointer">₹{l.price.toLocaleString('en-IN')}</div>
+                    </div>
+                  ))}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full glass text-xs">Map view · demo</div>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {list.map((l, i) => <PropertyCard key={l.id} item={l} index={i} />)}
-              </div>
+              list.length === 0 ? (
+                <div className="text-center py-20 border rounded-3xl bg-white">
+                  <div className="size-14 mx-auto rounded-2xl bg-secondary grid place-items-center"><Search className="size-6 text-muted-foreground" /></div>
+                  <div className="font-display text-xl font-bold mt-4">No matches found</div>
+                  <p className="text-sm text-muted-foreground mt-1">Try removing some service filters or widening your price range.</p>
+                  <Button variant="outline" className="rounded-full mt-5" onClick={()=>{setSelectedServices([]); setPrice([500,15000]); setCat('all');}}>Reset filters</Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {list.map((l, i) => <PropertyCard key={l.id} item={l} index={i} />)}
+                </div>
+              )
             )
           )}
         </section>
