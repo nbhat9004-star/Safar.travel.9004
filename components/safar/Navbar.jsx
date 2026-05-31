@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Menu, User, UserPlus, Sparkles, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
 
 const NAV = [
   { href: '/explore?cat=all',         label: 'Stays' },
@@ -53,12 +54,7 @@ export default function Navbar({ transparent = false }) {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm" className={`hidden md:inline-flex rounded-full px-4 h-10 font-medium ${solid ? 'text-charcoal hover:bg-secondary' : 'text-white hover:bg-white/10'}`}>
-            <Link href="/dashboard/traveler">Sign in</Link>
-          </Button>
-          <Button asChild size="sm" className="hidden md:inline-flex rounded-full bg-emerald2 hover:bg-emerald2-deep shadow-lg shadow-emerald2/25 px-5 h-10 font-semibold text-white">
-            <Link href="/dashboard/traveler"><UserPlus className="size-4 mr-1.5" /> Sign up</Link>
-          </Button>
+          <AuthButtons solid={solid} />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className={`xl:hidden rounded-full ${solid ? '' : 'text-white hover:bg-white/10'}`}>
@@ -86,12 +82,7 @@ export default function Navbar({ transparent = false }) {
                 <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Admin</Link>
               </div>
               <div className="p-4 border-t flex flex-col gap-2 safe-bottom">
-                <Button asChild variant="outline" className="w-full h-11 rounded-full font-semibold">
-                  <Link href="/dashboard/traveler" onClick={() => setOpen(false)}><User className="size-4 mr-2" /> Sign in</Link>
-                </Button>
-                <Button asChild className="w-full h-11 rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold">
-                  <Link href="/dashboard/traveler" onClick={() => setOpen(false)}><UserPlus className="size-4 mr-2" /> Sign up</Link>
-                </Button>
+                <MobileAuthButtons onClose={()=>setOpen(false)} />
               </div>
             </SheetContent>
           </Sheet>

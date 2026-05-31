@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, MoreHorizontal } from 'lucide-react';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
+import ProtectedRoute from '@/components/safar/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { LISTINGS } from '@/lib/data';
 
@@ -95,4 +96,5 @@ function App() {
     </main>
   );
 }
-export default App;
+const ProtectedAdmin = () => <ProtectedRoute roles={['admin']}><App /></ProtectedRoute>;
+export default ProtectedAdmin;

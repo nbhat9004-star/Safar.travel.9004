@@ -5,7 +5,9 @@ import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight 
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
+import ProtectedRoute from '@/components/safar/ProtectedRoute';
 import { LISTINGS } from '@/lib/data';
+import { useAuth } from '@/lib/auth-context';
 
 function Bars({ data }) {
   const max = Math.max(...data);
@@ -20,6 +22,7 @@ function Bars({ data }) {
 }
 
 function App() {
+  const { user } = useAuth();
   const myListings = LISTINGS.slice(0,4);
   const earnings = [12,18,9,22,28,31,26,38,33,42,46,52];
   return (
@@ -29,7 +32,7 @@ function App() {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Host Studio</div>
-            <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Salaam, Ishfaq 👋</h1>
+            <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Salaam, {user?.name?.split(' ')[0] || 'Host'} 👋</h1>
           </div>
           <Button asChild className="rounded-full bg-gradient-emerald font-semibold"><Link href="/add-listing"><Plus className="size-4 mr-2" /> Add new listing</Link></Button>
         </div>
@@ -86,4 +89,5 @@ function App() {
     </main>
   );
 }
-export default App;
+const ProtectedHost = () => <ProtectedRoute roles={['host','admin']}><App /></ProtectedRoute>;
+export default ProtectedHost;

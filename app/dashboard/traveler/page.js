@@ -5,12 +5,14 @@ import { Sparkles, Heart, Calendar, MessageCircle, Wand2, Compass, BookOpen, Map
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
+import ProtectedRoute from '@/components/safar/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { LISTINGS } from '@/lib/data';
+import { useAuth } from '@/lib/auth-context';
 
-function App() {
+function TravelerDashboardInner() {
+  const { user } = useAuth();
   const upcoming = [LISTINGS[0], LISTINGS[1]];
-  const past = [LISTINGS[5]];
   const wishlist = LISTINGS.slice(2,6);
   return (
     <main className="min-h-screen bg-background">
@@ -18,10 +20,10 @@ function App() {
       <div className="pt-24 container">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Welcome back, Aanya</div>
+            <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Welcome back, {user?.name?.split(' ')[0] || 'Traveler'}</div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Your travel hub</h1>
           </div>
-          <Button asChild className="rounded-full bg-gradient-emerald font-semibold"><Link href="/ai-planner"><Wand2 className="size-4 mr-2" /> Open AI Planner</Link></Button>
+          <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold"><Link href="/ai-planner"><Wand2 className="size-4 mr-2" /> Open AI Planner</Link></Button>
         </div>
 
         {/* KPIs */}
@@ -93,4 +95,7 @@ function App() {
     </main>
   );
 }
-export default App;
+
+export default function App() {
+  return <ProtectedRoute roles={['traveler','host','admin']}><TravelerDashboardInner /></ProtectedRoute>;
+}
