@@ -1,21 +1,47 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Check, CreditCard, Wallet, Calendar, Users, ShieldCheck, ChevronLeft, ChevronRight, PartyPopper, Mail, Download } from 'lucide-react';
+import { Check, CreditCard, Wallet, Calendar, Users, ShieldCheck, ChevronLeft, ChevronRight, PartyPopper, Mail, Download, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
 import { LISTINGS } from '@/lib/data';
+import { useListing, bookingsApi } from '@/lib/listings-api';
+import { useAuth } from '@/lib/auth-context';
+import AuthModal from '@/components/safar/AuthModal';
 
 const STEPS = ['Dates','Guests','Payment','Review','Confirmed'];
 
 function App() {
-  const item = LISTINGS[0];
+  const params = useSearchParams();
+  const router = useRouter();
+  const { user } = useAuth();
+  const listingId = params.get('id') || params.get('listingId');
+  const { listing } = useListing(listingId || '');
+  // Fallback to demo data if no listingId
+  const fallback = LISTINGS[0];
+  const item = listing ? {
+    id: listing.id,
+    title: listing.title,
+    location: listing.location,
+    price: listing.price,
+    image: (listing.images && listing.images[0]) || fallback.image,
+  } : fallback;
   const [step, setStep] = useState(0);
   const [pay, setPay] = useState('online');
-  const [guests, setGuests] = useState(2);
-  const nights = 4;
+  const [guests, setGuests] = useState(Number(params.get('guests')) || 2);
+  // Default dates: 7 and 11 days from now
+  const today = new Date();
+  const def = (d) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + d).toISOString().slice(0,10);
+  const [checkIn, setCheckIn] = useState(def(7));
+  const [checkOut, setCheckOut] = useState(def(11));
+  const [submitting, setSubmitting] = useState(false);
+  const [bookingId, setBookingId] = useState(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const nights = Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
   const subtotal = item.price * nights;
   const tax = Math.round(subtotal * 0.12);
   const total = subtotal + tax + 800;
@@ -130,9 +156,26 @@ function App() {
             {step < 4 && (
               <div className="mt-8 flex justify-between">
                 <Button variant="outline" className="rounded-full" onClick={()=>setStep(Math.max(0,step-1))}><ChevronLeft className="size-4 mr-1" /> Back</Button>
-                <Button className="rounded-full bg-gradient-emerald font-semibold px-6" onClick={()=>setStep(step+1)}>{step===3?'Confirm & Pay':'Continue'} <ChevronRight className="size-4 ml-1" /></Button>
+                <Button disabled={submitting} className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold px-6" onClick={async ()=>{
+                  if (step === 3) {
+                    if (!user) { setShowAuth(true); return; }
+                    if (!listingId) { toast.error('No listing selected. Pick a stay from Explore first.'); return; }
+                    setSubmitting(true);
+                    const { ok, data } = await bookingsApi.create({ listingId, checkInDate: checkIn, checkOutDate: checkOut, guests });
+                    setSubmitting(false);
+                    if (!ok) { toast.error(data?.error || 'Booking failed'); return; }
+                    setBookingId(data.booking.bookingId);
+                    toast.success('Booking request sent to host!');
+                    setStep(4);
+                  } else {
+                    setStep(step+1);
+                  }
+                }}>
+                  {submitting ? <Loader2 className="size-4 animate-spin" /> : (<>{step===3?'Confirm & Send Request':'Continue'} <ChevronRight className="size-4 ml-1" /></>)}
+                </Button>
               </div>
             )}
+            <AuthModal open={showAuth} defaultMode="login" onClose={()=>setShowAuth(false)} />
           </motion.div>
         </div>
 

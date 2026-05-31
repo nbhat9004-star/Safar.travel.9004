@@ -8,7 +8,7 @@ import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
-import { listingsApi, apiJson } from '@/lib/listings-api';
+import { listingsApi, apiJson, bookingsApi } from '@/lib/listings-api';
 
 function LineChart({ data }) {
   const max = Math.max(...data); const min = Math.min(...data);
@@ -35,20 +35,23 @@ function AdminInner() {
   const [pending, setPending] = useState([]);
   const [all, setAll] = useState([]);
   const [users, setUsers] = useState([]);
+  const [allBookings, setAllBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const revenue = [22,28,34,30,42,55,49,62,68,71,84,96];
 
   const load = async () => {
     setLoading(true); setError(null);
-    const [p, a, u] = await Promise.all([
+    const [p, a, u, bk] = await Promise.all([
       listingsApi.list({ status: 'pending', limit: 50 }),
       listingsApi.list({ status: 'all', limit: 200 }),
       apiJson('/api/users'),
+      bookingsApi.list('all'),
     ]);
     if (p.ok && p.data?.ok) setPending(p.data.listings); else setError(p.data?.error || 'Failed to load pending');
     if (a.ok && a.data?.ok) setAll(a.data.listings);
     if (u.ok && u.data?.ok) setUsers(u.data.users);
+    if (bk.ok && bk.data?.ok) setAllBookings(bk.data.bookings || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -169,6 +172,33 @@ function AdminInner() {
                     {p.status !== 'rejected' && <Button onClick={()=>reject(p.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600"><X className="size-3.5" /></Button>}
                     <Link href={`/property/${p.id}`} className="px-3 py-1 rounded-full bg-secondary text-xs font-semibold">View</Link>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* All Bookings */}
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-2xl font-bold">All bookings</h2>
+            <span className="text-sm text-muted-foreground">{allBookings.length} total · {allBookings.filter(b=>b.status==='pending').length} pending</span>
+          </div>
+          {!loading && allBookings.length === 0 && (
+            <div className="p-6 rounded-3xl border bg-white text-center text-sm text-muted-foreground">No bookings yet.</div>
+          )}
+          {!loading && allBookings.length > 0 && (
+            <div className="rounded-3xl border bg-white overflow-hidden">
+              <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                <div className="col-span-4">Listing</div><div className="col-span-3">Guest → Host</div><div className="col-span-2">Dates</div><div className="col-span-1">Status</div><div className="col-span-2 text-right">Total</div>
+              </div>
+              {allBookings.slice(0, 10).map((b) => (
+                <div key={b.bookingId} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                  <div className="col-span-4 flex items-center gap-3">{b.listingImage && <img src={b.listingImage} className="size-10 rounded-lg object-cover" alt="" />}<div><div className="font-semibold text-sm line-clamp-1">{b.listingTitle}</div></div></div>
+                  <div className="col-span-3 text-xs">{b.travelerName}<br/><span className="text-muted-foreground">→ {b.hostName}</span></div>
+                  <div className="col-span-2 text-xs">{new Date(b.checkInDate).toLocaleDateString()} →<br/>{new Date(b.checkOutDate).toLocaleDateString()}</div>
+                  <div className="col-span-1"><StatusPill s={b.status} /></div>
+                  <div className="col-span-2 text-right text-sm font-semibold">₹{(b.totalPrice||0).toLocaleString('en-IN')}</div>
                 </div>
               ))}
             </div>

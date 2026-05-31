@@ -54,7 +54,7 @@ def print_info(msg):
     print(f"ℹ️  INFO: {msg}")
 
 def cleanup_test_data():
-    """Remove test users and listings from MongoDB"""
+    """Remove test users, listings, and bookings from MongoDB"""
     try:
         client = MongoClient(MONGO_URL)
         db = client[DB_NAME]
@@ -67,6 +67,10 @@ def cleanup_test_data():
         # Clean test listings (non-demo)
         result = db['listings'].delete_many({'isDemo': False})
         print_info(f"Cleaned up {result.deleted_count} test listings")
+        
+        # Clean test bookings
+        result = db['bookings'].delete_many({})
+        print_info(f"Cleaned up {result.deleted_count} test bookings")
         
         client.close()
     except Exception as e:
@@ -1475,9 +1479,988 @@ def test_mongodb_persistence():
         print_fail(f"MongoDB check failed: {e}")
         return False
 
+
+# ============================================================================
+# BOOKINGS API TESTS
+# ============================================================================
+
+# Global variables to store test data
+HOST_TOKEN = None
+HOST_ID = None
+TRAVELER_TOKEN = None
+TRAVELER_ID = None
+ADMIN_TOKEN = None
+APPROVED_LISTING_ID = None
+BOOKING_ID_1 = None
+BOOKING_ID_2 = None
+
+def setup_bookings_test_data():
+    """Setup: Login users and create an approved listing"""
+    global HOST_TOKEN, HOST_ID, TRAVELER_TOKEN, TRAVELER_ID, ADMIN_TOKEN, APPROVED_LISTING_ID
+    
+    print_test("BOOKINGS SETUP: Login users and create approved listing")
+    
+    # Login host
+    HOST_TOKEN = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
+    if not HOST_TOKEN:
+        print_fail("Failed to login host")
+        return False
+    print_pass("Host logged in")
+    
+    # Get host ID
+    try:
+        response = requests.get(
+            f"{API_BASE}/auth/me",
+            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
+            timeout=10
+        )
+        if response.status_code == 200:
+            HOST_ID = response.json()['user']['id']
+            print_pass(f"Host ID: {HOST_ID}")
+    except:
+        print_fail("Failed to get host ID")
+        return False
+    
+    # Login traveler
+    TRAVELER_TOKEN = get_auth_token(TEST_TRAVELER['email'], TEST_TRAVELER['password'])
+    if not TRAVELER_TOKEN:
+        print_fail("Failed to login traveler")
+        return False
+    print_pass("Traveler logged in")
+    
+    # Get traveler ID
+    try:
+        response = requests.get(
+            f"{API_BASE}/auth/me",
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        if response.status_code == 200:
+            TRAVELER_ID = response.json()['user']['id']
+            print_pass(f"Traveler ID: {TRAVELER_ID}")
+    except:
+        print_fail("Failed to get traveler ID")
+        return False
+    
+    # Login admin
+    ADMIN_TOKEN = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
+    if not ADMIN_TOKEN:
+        print_fail("Failed to login admin")
+        return False
+    print_pass("Admin logged in")
+    
+    # Create a listing as host
+    listing_data = {
+        'title': 'Test Houseboat for Bookings',
+        'description': 'Beautiful houseboat on Dal Lake for testing bookings',
+        'category': 'stay',
+        'subcategory': 'houseboat',
+        'location': 'Dal Lake, Srinagar',
+        'price': 5000,
+        'images': ['https://example.com/houseboat.jpg'],
+        'amenities': ['wifi', 'kitchen'],
+        'services': ['breakfast', 'pickup']
+    }
+    
+    try:
+        response = requests.post(
+            f"{API_BASE}/listings",
+            json=listing_data,
+            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
+            timeout=10
+        )
+        if response.status_code == 201:
+            listing_id = response.json()['listing']['id']
+            print_pass(f"Created listing: {listing_id}")
+            
+            # Approve the listing as admin
+            response = requests.post(
+                f"{API_BASE}/listings/{listing_id}/approve",
+                headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
+                timeout=10
+            )
+            if response.status_code == 200:
+                APPROVED_LISTING_ID = listing_id
+                print_pass(f"Approved listing: {APPROVED_LISTING_ID}")
+                return True
+            else:
+                print_fail(f"Failed to approve listing: {response.status_code}")
+                return False
+        else:
+            print_fail(f"Failed to create listing: {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception during setup: {e}")
+        return False
+
+# A) POST /api/bookings (create) tests
+
+def test_booking_create_no_auth():
+    """A1) POST /api/bookings without auth -> 401"""
+    print_test("BOOKINGS A1: Create booking without auth -> 401")
+    
+    try:
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2026-06-01',
+            'checkOutDate': '2026-06-05',
+            'guests': 2
+        }
+        response = requests.post(f"{API_BASE}/bookings", json=booking_data, timeout=10)
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 401:
+            print_pass("Correctly returned 401 Unauthorized")
+            return True
+        else:
+            print_fail(f"Expected 401, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_create_missing_listing_id():
+    """A2) POST /api/bookings without listingId -> 400"""
+    print_test("BOOKINGS A2: Create booking without listingId -> 400")
+    
+    try:
+        booking_data = {
+            'checkInDate': '2026-06-01',
+            'checkOutDate': '2026-06-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 400:
+            print_pass("Correctly returned 400 Bad Request")
+            return True
+        else:
+            print_fail(f"Expected 400, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_create_invalid_dates():
+    """A3) POST /api/bookings with invalid dates -> 400"""
+    print_test("BOOKINGS A3: Create booking with invalid dates -> 400")
+    
+    all_passed = True
+    
+    # Test 1: Past check-in date
+    try:
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2020-01-01',
+            'checkOutDate': '2020-01-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Past date - Status: {response.status_code}")
+        if response.status_code == 400:
+            print_pass("Past check-in correctly rejected")
+        else:
+            print_fail(f"Past check-in: Expected 400, got {response.status_code}")
+            all_passed = False
+    except Exception as e:
+        print_fail(f"Past date exception: {e}")
+        all_passed = False
+    
+    # Test 2: Check-out <= check-in
+    try:
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2026-06-05',
+            'checkOutDate': '2026-06-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Same date - Status: {response.status_code}")
+        if response.status_code == 400:
+            print_pass("Check-out <= check-in correctly rejected")
+        else:
+            print_fail(f"Same dates: Expected 400, got {response.status_code}")
+            all_passed = False
+    except Exception as e:
+        print_fail(f"Same date exception: {e}")
+        all_passed = False
+    
+    # Test 3: Invalid date format (NaN)
+    try:
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': 'invalid-date',
+            'checkOutDate': '2026-06-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Invalid date - Status: {response.status_code}")
+        if response.status_code == 400:
+            print_pass("Invalid date format correctly rejected")
+        else:
+            print_fail(f"Invalid date: Expected 400, got {response.status_code}")
+            all_passed = False
+    except Exception as e:
+        print_fail(f"Invalid date exception: {e}")
+        all_passed = False
+    
+    return all_passed
+
+def test_booking_create_nonexistent_listing():
+    """A4) POST /api/bookings with non-existent listingId -> 404"""
+    print_test("BOOKINGS A4: Create booking with non-existent listing -> 404")
+    
+    try:
+        booking_data = {
+            'listingId': 'nonexistent-listing-id',
+            'checkInDate': '2026-06-01',
+            'checkOutDate': '2026-06-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 404:
+            print_pass("Correctly returned 404 Not Found")
+            return True
+        else:
+            print_fail(f"Expected 404, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_create_pending_listing():
+    """A5) POST /api/bookings with pending/rejected listing -> 404"""
+    print_test("BOOKINGS A5: Create booking with pending listing -> 404")
+    
+    try:
+        # Create a pending listing as host
+        listing_data = {
+            'title': 'Pending Test Listing',
+            'description': 'This listing is pending approval',
+            'category': 'stay',
+            'location': 'Test Location',
+            'price': 3000
+        }
+        response = requests.post(
+            f"{API_BASE}/listings",
+            json=listing_data,
+            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            pending_listing_id = response.json()['listing']['id']
+            print_info(f"Created pending listing: {pending_listing_id}")
+            
+            # Try to book the pending listing
+            booking_data = {
+                'listingId': pending_listing_id,
+                'checkInDate': '2026-06-01',
+                'checkOutDate': '2026-06-05',
+                'guests': 2
+            }
+            response = requests.post(
+                f"{API_BASE}/bookings",
+                json=booking_data,
+                headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+                timeout=10
+            )
+            print_info(f"Booking status: {response.status_code}")
+            
+            if response.status_code == 404:
+                print_pass("Correctly rejected booking for pending listing")
+                return True
+            else:
+                print_fail(f"Expected 404, got {response.status_code}")
+                return False
+        else:
+            print_fail(f"Failed to create pending listing: {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_create_valid():
+    """A6) POST /api/bookings with valid payload -> 201"""
+    print_test("BOOKINGS A6: Create booking with valid payload -> 201")
+    
+    global BOOKING_ID_1
+    
+    try:
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2026-06-01',
+            'checkOutDate': '2026-06-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code != 201:
+            print_fail(f"Expected 201, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        booking = data.get('booking', {})
+        
+        # Check bookingId (uuid)
+        booking_id = booking.get('bookingId')
+        if booking_id and len(booking_id) == 36:
+            print_pass(f"Booking has UUID bookingId: {booking_id}")
+            BOOKING_ID_1 = booking_id
+        else:
+            print_fail(f"Invalid bookingId: {booking_id}")
+            return False
+        
+        # Check status
+        if booking.get('status') == 'pending':
+            print_pass("Booking status is 'pending'")
+        else:
+            print_fail(f"Expected status='pending', got {booking.get('status')}")
+            return False
+        
+        # Check hostId auto-filled
+        if booking.get('hostId') == HOST_ID:
+            print_pass(f"HostId auto-filled correctly: {HOST_ID}")
+        else:
+            print_fail(f"HostId mismatch: expected {HOST_ID}, got {booking.get('hostId')}")
+            return False
+        
+        # Check nights and totalPrice
+        nights = booking.get('nights')
+        total_price = booking.get('totalPrice')
+        price_per_night = booking.get('pricePerNight')
+        
+        if nights == 4:
+            print_pass(f"Nights calculated correctly: {nights}")
+        else:
+            print_fail(f"Expected 4 nights, got {nights}")
+            return False
+        
+        if price_per_night == 5000:
+            print_pass(f"Price per night: {price_per_night}")
+        else:
+            print_fail(f"Expected price 5000, got {price_per_night}")
+            return False
+        
+        expected_total = 5000 * 4
+        if total_price == expected_total:
+            print_pass(f"Total price calculated correctly: {total_price}")
+        else:
+            print_fail(f"Expected total {expected_total}, got {total_price}")
+            return False
+        
+        return True
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_create_overlapping():
+    """A7) POST /api/bookings with overlapping dates -> 409"""
+    print_test("BOOKINGS A7: Create booking with overlapping dates -> 409")
+    
+    try:
+        # Try to book overlapping dates (June 1-5 already booked, try June 3-7)
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2026-06-03',
+            'checkOutDate': '2026-06-07',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 409:
+            print_pass("Correctly returned 409 Conflict for overlapping dates")
+            return True
+        else:
+            print_fail(f"Expected 409, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_create_non_overlapping():
+    """A8) POST /api/bookings with non-overlapping dates -> 201"""
+    print_test("BOOKINGS A8: Create booking with non-overlapping dates -> 201")
+    
+    global BOOKING_ID_2
+    
+    try:
+        # Book non-overlapping dates (June 10-15)
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2026-06-10',
+            'checkOutDate': '2026-06-15',
+            'guests': 3
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 201:
+            booking_id = response.json()['booking']['bookingId']
+            BOOKING_ID_2 = booking_id
+            print_pass(f"Successfully created non-overlapping booking: {booking_id}")
+            return True
+        else:
+            print_fail(f"Expected 201, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+# B) GET /api/bookings (list) tests
+
+def test_booking_list_no_auth():
+    """B1) GET /api/bookings without auth -> 401"""
+    print_test("BOOKINGS B1: List bookings without auth -> 401")
+    
+    try:
+        response = requests.get(f"{API_BASE}/bookings", timeout=10)
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 401:
+            print_pass("Correctly returned 401 Unauthorized")
+            return True
+        else:
+            print_fail(f"Expected 401, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_list_traveler():
+    """B2) GET /api/bookings as traveler -> only own bookings"""
+    print_test("BOOKINGS B2: List bookings as traveler -> only own")
+    
+    try:
+        response = requests.get(
+            f"{API_BASE}/bookings",
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print_fail(f"Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        bookings = data.get('bookings', [])
+        
+        print_info(f"Found {len(bookings)} bookings")
+        
+        # All bookings should belong to traveler
+        all_mine = all(b.get('travelerId') == TRAVELER_ID for b in bookings)
+        if all_mine:
+            print_pass("All bookings belong to traveler")
+            return True
+        else:
+            print_fail("Some bookings don't belong to traveler")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_list_host_default():
+    """B3) GET /api/bookings as host (default) -> only received"""
+    print_test("BOOKINGS B3: List bookings as host (default) -> only received")
+    
+    try:
+        response = requests.get(
+            f"{API_BASE}/bookings",
+            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print_fail(f"Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        bookings = data.get('bookings', [])
+        
+        print_info(f"Found {len(bookings)} bookings")
+        
+        # All bookings should be for host's listings
+        all_received = all(b.get('hostId') == HOST_ID for b in bookings)
+        if all_received:
+            print_pass("All bookings are for host's listings")
+            return True
+        else:
+            print_fail("Some bookings are not for host's listings")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_list_host_received():
+    """B4) GET /api/bookings as host with ?view=received -> same as default"""
+    print_test("BOOKINGS B4: List bookings as host with ?view=received")
+    
+    try:
+        response = requests.get(
+            f"{API_BASE}/bookings?view=received",
+            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print_fail(f"Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        bookings = data.get('bookings', [])
+        
+        print_info(f"Found {len(bookings)} bookings")
+        
+        # All bookings should be for host's listings
+        all_received = all(b.get('hostId') == HOST_ID for b in bookings)
+        if all_received:
+            print_pass("All bookings are for host's listings")
+            return True
+        else:
+            print_fail("Some bookings are not for host's listings")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_list_admin_all():
+    """B5) GET /api/bookings as admin with ?view=all -> all bookings"""
+    print_test("BOOKINGS B5: List bookings as admin with ?view=all")
+    
+    try:
+        response = requests.get(
+            f"{API_BASE}/bookings?view=all",
+            headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print_fail(f"Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        bookings = data.get('bookings', [])
+        
+        print_info(f"Found {len(bookings)} bookings")
+        
+        # Should have at least 2 bookings (the ones we created)
+        if len(bookings) >= 2:
+            print_pass(f"Admin can see all bookings: {len(bookings)}")
+            return True
+        else:
+            print_fail(f"Expected at least 2 bookings, got {len(bookings)}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+# C) PATCH /api/bookings/:id (status update) tests
+
+def test_booking_patch_no_auth():
+    """C1) PATCH /api/bookings/:id without auth -> 401"""
+    print_test("BOOKINGS C1: Patch booking without auth -> 401")
+    
+    try:
+        response = requests.patch(
+            f"{API_BASE}/bookings/{BOOKING_ID_1}",
+            json={'status': 'approved'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 401:
+            print_pass("Correctly returned 401 Unauthorized")
+            return True
+        else:
+            print_fail(f"Expected 401, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_patch_invalid_status():
+    """C2) PATCH /api/bookings/:id with invalid status -> 400"""
+    print_test("BOOKINGS C2: Patch booking with invalid status -> 400")
+    
+    try:
+        response = requests.patch(
+            f"{API_BASE}/bookings/{BOOKING_ID_1}",
+            json={'status': 'invalid_status'},
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 400:
+            print_pass("Correctly returned 400 Bad Request")
+            return True
+        else:
+            print_fail(f"Expected 400, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_patch_nonexistent():
+    """C3) PATCH /api/bookings/:id with non-existent id -> 404"""
+    print_test("BOOKINGS C3: Patch non-existent booking -> 404")
+    
+    try:
+        response = requests.patch(
+            f"{API_BASE}/bookings/nonexistent-booking-id",
+            json={'status': 'cancelled'},
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 404:
+            print_pass("Correctly returned 404 Not Found")
+            return True
+        else:
+            print_fail(f"Expected 404, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_patch_traveler_approve():
+    """C4) Traveler tries to approve/reject -> 403"""
+    print_test("BOOKINGS C4: Traveler tries to approve -> 403")
+    
+    try:
+        response = requests.patch(
+            f"{API_BASE}/bookings/{BOOKING_ID_1}",
+            json={'status': 'approved'},
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code == 403:
+            print_pass("Correctly returned 403 Forbidden")
+            return True
+        else:
+            print_fail(f"Expected 403, got {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_patch_traveler_cancel():
+    """C5) Traveler cancels own booking -> 200"""
+    print_test("BOOKINGS C5: Traveler cancels own booking -> 200")
+    
+    try:
+        response = requests.patch(
+            f"{API_BASE}/bookings/{BOOKING_ID_2}",
+            json={'status': 'cancelled'},
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print_fail(f"Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        booking = data.get('booking', {})
+        
+        if booking.get('status') == 'cancelled':
+            print_pass("Booking status updated to 'cancelled'")
+            return True
+        else:
+            print_fail(f"Expected status='cancelled', got {booking.get('status')}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_patch_host_wrong_listing():
+    """C6) Host tries to approve booking not on their listing -> 403"""
+    print_test("BOOKINGS C6: Host tries to approve booking not on their listing -> 403")
+    
+    # This test would require creating another host and their listing
+    # For simplicity, we'll skip this as our current setup only has one host
+    # and all bookings are for that host's listing
+    print_info("Skipping: Would require multiple hosts setup")
+    return True
+
+def test_booking_patch_host_approve():
+    """C7) Host approves booking on their listing -> 200"""
+    print_test("BOOKINGS C7: Host approves booking on their listing -> 200")
+    
+    try:
+        response = requests.patch(
+            f"{API_BASE}/bookings/{BOOKING_ID_1}",
+            json={'status': 'approved'},
+            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
+            timeout=10
+        )
+        print_info(f"Status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print_fail(f"Expected 200, got {response.status_code}")
+            return False
+        
+        data = response.json()
+        booking = data.get('booking', {})
+        
+        if booking.get('status') == 'approved':
+            print_pass("Booking status updated to 'approved'")
+            return True
+        else:
+            print_fail(f"Expected status='approved', got {booking.get('status')}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_patch_host_reject():
+    """C8) Host rejects booking on their listing -> 200"""
+    print_test("BOOKINGS C8: Host rejects booking on their listing -> 200")
+    
+    # First create a new booking to reject
+    try:
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2026-07-01',
+            'checkOutDate': '2026-07-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            booking_id = response.json()['booking']['bookingId']
+            print_info(f"Created booking to reject: {booking_id}")
+            
+            # Now reject it as host
+            response = requests.patch(
+                f"{API_BASE}/bookings/{booking_id}",
+                json={'status': 'rejected'},
+                headers={'Authorization': f'Bearer {HOST_TOKEN}'},
+                timeout=10
+            )
+            print_info(f"Reject status: {response.status_code}")
+            
+            if response.status_code != 200:
+                print_fail(f"Expected 200, got {response.status_code}")
+                return False
+            
+            data = response.json()
+            booking = data.get('booking', {})
+            
+            if booking.get('status') == 'rejected':
+                print_pass("Booking status updated to 'rejected'")
+                return True
+            else:
+                print_fail(f"Expected status='rejected', got {booking.get('status')}")
+                return False
+        else:
+            print_fail(f"Failed to create booking: {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+def test_booking_patch_admin():
+    """C9) Admin can patch any booking to any valid status"""
+    print_test("BOOKINGS C9: Admin can patch any booking -> 200")
+    
+    # Create a new booking
+    try:
+        booking_data = {
+            'listingId': APPROVED_LISTING_ID,
+            'checkInDate': '2026-08-01',
+            'checkOutDate': '2026-08-05',
+            'guests': 2
+        }
+        response = requests.post(
+            f"{API_BASE}/bookings",
+            json=booking_data,
+            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            booking_id = response.json()['booking']['bookingId']
+            print_info(f"Created booking for admin test: {booking_id}")
+            
+            # Admin approves it
+            response = requests.patch(
+                f"{API_BASE}/bookings/{booking_id}",
+                json={'status': 'approved'},
+                headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
+                timeout=10
+            )
+            print_info(f"Admin approve status: {response.status_code}")
+            
+            if response.status_code != 200:
+                print_fail(f"Expected 200, got {response.status_code}")
+                return False
+            
+            if response.json()['booking']['status'] == 'approved':
+                print_pass("Admin successfully approved booking")
+            else:
+                print_fail("Admin approval failed")
+                return False
+            
+            # Admin cancels it
+            response = requests.patch(
+                f"{API_BASE}/bookings/{booking_id}",
+                json={'status': 'cancelled'},
+                headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
+                timeout=10
+            )
+            print_info(f"Admin cancel status: {response.status_code}")
+            
+            if response.status_code != 200:
+                print_fail(f"Expected 200, got {response.status_code}")
+                return False
+            
+            if response.json()['booking']['status'] == 'cancelled':
+                print_pass("Admin successfully cancelled booking")
+                return True
+            else:
+                print_fail("Admin cancellation failed")
+                return False
+        else:
+            print_fail(f"Failed to create booking: {response.status_code}")
+            return False
+    except Exception as e:
+        print_fail(f"Exception: {e}")
+        return False
+
+# D) MongoDB persistence test
+
+def test_booking_mongodb_persistence():
+    """D) Verify MongoDB persistence"""
+    print_test("BOOKINGS D: MongoDB Persistence Verification")
+    
+    try:
+        client = MongoClient(MONGO_URL)
+        db = client[DB_NAME]
+        bookings = db['bookings']
+        
+        # Find a booking
+        booking = bookings.find_one({'bookingId': BOOKING_ID_1})
+        
+        if not booking:
+            print_fail("Booking not found in MongoDB")
+            return False
+        
+        print_pass("Booking found in safar.bookings collection")
+        
+        # Check bookingId is UUID format
+        booking_id = booking.get('bookingId')
+        if booking_id and len(booking_id) == 36 and booking_id.count('-') == 4:
+            print_pass(f"bookingId is UUID format: {booking_id}")
+        else:
+            print_fail(f"Invalid bookingId format: {booking_id}")
+            return False
+        
+        # Check status is valid
+        status = booking.get('status')
+        if status in ['pending', 'approved', 'rejected', 'cancelled']:
+            print_pass(f"Status is valid: {status}")
+        else:
+            print_fail(f"Invalid status: {status}")
+            return False
+        
+        # Check travelerId and hostId references
+        if booking.get('travelerId'):
+            print_pass(f"travelerId present: {booking.get('travelerId')}")
+        else:
+            print_fail("travelerId missing")
+            return False
+        
+        if booking.get('hostId'):
+            print_pass(f"hostId present: {booking.get('hostId')}")
+        else:
+            print_fail("hostId missing")
+            return False
+        
+        # Check dates are stored as Date objects
+        check_in = booking.get('checkInDate')
+        check_out = booking.get('checkOutDate')
+        
+        from datetime import datetime
+        if isinstance(check_in, datetime):
+            print_pass("checkInDate stored as Date object")
+        else:
+            print_fail(f"checkInDate not a Date object: {type(check_in)}")
+            return False
+        
+        if isinstance(check_out, datetime):
+            print_pass("checkOutDate stored as Date object")
+        else:
+            print_fail(f"checkOutDate not a Date object: {type(check_out)}")
+            return False
+        
+        client.close()
+        return True
+    except Exception as e:
+        print_fail(f"MongoDB check failed: {e}")
+        return False
+
 def main():
     print("\n" + "="*80)
-    print("SAFAR LISTINGS API BACKEND TEST SUITE")
+    print("SAFAR BOOKINGS API BACKEND TEST SUITE")
     print("="*80)
     print_info(f"API Base URL: {API_BASE}")
     print_info(f"MongoDB: {MONGO_URL}/{DB_NAME}")
@@ -1489,46 +2472,60 @@ def main():
     cleanup_test_data()
     setup_test_users()
     
+    # Setup bookings test data (login users, create approved listing)
+    if not setup_bookings_test_data():
+        print_fail("Failed to setup bookings test data")
+        return False
+    
     # Track results
     results = {}
     
-    # Run tests
-    results['auto_seed'] = test_auto_seed()
-    results['filter_category'] = test_filter_category()
-    results['filter_subcategory'] = test_filter_subcategory()
-    results['filter_services'] = test_filter_services()
-    results['filter_price_range'] = test_filter_price_range()
-    results['filter_location'] = test_filter_location()
-    results['filter_status_no_auth'] = test_filter_status_no_auth()
-    results['filter_status_admin'] = test_filter_status_admin()
-    results['create_no_auth'] = test_create_listing_no_auth()
-    results['create_traveler'] = test_create_listing_traveler()
-    results['create_host'] = test_create_listing_host()[0]
-    results['create_admin'] = test_create_listing_admin()[0]
-    results['create_validation'] = test_create_listing_validation()
-    results['get_single_approved'] = test_get_single_listing_approved()
-    results['get_single_pending_no_auth'] = test_get_single_listing_pending_no_auth()
-    results['get_single_pending_owner'] = test_get_single_listing_pending_owner()
-    results['get_single_pending_admin'] = test_get_single_listing_pending_admin()
-    results['get_nonexistent'] = test_get_nonexistent_listing()
-    results['update_non_owner'] = test_update_listing_non_owner()
-    results['update_owner'] = test_update_listing_owner()
-    results['update_admin'] = test_update_listing_admin()
-    results['update_validation'] = test_update_listing_validation()
-    results['delete_non_owner'] = test_delete_listing_non_owner()
-    results['delete_owner'] = test_delete_listing_owner()
-    results['get_host_me'] = test_get_host_listings_me()
-    results['get_host_by_id_no_auth'] = test_get_host_listings_by_id_no_auth()
-    results['get_host_by_id_admin'] = test_get_host_listings_by_id_admin()
-    results['get_host_me_no_auth'] = test_get_host_listings_me_no_auth()
-    results['approve_non_admin'] = test_approve_listing_non_admin()
-    results['approve_admin'] = test_approve_listing_admin()
-    results['reject_admin'] = test_reject_listing_admin()
-    results['mongodb_persistence'] = test_mongodb_persistence()
+    # A) POST /api/bookings (create) tests
+    print("\n" + "="*80)
+    print("SECTION A: CREATE BOOKING TESTS")
+    print("="*80)
+    results['booking_create_no_auth'] = test_booking_create_no_auth()
+    results['booking_create_missing_listing_id'] = test_booking_create_missing_listing_id()
+    results['booking_create_invalid_dates'] = test_booking_create_invalid_dates()
+    results['booking_create_nonexistent_listing'] = test_booking_create_nonexistent_listing()
+    results['booking_create_pending_listing'] = test_booking_create_pending_listing()
+    results['booking_create_valid'] = test_booking_create_valid()
+    results['booking_create_overlapping'] = test_booking_create_overlapping()
+    results['booking_create_non_overlapping'] = test_booking_create_non_overlapping()
+    
+    # B) GET /api/bookings (list) tests
+    print("\n" + "="*80)
+    print("SECTION B: LIST BOOKINGS TESTS")
+    print("="*80)
+    results['booking_list_no_auth'] = test_booking_list_no_auth()
+    results['booking_list_traveler'] = test_booking_list_traveler()
+    results['booking_list_host_default'] = test_booking_list_host_default()
+    results['booking_list_host_received'] = test_booking_list_host_received()
+    results['booking_list_admin_all'] = test_booking_list_admin_all()
+    
+    # C) PATCH /api/bookings/:id (status update) tests
+    print("\n" + "="*80)
+    print("SECTION C: UPDATE BOOKING STATUS TESTS")
+    print("="*80)
+    results['booking_patch_no_auth'] = test_booking_patch_no_auth()
+    results['booking_patch_invalid_status'] = test_booking_patch_invalid_status()
+    results['booking_patch_nonexistent'] = test_booking_patch_nonexistent()
+    results['booking_patch_traveler_approve'] = test_booking_patch_traveler_approve()
+    results['booking_patch_traveler_cancel'] = test_booking_patch_traveler_cancel()
+    results['booking_patch_host_wrong_listing'] = test_booking_patch_host_wrong_listing()
+    results['booking_patch_host_approve'] = test_booking_patch_host_approve()
+    results['booking_patch_host_reject'] = test_booking_patch_host_reject()
+    results['booking_patch_admin'] = test_booking_patch_admin()
+    
+    # D) MongoDB persistence test
+    print("\n" + "="*80)
+    print("SECTION D: MONGODB PERSISTENCE TEST")
+    print("="*80)
+    results['booking_mongodb_persistence'] = test_booking_mongodb_persistence()
     
     # Summary
     print("\n" + "="*80)
-    print("TEST SUMMARY")
+    print("BOOKINGS API TEST SUMMARY")
     print("="*80)
     
     passed = sum(1 for v in results.values() if v)

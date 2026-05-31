@@ -9,7 +9,7 @@ import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
 import { useAuth } from '@/lib/auth-context';
-import { listingsApi } from '@/lib/listings-api';
+import { listingsApi, bookingsApi } from '@/lib/listings-api';
 
 function Bars({ data }) {
   const max = Math.max(...data);
@@ -35,15 +35,20 @@ const StatusPill = ({ s }) => {
 function HostDashboardInner() {
   const { user } = useAuth();
   const [myListings, setMyListings] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const earnings = [12,18,9,22,28,31,26,38,33,42,46,52];
 
   const load = async () => {
     setLoading(true); setError(null);
-    const { ok, data, status } = await listingsApi.myHostListings();
-    if (ok && data?.ok) setMyListings(data.listings || []);
-    else setError(data?.error || `Failed (${status})`);
+    const [r, b] = await Promise.all([
+      listingsApi.myHostListings(),
+      bookingsApi.list('received'),
+    ]);
+    if (r.ok && r.data?.ok) setMyListings(r.data.listings || []);
+    else setError(r.data?.error || 'Failed to load listings');
+    if (b.ok && b.data?.ok) setBookings(b.data.bookings || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -53,6 +58,13 @@ function HostDashboardInner() {
     const { ok, data } = await listingsApi.remove(id);
     if (!ok) return toast.error(data?.error || 'Delete failed');
     toast.success('Listing deleted');
+    load();
+  };
+
+  const updateBooking = async (id, status) => {
+    const { ok, data } = await bookingsApi.patch(id, status);
+    if (!ok) return toast.error(data?.error || 'Action failed');
+    toast.success(status === 'approved' ? 'Booking approved' : 'Booking rejected');
     load();
   };
 
@@ -106,6 +118,38 @@ function HostDashboardInner() {
             </div>
           </div>
         </div>
+
+        {/* Booking Requests */}
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-2xl font-bold">Booking requests</h2>
+            <span className="text-sm text-muted-foreground">{bookings.filter(b=>b.status==='pending').length} pending</span>
+          </div>
+          {!loading && bookings.length === 0 && (
+            <div className="p-6 rounded-3xl border bg-white text-center text-sm text-muted-foreground">No booking requests yet.</div>
+          )}
+          {!loading && bookings.length > 0 && (
+            <div className="rounded-3xl border bg-white overflow-hidden">
+              <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                <div className="col-span-4">Listing</div><div className="col-span-3">Guest</div><div className="col-span-2">Dates</div><div className="col-span-1">Status</div><div className="col-span-2 text-right">Action</div>
+              </div>
+              {bookings.map((b) => (
+                <div key={b.bookingId} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                  <div className="col-span-4 flex items-center gap-3">{b.listingImage && <img src={b.listingImage} className="size-10 rounded-lg object-cover" alt="" />}<div><div className="font-semibold text-sm line-clamp-1">{b.listingTitle}</div><div className="text-xs text-muted-foreground">₹{(b.totalPrice||0).toLocaleString('en-IN')} · {b.nights}n</div></div></div>
+                  <div className="col-span-3"><div className="text-sm">{b.travelerName}</div><div className="text-xs text-muted-foreground">{b.guests} guests</div></div>
+                  <div className="col-span-2 text-xs">{new Date(b.checkInDate).toLocaleDateString()} →<br/>{new Date(b.checkOutDate).toLocaleDateString()}</div>
+                  <div className="col-span-1"><span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${b.status==='approved'?'bg-emerald-50 text-emerald2 border-emerald-200':b.status==='pending'?'bg-amber-50 text-amber-700 border-amber-200':b.status==='rejected'?'bg-rose-50 text-rose-600 border-rose-200':'bg-secondary text-muted-foreground border-border'}`}>{b.status}</span></div>
+                  <div className="col-span-2 flex gap-1.5 justify-end">
+                    {b.status === 'pending' && <>
+                      <Button onClick={()=>updateBooking(b.bookingId,'approved')} size="sm" className="rounded-full h-8 bg-emerald2 hover:bg-emerald2-deep">Approve</Button>
+                      <Button onClick={()=>updateBooking(b.bookingId,'rejected')} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50">Reject</Button>
+                    </>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* My Listings */}
         <section className="mt-10">

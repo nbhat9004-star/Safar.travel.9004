@@ -327,6 +327,98 @@ async function route(request, { params }) {
     }
   }
 
+  // ---------- BOOKINGS ----------
+  // POST /api/bookings (traveler creates a booking request)
+  if (path === '/bookings' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const { listingId, checkInDate, checkOutDate, guests } = await readBody(request);
+    if (!listingId) return err('listingId is required');
+    const ci = new Date(checkInDate), co = new Date(checkOutDate);
+    if (isNaN(ci) || isNaN(co)) return err('Invalid dates');
+    if (ci < new Date(new Date().toDateString())) return err('Check-in must be in the future');
+    if (co <= ci) return err('Check-out must be after check-in');
+    const g = Number(guests) || 1;
+    if (g < 1 || g > 30) return err('Guests must be between 1 and 30');
+
+    const listings = await getCollection('listings');
+    const listing = await listings.findOne({ id: listingId });
+    if (!listing || listing.status !== 'approved') return err('Listing not available for booking', 404);
+
+    // Prevent overlapping bookings for same listing
+    const bookings = await getCollection('bookings');
+    const overlap = await bookings.findOne({
+      listingId,
+      status: { $in: ['pending','approved'] },
+      checkInDate: { $lt: co },
+      checkOutDate: { $gt: ci },
+    });
+    if (overlap) return err('These dates overlap with an existing booking. Please pick other dates.', 409);
+
+    const nights = Math.max(1, Math.round((co - ci) / 86400000));
+    const totalPrice = listing.price * nights;
+    const doc = {
+      bookingId: uuid(),
+      listingId,
+      listingTitle: listing.title,
+      listingImage: (listing.images && listing.images[0]) || null,
+      travelerId: me.id,
+      travelerName: me.name,
+      travelerEmail: me.email,
+      hostId: listing.hostId,
+      hostName: listing.hostName || 'Safar Host',
+      checkInDate: ci,
+      checkOutDate: co,
+      guests: g,
+      nights,
+      pricePerNight: listing.price,
+      totalPrice,
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await bookings.insertOne(doc);
+    const { _id, ...rest } = doc;
+    return ok({ booking: rest }, 201);
+  }
+
+  // GET /api/bookings  (auth-aware: traveler->own, host->received, admin->all; ?role=traveler|host to disambiguate)
+  if (path === '/bookings' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const view = url.searchParams.get('view'); // 'mine' | 'received' | 'all'
+    const bookings = await getCollection('bookings');
+    let filter = {};
+    if (me.role === 'admin' && view === 'all') filter = {};
+    else if (view === 'received' || me.role === 'host') filter = { hostId: me.id };
+    else filter = { travelerId: me.id };
+    // Travelers can only see their own; hosts default to received
+    if (me.role === 'traveler') filter = { travelerId: me.id };
+    const docs = await bookings.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
+    return ok({ bookings: docs });
+  }
+
+  // PATCH /api/bookings/:id  (host approve/reject; traveler cancel)
+  if (segments[0] === 'bookings' && segments[1] && method === 'PATCH') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const id = segments[1];
+    const { status } = await readBody(request);
+    if (!['approved','rejected','cancelled'].includes(status)) return err('Invalid status');
+    const bookings = await getCollection('bookings');
+    const b = await bookings.findOne({ bookingId: id });
+    if (!b) return err('Booking not found', 404);
+    // Permissions
+    const isAdmin = me.role === 'admin';
+    const isHost = me.id === b.hostId;
+    const isTraveler = me.id === b.travelerId;
+    if (status === 'cancelled' && !(isTraveler || isAdmin)) return err('Forbidden', 403);
+    if ((status === 'approved' || status === 'rejected') && !(isHost || isAdmin)) return err('Forbidden', 403);
+    await bookings.updateOne({ bookingId: id }, { $set: { status, updatedAt: new Date() } });
+    const fresh = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    return ok({ booking: fresh });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });
