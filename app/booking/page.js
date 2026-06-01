@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -15,7 +15,7 @@ import AuthModal from '@/components/safar/AuthModal';
 
 const STEPS = ['Dates','Guests','Payment','Review','Confirmed'];
 
-function App() {
+function BookingContent() {
   const params = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
@@ -198,4 +198,16 @@ function App() {
     </main>
   );
 }
-export default App;
+
+export default function App() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-emerald2" />
+      </main>
+    }>
+      <BookingContent />
+    </Suspense>
+  );
+}
+
