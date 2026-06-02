@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Heart, Star, MapPin } from 'lucide-react';
 import { useState } from 'react';
@@ -12,6 +13,12 @@ export default function PropertyCard({ item, index = 0 }) {
     || (Array.isArray(item.images) && item.images.length ? item.images : null)
     || [item.image].filter(Boolean);
   const isSuperhost = item.host?.superhost ?? item.superhost;
+
+  // PERF: previously rendered all gallery images stacked with opacity, causing 3-5× more image
+  // requests per card. Now we only render the currently visible image (the next/prev get prefetched
+  // by the browser when the user clicks a dot, which is acceptable for a hover-only carousel).
+  const currentSrc = gallery[imgIdx] || gallery[0];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -22,11 +29,16 @@ export default function PropertyCard({ item, index = 0 }) {
     >
       <Link href={`/property/${item.id}`} className="block">
         <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-secondary">
-          {gallery.map((g, i) => (
-            <img key={i} src={g} alt={item.title} loading="lazy"
-              className={`absolute inset-0 size-full object-cover transition-all duration-700 ${i === imgIdx ? 'opacity-100 scale-100' : 'opacity-0 scale-105'} group-hover:scale-[1.06]`} />
-          ))}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-black/15" />
+          <Image
+            src={currentSrc}
+            alt={item.title}
+            fill
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+            loading="lazy"
+            quality={72}
+            className="object-cover transition-transform duration-700 group-hover:scale-[1.06]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-black/15 pointer-events-none" />
 
           {item.badge && (
             <div className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-white/90 text-charcoal shadow-md backdrop-blur">{item.badge}</div>

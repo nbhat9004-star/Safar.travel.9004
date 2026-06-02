@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check } from 'lucide-react';
@@ -36,7 +37,16 @@ function App() {
 
       {/* HERO */}
       <section className="relative min-h-[100svh] w-full overflow-hidden">
-        <img src={IMG.dal2} alt="Dal Lake, Kashmir" className="absolute inset-0 size-full object-cover scale-[1.04]" />
+        <Image
+          src={IMG.dal2}
+          alt="Dal Lake, Kashmir"
+          fill
+          priority
+          fetchPriority="high"
+          sizes="100vw"
+          quality={75}
+          className="object-cover scale-[1.04]"
+        />
         {/* Soft top-to-bottom dark gradient for premium readability */}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.25),transparent_60%)]" />
@@ -156,7 +166,9 @@ function App() {
             {destinations.map((d, i) => (
               <motion.div key={d.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55, delay: i*0.06 }}
                 className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer">
-                <img src={d.img} alt={d.name} className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                <Image src={d.img} alt={d.name} fill loading="lazy" quality={70}
+                  sizes="(min-width: 1024px) 25vw, 50vw"
+                  className="object-cover transition-transform duration-700 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/30 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-white/70">{d.tag}</div>
@@ -208,7 +220,10 @@ function App() {
                   <span className="font-semibold text-emerald2">Suggested itinerary</span><br/>• Day 1–2 — Royal Cedar Houseboat (Dal Lake)<br/>• Day 3 — Pinepeak Snow Cabin (Gulmarg)<br/>• Day 4–5 — Apple Orchard Cottage (Pahalgam)<br/><span className="text-muted-foreground text-xs">Total est. ₹38,400 · incl. transport + 1 cultural dinner</span>
                 </div></div>
                 <div className="grid grid-cols-3 gap-2">
-                  {[IMG.hb1, IMG.cab1, IMG.cot1].map((src,i)=>(<img key={i} src={src} className="aspect-square object-cover rounded-xl" alt=""/>))}
+                  {[IMG.hb1, IMG.cab1, IMG.cot1].map((src,i)=>(
+                    <Image key={i} src={src} alt="" width={200} height={200} loading="lazy" quality={65}
+                      sizes="120px" className="aspect-square object-cover rounded-xl w-full h-auto"/>
+                  ))}
                 </div>
               </div>
             </div>
@@ -250,7 +265,8 @@ function App() {
       <section className="py-24">
         <div className="container">
           <div className="relative overflow-hidden rounded-[2.5rem] p-10 md:p-16 bg-charcoal text-white">
-            <img src={IMG.mtn4} alt="" className="absolute inset-0 size-full object-cover opacity-30" />
+            <Image src={IMG.mtn4} alt="" fill loading="lazy" quality={60}
+              sizes="100vw" className="object-cover opacity-30" />
             <div className="absolute inset-0 bg-gradient-to-r from-charcoal via-charcoal/85 to-charcoal/30" />
             <div className="relative max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-xs uppercase tracking-[0.18em] font-semibold text-white"><Mountain className="size-3.5" /> For Hosts</div>
