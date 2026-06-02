@@ -388,8 +388,8 @@ async function route(request, { params }) {
     if (isNaN(ci) || isNaN(co)) return err('Invalid dates');
     if (ci < new Date(new Date().toDateString())) return err('Check-in must be in the future');
     if (co <= ci) return err('Check-out must be after check-in');
-    const g = Number(guests) || 1;
-    if (g < 1 || g > 30) return err('Guests must be between 1 and 30');
+    const g = Number(guests);
+    if (!Number.isFinite(g) || g < 1 || g > 30) return err('Guests must be between 1 and 30');
 
     const listings = await getCollection('listings');
     const listing = await listings.findOne({ id: listingId });

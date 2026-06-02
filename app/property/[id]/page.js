@@ -73,11 +73,9 @@ function App() {
 
   const item = listing;
   const gallery = (item.images && item.images.length) ? item.images : [];
-  const nights = useMemo(() => {
-    const ci = new Date(checkIn), co = new Date(checkOut);
-    if (isNaN(ci) || isNaN(co) || co <= ci) return 1;
-    return Math.max(1, Math.round((co - ci) / 86400000));
-  }, [checkIn, checkOut]);
+  // Compute nights inline (no hook) — listing-existence already gates this branch
+  const _ci = new Date(checkIn), _co = new Date(checkOut);
+  const nights = (isNaN(_ci) || isNaN(_co) || _co <= _ci) ? 1 : Math.max(1, Math.round((_co - _ci) / 86400000));
   const subtotal = item.price * nights;
   const tax = Math.round(subtotal * 0.12);
   const total = subtotal + tax + 800;
