@@ -99,64 +99,76 @@ function App() {
             </div>
           </motion.div>
 
-          {/* Search Card */}
-          <motion.form onSubmit={onSearch} initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, delay: 0.3 }}
-            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 md:p-2.5 flex flex-col md:flex-row items-stretch md:items-center gap-2 max-w-4xl">
-            <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-text">
-              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><MapPin className="size-4 text-emerald2" /></div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Where</div>
-                <input
-                  type="text"
-                  value={where}
-                  onChange={(e) => setWhere(e.target.value)}
-                  placeholder="Srinagar, Gulmarg, Pahalgam..."
-                  className="w-full bg-transparent text-sm text-charcoal placeholder:text-charcoal/60 outline-none border-0 p-0"
-                />
-              </div>
-            </label>
-            <div className="hidden md:block h-10 w-px bg-border/80" />
-            <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-in</div>
-                <input
-                  type="date"
-                  min={todayStr}
-                  value={checkIn}
-                  onChange={(e) => { setCheckIn(e.target.value); if (checkOut && e.target.value && checkOut <= e.target.value) setCheckOut(''); }}
-                  className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
-                />
-              </div>
-            </label>
-            <div className="hidden md:block h-10 w-px bg-border/80" />
-            <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-out</div>
-                <input
-                  type="date"
-                  min={checkIn || todayStr}
-                  value={checkOut}
-                  onChange={(e) => setCheckOut(e.target.value)}
-                  className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
-                />
-              </div>
-            </label>
-            <div className="hidden md:block h-10 w-px bg-border/80" />
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition">
-              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><Users className="size-4 text-emerald2" /></div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Guests</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <button type="button" onClick={() => setGuests(Math.max(1, guests - 1))} aria-label="Decrease guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition">−</button>
-                  <span className="text-sm font-semibold text-charcoal w-10 text-center">{guests} {guests === 1 ? 'guest' : 'guests'}</span>
-                  <button type="button" onClick={() => setGuests(Math.min(20, guests + 1))} aria-label="Increase guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition">+</button>
+          {/* Search Card — responsive, fully contained at all viewports */}
+          <motion.form
+            onSubmit={onSearch}
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.9, delay: 0.3 }}
+            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl"
+          >
+            {/* Fields wrapper: stack on mobile, 2x2 grid on sm-tablet, inline row on lg+ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-1 lg:items-stretch gap-2 lg:gap-0 min-w-0">
+              <label className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition cursor-text min-w-0 lg:flex-1">
+                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><MapPin className="size-4 text-emerald2" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Where</div>
+                  <input
+                    type="text"
+                    value={where}
+                    onChange={(e) => setWhere(e.target.value)}
+                    placeholder="Srinagar, Gulmarg..."
+                    className="w-full bg-transparent text-sm text-charcoal placeholder:text-charcoal/60 outline-none border-0 p-0 truncate"
+                  />
+                </div>
+              </label>
+              <div className="hidden lg:block self-center h-10 w-px bg-border/80 shrink-0" />
+              <label className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition cursor-pointer min-w-0 lg:flex-1">
+                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-in</div>
+                  <input
+                    type="date"
+                    min={todayStr}
+                    value={checkIn}
+                    onChange={(e) => { setCheckIn(e.target.value); if (checkOut && e.target.value && checkOut <= e.target.value) setCheckOut(''); }}
+                    className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
+                  />
+                </div>
+              </label>
+              <div className="hidden lg:block self-center h-10 w-px bg-border/80 shrink-0" />
+              <label className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition cursor-pointer min-w-0 lg:flex-1">
+                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-out</div>
+                  <input
+                    type="date"
+                    min={checkIn || todayStr}
+                    value={checkOut}
+                    onChange={(e) => setCheckOut(e.target.value)}
+                    className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
+                  />
+                </div>
+              </label>
+              <div className="hidden lg:block self-center h-10 w-px bg-border/80 shrink-0" />
+              <div className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition min-w-0 lg:flex-1">
+                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><Users className="size-4 text-emerald2" /></div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Guests</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <button type="button" onClick={() => setGuests(Math.max(1, guests - 1))} aria-label="Decrease guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition shrink-0">−</button>
+                    <span className="text-sm font-semibold text-charcoal whitespace-nowrap">{guests} {guests === 1 ? 'guest' : 'guests'}</span>
+                    <button type="button" onClick={() => setGuests(Math.min(20, guests + 1))} aria-label="Increase guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition shrink-0">+</button>
+                  </div>
                 </div>
               </div>
             </div>
-            <Button type="submit" size="lg" className="rounded-2xl bg-emerald2 hover:bg-emerald2-deep h-14 px-7 font-semibold shadow-lg shadow-emerald2/30">
-              <Search className="size-5 md:mr-2" /> <span className="hidden md:inline">Search</span>
+            <Button
+              type="submit"
+              size="lg"
+              className="rounded-2xl bg-emerald2 hover:bg-emerald2-deep h-12 lg:h-auto lg:min-h-14 px-5 lg:px-7 font-semibold shadow-lg shadow-emerald2/30 shrink-0 w-full lg:w-auto"
+            >
+              <Search className="size-5 mr-2" /> <span>Search</span>
             </Button>
           </motion.form>
 
