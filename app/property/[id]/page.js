@@ -3,22 +3,45 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Star, MapPin, Heart, Share2, ShieldCheck, Wifi, Coffee, Wind, ParkingCircle, MessageCircle, ChevronRight, BadgeCheck, AlertTriangle, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
 import ServiceBadges from '@/components/safar/ServiceBadges';
 import { Button } from '@/components/ui/button';
-import { useListing } from '@/lib/listings-api';
+import { useListing, useAvailability } from '@/lib/listings-api';
 import { SERVICE_GROUPS, SERVICE_INDEX } from '@/lib/services';
 
 const AMENITY_ICONS = { 'Wi-Fi': Wifi, 'Heater': Wind, 'Kahwa': Coffee, 'Parking': ParkingCircle };
 
+// yyyy-mm-dd N days from today
+function ymdOffset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function rangeOverlaps(ciStr, coStr, ranges) {
+  if (!ciStr || !coStr) return null;
+  const ci = new Date(ciStr), co = new Date(coStr);
+  if (isNaN(ci) || isNaN(co) || co <= ci) return null;
+  for (const r of ranges) {
+    const rci = new Date(r.checkInDate), rco = new Date(r.checkOutDate);
+    if (rci < co && rco > ci) return r;
+  }
+  return null;
+}
+
 function App() {
   const { id } = useParams();
   const { listing, loading, error } = useListing(id);
+  const { bookedRanges } = useAvailability(id);
   const [liked, setLiked] = useState(false);
   const [guests, setGuests] = useState(2);
+  const [checkIn, setCheckIn] = useState(ymdOffset(7));
+  const [checkOut, setCheckOut] = useState(ymdOffset(11));
+  const todayStr = ymdOffset(0);
+  const conflict = useMemo(() => rangeOverlaps(checkIn, checkOut, bookedRanges), [checkIn, checkOut, bookedRanges]);
 
   if (loading) {
     return (
@@ -50,10 +73,15 @@ function App() {
 
   const item = listing;
   const gallery = (item.images && item.images.length) ? item.images : [];
-  const nights = 4;
+  const nights = useMemo(() => {
+    const ci = new Date(checkIn), co = new Date(checkOut);
+    if (isNaN(ci) || isNaN(co) || co <= ci) return 1;
+    return Math.max(1, Math.round((co - ci) / 86400000));
+  }, [checkIn, checkOut]);
   const subtotal = item.price * nights;
   const tax = Math.round(subtotal * 0.12);
   const total = subtotal + tax + 800;
+  const reserveHref = `/booking?id=${item.id}&guests=${guests}&checkIn=${checkIn}&checkOut=${checkOut}`;
 
   return (
     <main className="min-h-screen bg-background">
@@ -166,18 +194,42 @@ function App() {
               <div className="text-xs flex items-center gap-1 text-muted-foreground"><Star className="size-3.5 fill-gold text-gold" /> {item.rating || '—'}</div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <div className="p-3 rounded-2xl border"><div className="text-[10px] uppercase tracking-wider font-semibold">Check-in</div><div className="text-sm mt-0.5">12 Jul 2025</div></div>
-              <div className="p-3 rounded-2xl border"><div className="text-[10px] uppercase tracking-wider font-semibold">Check-out</div><div className="text-sm mt-0.5">16 Jul 2025</div></div>
+              <label className="p-3 rounded-2xl border cursor-pointer hover:border-emerald2 transition">
+                <div className="text-[10px] uppercase tracking-wider font-semibold">Check-in</div>
+                <input
+                  type="date"
+                  min={todayStr}
+                  value={checkIn}
+                  onChange={(e) => { setCheckIn(e.target.value); if (checkOut && e.target.value && checkOut <= e.target.value) setCheckOut(''); }}
+                  className="w-full text-sm mt-0.5 outline-none bg-transparent [color-scheme:light]"
+                />
+              </label>
+              <label className="p-3 rounded-2xl border cursor-pointer hover:border-emerald2 transition">
+                <div className="text-[10px] uppercase tracking-wider font-semibold">Check-out</div>
+                <input
+                  type="date"
+                  min={checkIn || todayStr}
+                  value={checkOut}
+                  onChange={(e) => setCheckOut(e.target.value)}
+                  className="w-full text-sm mt-0.5 outline-none bg-transparent [color-scheme:light]"
+                />
+              </label>
               <div className="p-3 rounded-2xl border col-span-2 flex items-center justify-between">
-                <div><div className="text-[10px] uppercase tracking-wider font-semibold">Guests</div><div className="text-sm mt-0.5">{guests} adults</div></div>
+                <div><div className="text-[10px] uppercase tracking-wider font-semibold">Guests</div><div className="text-sm mt-0.5">{guests} {guests === 1 ? 'adult' : 'adults'}</div></div>
                 <div className="flex items-center gap-2">
                   <button onClick={()=>setGuests(Math.max(1,guests-1))} className="size-8 rounded-full border hover:bg-secondary">−</button>
-                  <button onClick={()=>setGuests(guests+1)} className="size-8 rounded-full border hover:bg-secondary">+</button>
+                  <button onClick={()=>setGuests(Math.min(item.guests || 30, guests+1))} className="size-8 rounded-full border hover:bg-secondary">+</button>
                 </div>
               </div>
             </div>
-            <Button asChild className="w-full mt-4 h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep font-semibold">
-              <Link href={`/booking?id=${item.id}&guests=${guests}`}>Reserve <ChevronRight className="size-4 ml-1" /></Link>
+            {conflict && (
+              <div className="mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+                <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                <span>These dates overlap an existing {conflict.status} booking ({new Date(conflict.checkInDate).toLocaleDateString()} → {new Date(conflict.checkOutDate).toLocaleDateString()}). Try different dates.</span>
+              </div>
+            )}
+            <Button asChild disabled={!!conflict} className="w-full mt-4 h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep font-semibold disabled:opacity-60 disabled:pointer-events-none">
+              <Link href={reserveHref}>Reserve <ChevronRight className="size-4 ml-1" /></Link>
             </Button>
             <Button variant="outline" className="w-full mt-2 h-11 rounded-2xl" asChild>
               <a href={`https://wa.me/911234567890?text=Hi%20${encodeURIComponent(item.hostName||'host')}%2C%20I%27m%20interested%20in%20%22${encodeURIComponent(item.title)}%22%20on%20Safar.`} target="_blank" rel="noreferrer"><MessageCircle className="size-4 mr-2" /> Chat with Host on WhatsApp</a>

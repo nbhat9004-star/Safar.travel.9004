@@ -1,7 +1,8 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, SlidersHorizontal, Map, X, Star, ListChecks, AlertTriangle } from 'lucide-react';
+import { Search, SlidersHorizontal, Map, X, Star, ListChecks, AlertTriangle, CalendarRange, Users, Loader2 } from 'lucide-react';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import PropertyCard from '@/components/safar/PropertyCard';
@@ -16,26 +17,56 @@ import { Slider } from '@/components/ui/slider';
 import { IMG } from '@/lib/data';
 import { useListings } from '@/lib/listings-api';
 
-function App() {
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function ExploreContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [cat, setCat] = useState('all');
-  const [q, setQ] = useState('');
+  // Initialize search state from URL params so the hero search submission persists
+  const [q, setQ] = useState(searchParams.get('location') || '');
+  const [checkIn, setCheckIn] = useState(searchParams.get('checkIn') || '');
+  const [checkOut, setCheckOut] = useState(searchParams.get('checkOut') || '');
+  const [guests, setGuests] = useState(Number(searchParams.get('guests')) || 0);
   const [price, setPrice] = useState([1000, 10000]);
   const [sort, setSort] = useState('recommended');
   const [showFilters, setShowFilters] = useState(false);
   const [mapView, setMapView] = useState(false);
   const [selectedServices, setSelectedServices] = useState([]);
 
+  // Keep URL in sync (so refresh / share preserves search)
+  useEffect(() => {
+    const qp = new URLSearchParams();
+    if (q) qp.set('location', q);
+    if (checkIn) qp.set('checkIn', checkIn);
+    if (checkOut) qp.set('checkOut', checkOut);
+    if (guests > 0) qp.set('guests', String(guests));
+    const next = qp.toString();
+    const current = searchParams.toString();
+    if (next !== current) {
+      router.replace(`/explore${next ? '?' + next : ''}`, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, checkIn, checkOut, guests]);
+
   // Map UI category -> API filter (subcategory for stays; category for transport/tour/experience)
   const apiParams = useMemo(() => {
     const p = { minPrice: price[0], maxPrice: price[1], limit: 60 };
     if (q) p.location = q;
+    if (checkIn && checkOut && checkOut > checkIn) {
+      p.checkIn = checkIn;
+      p.checkOut = checkOut;
+    }
+    if (guests > 0) p.guests = guests;
     if (selectedServices.length) p.services = selectedServices;
     if (cat !== 'all') {
       if (['houseboat','cabin','cottage','home','camp'].includes(cat)) { p.category = 'stay'; p.subcategory = cat; }
       else { p.category = cat; }
     }
     return p;
-  }, [cat, q, price, selectedServices]);
+  }, [cat, q, checkIn, checkOut, guests, price, selectedServices]);
 
   const { listings, total, loading, error, refresh } = useListings(apiParams, [JSON.stringify(apiParams)]);
 
@@ -46,6 +77,10 @@ function App() {
     if (sort === 'rating') arr.sort((a,b)=>b.rating-a.rating);
     return arr;
   }, [listings, sort]);
+
+  const hasDateFilter = checkIn && checkOut && checkOut > checkIn;
+  const hasGuestFilter = guests > 0;
+  const today = todayStr();
 
   return (
     <main className="min-h-screen bg-background">
@@ -73,6 +108,26 @@ function App() {
             </div>
           </motion.div>
           <div className="mt-5"><CategoryPills value={cat} onChange={setCat} /></div>
+
+          {/* Active search filters: dates + guests */}
+          {(hasDateFilter || hasGuestFilter) && (
+            <div className="mt-4 flex items-center gap-2 flex-wrap text-sm">
+              <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active search</div>
+              {hasDateFilter && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald2 text-xs font-semibold">
+                  <CalendarRange className="size-3.5" />
+                  {new Date(checkIn).toLocaleDateString()} → {new Date(checkOut).toLocaleDateString()}
+                  <button onClick={() => { setCheckIn(''); setCheckOut(''); }} aria-label="Clear dates" className="ml-1 hover:text-emerald2-deep"><X className="size-3" /></button>
+                </div>
+              )}
+              {hasGuestFilter && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald2 text-xs font-semibold">
+                  <Users className="size-3.5" /> {guests} {guests === 1 ? 'guest' : 'guests'}
+                  <button onClick={() => setGuests(0)} aria-label="Clear guests" className="ml-1 hover:text-emerald2-deep"><X className="size-3" /></button>
+                </div>
+              )}
+            </div>
+          )}
 
           {selectedServices.length > 0 && (
             <div className="mt-4 flex items-center gap-3 flex-wrap">
@@ -184,4 +239,15 @@ function App() {
     </main>
   );
 }
-export default App;
+
+export default function App() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-emerald2" />
+      </main>
+    }>
+      <ExploreContent />
+    </Suspense>
+  );
+}

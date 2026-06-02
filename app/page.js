@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check } from 'lucide-react';
@@ -26,8 +27,33 @@ const experiences = [
   { title: 'Heritage Walk', desc: 'Old-city woodwork, mosques and bakeries tour.', img: IMG.dal3, price: 1500 },
 ];
 
+// Small helper: yyyy-mm-dd for a date N days from today.
+function ymdOffset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 function App() {
+  const router = useRouter();
   const [cat, setCat] = useState('all');
+  // Hero search state — fully functional, drives /explore navigation
+  const [where, setWhere] = useState('');
+  const [checkIn, setCheckIn] = useState('');
+  const [checkOut, setCheckOut] = useState('');
+  const [guests, setGuests] = useState(2);
+  const todayStr = ymdOffset(0);
+
+  const onSearch = (e) => {
+    if (e) e.preventDefault();
+    const qp = new URLSearchParams();
+    if (where.trim()) qp.set('location', where.trim());
+    if (checkIn) qp.set('checkIn', checkIn);
+    if (checkOut) qp.set('checkOut', checkOut);
+    if (guests && guests !== 2) qp.set('guests', String(guests));
+    router.push(`/explore${qp.toString() ? '?' + qp.toString() : ''}`);
+  };
+
   const featured = LISTINGS.filter(l => l.featured);
   const filtered = cat === 'all' ? LISTINGS : LISTINGS.filter(l => l.category === cat);
 
@@ -74,35 +100,65 @@ function App() {
           </motion.div>
 
           {/* Search Card */}
-          <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, delay: 0.3 }}
+          <motion.form onSubmit={onSearch} initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, delay: 0.3 }}
             className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 md:p-2.5 flex flex-col md:flex-row items-stretch md:items-center gap-2 max-w-4xl">
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center"><MapPin className="size-4 text-emerald2" /></div>
-              <div>
+            <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-text">
+              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><MapPin className="size-4 text-emerald2" /></div>
+              <div className="flex-1 min-w-0">
                 <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Where</div>
-                <div className="text-sm text-charcoal/70">Srinagar, Gulmarg, Pahalgam...</div>
+                <input
+                  type="text"
+                  value={where}
+                  onChange={(e) => setWhere(e.target.value)}
+                  placeholder="Srinagar, Gulmarg, Pahalgam..."
+                  className="w-full bg-transparent text-sm text-charcoal placeholder:text-charcoal/60 outline-none border-0 p-0"
+                />
               </div>
-            </div>
+            </label>
             <div className="hidden md:block h-10 w-px bg-border/80" />
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center"><CalendarRange className="size-4 text-emerald2" /></div>
-              <div>
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">When</div>
-                <div className="text-sm text-charcoal/70">Add dates</div>
+            <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
+              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-in</div>
+                <input
+                  type="date"
+                  min={todayStr}
+                  value={checkIn}
+                  onChange={(e) => { setCheckIn(e.target.value); if (checkOut && e.target.value && checkOut <= e.target.value) setCheckOut(''); }}
+                  className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
+                />
               </div>
-            </div>
+            </label>
             <div className="hidden md:block h-10 w-px bg-border/80" />
-            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
-              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center"><Users className="size-4 text-emerald2" /></div>
-              <div>
+            <label className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition cursor-pointer">
+              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-out</div>
+                <input
+                  type="date"
+                  min={checkIn || todayStr}
+                  value={checkOut}
+                  onChange={(e) => setCheckOut(e.target.value)}
+                  className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
+                />
+              </div>
+            </label>
+            <div className="hidden md:block h-10 w-px bg-border/80" />
+            <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-white transition">
+              <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><Users className="size-4 text-emerald2" /></div>
+              <div className="flex-1 min-w-0">
                 <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Guests</div>
-                <div className="text-sm text-charcoal/70">2 adults</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <button type="button" onClick={() => setGuests(Math.max(1, guests - 1))} aria-label="Decrease guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition">−</button>
+                  <span className="text-sm font-semibold text-charcoal w-10 text-center">{guests} {guests === 1 ? 'guest' : 'guests'}</span>
+                  <button type="button" onClick={() => setGuests(Math.min(20, guests + 1))} aria-label="Increase guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition">+</button>
+                </div>
               </div>
             </div>
-            <Button asChild size="lg" className="rounded-2xl bg-emerald2 hover:bg-emerald2-deep h-14 px-7 font-semibold shadow-lg shadow-emerald2/30">
-              <Link href="/explore"><Search className="size-5 md:mr-2" /> <span className="hidden md:inline">Search</span></Link>
+            <Button type="submit" size="lg" className="rounded-2xl bg-emerald2 hover:bg-emerald2-deep h-14 px-7 font-semibold shadow-lg shadow-emerald2/30">
+              <Search className="size-5 md:mr-2" /> <span className="hidden md:inline">Search</span>
             </Button>
-          </motion.div>
+          </motion.form>
 
           {/* Trust strip */}
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.6 }}

@@ -152,6 +152,10 @@ async function route(request, { params }) {
     const hostId = url.searchParams.get('hostId');
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
     const page = Math.max(parseInt(url.searchParams.get('page') || '1', 10), 1);
+    // Date-range + guests for availability-aware search
+    const checkInStr = url.searchParams.get('checkIn');
+    const checkOutStr = url.searchParams.get('checkOut');
+    const guestsParam = parseInt(url.searchParams.get('guests') || '0', 10);
 
     const filter = {};
     if (category) filter.category = category;
@@ -161,6 +165,15 @@ async function route(request, { params }) {
     if (maxPrice) filter.price = { ...(filter.price || {}), $lte: maxPrice };
     if (services.length) filter.services = { $all: services };
     if (hostId) filter.hostId = hostId;
+    // Guests filter: listing must accommodate at least the requested guests (when the
+    // listing defines a `guests` capacity; experiences/tours often don't)
+    if (guestsParam > 0) {
+      filter.$or = [
+        { guests: { $exists: false } },
+        { guests: null },
+        { guests: { $gte: guestsParam } },
+      ];
+    }
 
     // Status visibility rules
     if (requestedStatus && requestedStatus !== 'all') {
@@ -169,6 +182,24 @@ async function route(request, { params }) {
       if (!me || me.role !== 'admin') filter.status = 'approved';
     } else {
       filter.status = 'approved';
+    }
+
+    // Availability-aware search: if date range supplied, exclude listings with overlapping
+    // confirmed/pending bookings in that window.
+    let unavailableIds = [];
+    if (checkInStr && checkOutStr) {
+      const ci = new Date(checkInStr);
+      const co = new Date(checkOutStr);
+      if (!isNaN(ci) && !isNaN(co) && co > ci) {
+        const bookings = await getCollection('bookings');
+        const conflicts = await bookings.find({
+          status: { $in: ['pending', 'approved'] },
+          checkInDate: { $lt: co },
+          checkOutDate: { $gt: ci },
+        }, { projection: { listingId: 1, _id: 0 } }).toArray();
+        unavailableIds = [...new Set(conflicts.map((b) => b.listingId))];
+        if (unavailableIds.length) filter.id = { $nin: unavailableIds };
+      }
     }
 
     const total = await listings.countDocuments(filter);
@@ -324,6 +355,25 @@ async function route(request, { params }) {
       if (!r.matchedCount) return err('Listing not found', 404);
       const fresh = await col.findOne({ id }, { projection: { _id: 0 } });
       return ok({ listing: fresh });
+    }
+
+    // GET /listings/:id/availability  (public)
+    // Returns the list of pending/approved booking date ranges for a listing
+    // so the booking calendar UI can disable those days.
+    if (action === 'availability' && method === 'GET') {
+      const bookings = await getCollection('bookings');
+      const ranges = await bookings.find(
+        { listingId: id, status: { $in: ['pending', 'approved'] } },
+        { projection: { _id: 0, checkInDate: 1, checkOutDate: 1, status: 1 } }
+      ).toArray();
+      return ok({
+        listingId: id,
+        bookedRanges: ranges.map((r) => ({
+          checkInDate: r.checkInDate,
+          checkOutDate: r.checkOutDate,
+          status: r.status,
+        })),
+      });
     }
   }
 
