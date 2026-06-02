@@ -28,7 +28,7 @@ In Vercel: **Project → Settings → Environment Variables** → add the follow
 
 | Variable | Required? | Value | Notes |
 |---|---|---|---|
-| `MONGO_URL` | ✅ Required | `mongodb+srv://safar_app:<PASSWORD>@<CLUSTER>.mongodb.net/safar?retryWrites=true&w=majority&appName=Safar` | From Atlas Step B |
+| `MONGO_URL` | ✅ Required (preferred) | `mongodb+srv://safar_app:<PASSWORD>@<CLUSTER>.mongodb.net/safar?retryWrites=true&w=majority&appName=Safar` | From Atlas Step B. Code also accepts `MONGODB_URI` or `DATABASE_URL` as fallback. |
 | `DB_NAME` | ✅ Required | `safar` | Used by `lib/db.js` |
 | `JWT_SECRET` | ✅ Required | Generate with `openssl rand -hex 32` (min 32 chars) | **Do NOT reuse the dev value** |
 | `JWT_EXPIRES_IN` | Optional | `7d` | Defaults to `7d` if omitted |
