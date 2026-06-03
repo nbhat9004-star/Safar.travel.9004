@@ -17,7 +17,7 @@ import { IMG } from '@/lib/data';
 import AuthModal from '@/components/safar/AuthModal';
 import { useAuth } from '@/lib/auth-context';
 
-const STEPS = ['Services','Basics','Photos','Amenities','Pricing','Review'];
+const STEPS = ['Services','Basics','Photos','Amenities','Pricing','Inventory','Review'];
 const AMEN = [{i:Wifi,t:'Wi-Fi'},{i:Coffee,t:'Kahwa'},{i:Wind,t:'Heater'},{i:ParkingCircle,t:'Parking'},{i:ImageIcon,t:'Mountain view'},{i:ListChecks,t:'Breakfast'}];
 
 // Map first selected service -> API category
@@ -51,6 +51,10 @@ function AddListingInner() {
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [price, setPrice] = useState(4500);
+  
+  // Inventory types state
+  const [useInventoryTypes, setUseInventoryTypes] = useState(false);
+  const [inventoryTypes, setInventoryTypes] = useState([]);
 
   const category = useMemo(() => detectCategory(services), [services]);
 
@@ -64,6 +68,46 @@ function AddListingInner() {
     services.forEach(id => { const s = SERVICE_INDEX[id]; if (s) set.add(s.group); });
     return SERVICE_GROUPS.filter(g => set.has(g.id));
   }, [services]);
+
+  // Inventory types helpers
+  const addInventoryType = () => {
+    setInventoryTypes([...inventoryTypes, {
+      id: Date.now().toString(),
+      name: '',
+      description: '',
+      price: price,
+      quantity: 1,
+      images: [],
+      status: 'active',
+      displayOrder: inventoryTypes.length
+    }]);
+  };
+
+  const removeInventoryType = (id) => {
+    setInventoryTypes(inventoryTypes.filter(t => t.id !== id));
+  };
+
+  const updateInventoryType = (id, field, value) => {
+    setInventoryTypes(inventoryTypes.map(t => 
+      t.id === id ? { ...t, [field]: value } : t
+    ));
+  };
+
+  const moveTypeUp = (index) => {
+    if (index === 0) return;
+    const newTypes = [...inventoryTypes];
+    [newTypes[index - 1], newTypes[index]] = [newTypes[index], newTypes[index - 1]];
+    newTypes.forEach((t, i) => t.displayOrder = i);
+    setInventoryTypes(newTypes);
+  };
+
+  const moveTypeDown = (index) => {
+    if (index === inventoryTypes.length - 1) return;
+    const newTypes = [...inventoryTypes];
+    [newTypes[index], newTypes[index + 1]] = [newTypes[index + 1], newTypes[index]];
+    newTypes.forEach((t, i) => t.displayOrder = i);
+    setInventoryTypes(newTypes);
+  };
 
   const handlePublish = async () => {
     setSubmitting(true);
@@ -83,6 +127,15 @@ function AddListingInner() {
       images: imgs,
       amenities: amen,
       services,
+      inventoryTypes: useInventoryTypes ? inventoryTypes.map(t => ({
+        name: t.name,
+        description: t.description,
+        price: Number(t.price),
+        quantity: Number(t.quantity),
+        images: Array.isArray(t.images) ? t.images : [],
+        status: t.status,
+        displayOrder: t.displayOrder
+      })) : []
     };
     const { ok, data } = await listingsApi.create(payload);
     setSubmitting(false);
@@ -189,12 +242,143 @@ function AddListingInner() {
           )}
           {step===5 && (
             <div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-2xl font-bold">Inventory Types</h2>
+                  <p className="text-sm text-muted-foreground mt-1">For hotels, homestays, or fleets: Create room/vehicle types with different pricing.</p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={useInventoryTypes ? "default" : "outline"}
+                  onClick={() => {
+                    setUseInventoryTypes(!useInventoryTypes);
+                    if (!useInventoryTypes && inventoryTypes.length === 0) {
+                      addInventoryType();
+                    }
+                  }}
+                  className="rounded-full"
+                >
+                  {useInventoryTypes ? 'Enabled' : 'Enable Multi-Type'}
+                </Button>
+              </div>
+              
+              {!useInventoryTypes && (
+                <div className="mt-5 p-5 rounded-xl border bg-secondary/20">
+                  <div className="text-sm text-muted-foreground">
+                    Skip this if you have a single-unit property. Enable Multi-Type for hotels with multiple room types or vehicle rentals with different vehicles.
+                  </div>
+                </div>
+              )}
+
+              {useInventoryTypes && (
+                <div className="mt-5 space-y-4">
+                  {inventoryTypes.map((type, idx) => (
+                    <div key={type.id} className="p-5 rounded-xl border bg-white">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-emerald2">Type {idx + 1}</div>
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => moveTypeUp(idx)}
+                              disabled={idx === 0}
+                              className="p-1 hover:bg-secondary rounded disabled:opacity-30"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveTypeDown(idx)}
+                              disabled={idx === inventoryTypes.length - 1}
+                              className="p-1 hover:bg-secondary rounded disabled:opacity-30"
+                            >
+                              ↓
+                            </button>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeInventoryType(type.id)}
+                          className="text-xs text-rose-500 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          placeholder="Name (e.g., Standard Room, Swift Car)"
+                          value={type.name}
+                          onChange={(e) => updateInventoryType(type.id, 'name', e.target.value)}
+                          className="px-3 py-2 rounded-xl border text-sm"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Price per night/day"
+                          value={type.price}
+                          onChange={(e) => updateInventoryType(type.id, 'price', e.target.value)}
+                          className="px-3 py-2 rounded-xl border text-sm"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Quantity available"
+                          min="1"
+                          value={type.quantity}
+                          onChange={(e) => updateInventoryType(type.id, 'quantity', e.target.value)}
+                          className="px-3 py-2 rounded-xl border text-sm"
+                        />
+                        <select
+                          value={type.status}
+                          onChange={(e) => updateInventoryType(type.id, 'status', e.target.value)}
+                          className="px-3 py-2 rounded-xl border text-sm"
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+                      <textarea
+                        placeholder="Description (optional)"
+                        value={type.description}
+                        onChange={(e) => updateInventoryType(type.id, 'description', e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border text-sm mt-3"
+                        rows={2}
+                      />
+                    </div>
+                  ))}
+                  
+                  <Button
+                    type="button"
+                    onClick={addInventoryType}
+                    variant="outline"
+                    className="w-full rounded-full"
+                  >
+                    + Add Another Type
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          {step===6 && (
+            <div>
               <h2 className="font-display text-2xl font-bold">Review and publish</h2>
               <div className="mt-5 p-5 rounded-2xl border bg-secondary/40">
                 <div className="text-xs uppercase tracking-wider text-emerald2 font-semibold capitalize">{category}</div>
                 <div className="font-display font-bold mt-1">{title || `New ${category} listing in Kashmir`}</div>
-                <div className="text-xs text-muted-foreground mt-1">{location || 'Location not set'} · ₹{Number(price).toLocaleString('en-IN')}</div>
+                <div className="text-xs text-muted-foreground mt-1">{location || 'Location not set'} · {useInventoryTypes ? `${inventoryTypes.length} type(s)` : `₹${Number(price).toLocaleString('en-IN')}`}</div>
                 <div className="mt-4"><div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Services ({services.length})</div><ServiceBadges ids={services} max={20} /></div>
+                {useInventoryTypes && inventoryTypes.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Inventory Types</div>
+                    {inventoryTypes.map(t => (
+                      <div key={t.id} className="text-xs flex justify-between">
+                        <span>{t.name}</span>
+                        <span className="text-emerald2 font-semibold">₹{Number(t.price).toLocaleString('en-IN')} × {t.quantity} units</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <Button onClick={handlePublish} disabled={submitting} className="mt-5 w-full rounded-full bg-emerald2 hover:bg-emerald2-deep h-12 font-semibold">
                 {submitting ? <Loader2 className="size-4 animate-spin" /> : 'Publish listing'}

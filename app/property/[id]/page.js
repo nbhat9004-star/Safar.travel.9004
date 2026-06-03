@@ -40,6 +40,7 @@ function App() {
   const [guests, setGuests] = useState(2);
   const [checkIn, setCheckIn] = useState(ymdOffset(7));
   const [checkOut, setCheckOut] = useState(ymdOffset(11));
+  const [selectedTypeId, setSelectedTypeId] = useState(null);
   const todayStr = ymdOffset(0);
   const conflict = useMemo(() => rangeOverlaps(checkIn, checkOut, bookedRanges), [checkIn, checkOut, bookedRanges]);
 
@@ -73,13 +74,19 @@ function App() {
 
   const item = listing;
   const gallery = (item.images && item.images.length) ? item.images : [];
+  
+  // Check if listing has inventory types
+  const hasTypes = item.inventoryTypes && Array.isArray(item.inventoryTypes) && item.inventoryTypes.length > 0;
+  const selectedType = hasTypes && selectedTypeId ? item.inventoryTypes.find(t => t.id === selectedTypeId) : null;
+  const displayPrice = selectedType ? selectedType.price : item.price;
+  
   // Compute nights inline (no hook) — listing-existence already gates this branch
   const _ci = new Date(checkIn), _co = new Date(checkOut);
   const nights = (isNaN(_ci) || isNaN(_co) || _co <= _ci) ? 1 : Math.max(1, Math.round((_co - _ci) / 86400000));
-  const subtotal = item.price * nights;
+  const subtotal = displayPrice * nights;
   const tax = Math.round(subtotal * 0.12);
   const total = subtotal + tax + 800;
-  const reserveHref = `/booking?id=${item.id}&guests=${guests}&checkIn=${checkIn}&checkOut=${checkOut}`;
+  const reserveHref = `/booking?id=${item.id}&guests=${guests}&checkIn=${checkIn}&checkOut=${checkOut}${selectedTypeId ? `&typeId=${selectedTypeId}` : ''}`;
 
   return (
     <main className="min-h-screen bg-background">
@@ -188,9 +195,45 @@ function App() {
         <aside className="lg:col-span-1">
           <div className="lg:sticky lg:top-28 rounded-3xl border bg-white shadow-xl p-6">
             <div className="flex items-baseline justify-between">
-              <div><span className="font-display text-3xl font-bold">₹{item.price.toLocaleString('en-IN')}</span><span className="text-sm text-muted-foreground"> / {item.duration ? item.duration : 'night'}</span></div>
+              <div><span className="font-display text-3xl font-bold">₹{displayPrice.toLocaleString('en-IN')}</span><span className="text-sm text-muted-foreground"> / {item.duration ? item.duration : 'night'}</span></div>
               <div className="text-xs flex items-center gap-1 text-muted-foreground"><Star className="size-3.5 fill-gold text-gold" /> {item.rating || '—'}</div>
             </div>
+            
+            {hasTypes && (
+              <div className="mt-4 mb-4">
+                <div className="text-xs uppercase tracking-wider font-semibold mb-2">Select Type</div>
+                <div className="space-y-2">
+                  {item.inventoryTypes.filter(t => t.status === 'active').map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => setSelectedTypeId(type.id)}
+                      className={`w-full text-left p-3 rounded-xl border-2 transition ${
+                        selectedTypeId === type.id 
+                          ? 'border-emerald2 bg-emerald-50' 
+                          : 'border-border hover:border-charcoal/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-sm">{type.name}</div>
+                        <div className="text-emerald2 font-bold text-sm">
+                          ₹{type.price.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                      {type.description && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {type.description}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {type.available || 0} of {type.quantity} available
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <div className="mt-4 grid grid-cols-2 gap-2">
               <label className="p-3 rounded-2xl border cursor-pointer hover:border-emerald2 transition">
                 <div className="text-[10px] uppercase tracking-wider font-semibold">Check-in</div>
@@ -226,9 +269,12 @@ function App() {
                 <span>These dates overlap an existing {conflict.status} booking ({new Date(conflict.checkInDate).toLocaleDateString()} → {new Date(conflict.checkOutDate).toLocaleDateString()}). Try different dates.</span>
               </div>
             )}
-            <Button asChild disabled={!!conflict} className="w-full mt-4 h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep font-semibold disabled:opacity-60 disabled:pointer-events-none">
+            <Button asChild disabled={!!conflict || (hasTypes && !selectedTypeId)} className="w-full mt-4 h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep font-semibold disabled:opacity-60 disabled:pointer-events-none">
               <Link href={reserveHref}>Reserve <ChevronRight className="size-4 ml-1" /></Link>
             </Button>
+            {hasTypes && !selectedTypeId && (
+              <div className="mt-2 text-xs text-amber-600 text-center">Please select a type to continue</div>
+            )}
             <Button variant="outline" className="w-full mt-2 h-11 rounded-2xl" asChild>
               <a href={`https://wa.me/911234567890?text=Hi%20${encodeURIComponent(item.hostName||'host')}%2C%20I%27m%20interested%20in%20%22${encodeURIComponent(item.title)}%22%20on%20Safar.`} target="_blank" rel="noreferrer"><MessageCircle className="size-4 mr-2" /> Chat with Host on WhatsApp</a>
             </Button>

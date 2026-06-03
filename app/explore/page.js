@@ -169,7 +169,10 @@ function ExploreContent() {
                   <div className="absolute inset-0 bg-gradient-to-t from-charcoal/40 to-transparent" />
                   {list.slice(0,8).map((l, i) => (
                     <div key={l.id} style={{ left: `${10 + (i*9)%75}%`, top: `${15 + (i*13)%65}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
-                      <div className="px-3 py-1.5 rounded-full bg-white shadow-lg text-xs font-semibold text-charcoal hover:bg-charcoal hover:text-white transition cursor-pointer">₹{l.price.toLocaleString('en-IN')}</div>
+                      <div className="px-3 py-1.5 rounded-full bg-white shadow-lg text-xs font-semibold text-charcoal hover:bg-charcoal hover:text-white transition cursor-pointer">
+                        {l.displayPrice && l.displayPrice < l.price && <span className="opacity-70">From </span>}
+                        ₹{(l.displayPrice || l.price).toLocaleString('en-IN')}
+                      </div>
                     </div>
                   ))}
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full glass text-xs">Map view · demo</div>

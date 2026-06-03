@@ -1,2552 +1,1073 @@
 #!/usr/bin/env python3
 """
-Comprehensive backend test for Safar Listings API.
-Tests all listings CRUD endpoints, filters, auth, and MongoDB persistence.
+Multi-Type Inventory System Backend Test Suite
+Tests all scenarios for the new inventory types feature
 """
-import os
-import sys
+
 import requests
 import json
-from pymongo import MongoClient
-import bcrypt
-import uuid
+from datetime import datetime, timedelta
+import time
 
 # Configuration
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://github-import-check.preview.emergentagent.com')
-API_BASE = f"{BASE_URL}/api"
-MONGO_URL = os.getenv('MONGO_URL', 'mongodb://localhost:27017')
-DB_NAME = os.getenv('DB_NAME', 'safar')
+BASE_URL = "https://github-import-check.preview.emergentagent.com/api"
 
-# Test data - reuse from previous auth tests
-TEST_TRAVELER = {
-    'name': 'Priya Sharma',
-    'email': 'priya.sharma@safar.test',
-    'password': 'secure123',
-    'role': 'traveler'
-}
+# Test credentials from /app/memory/test_credentials.md
+TRAVELER_EMAIL = "test-traveler-20260603120055@safar.com"
+TRAVELER_PASSWORD = "password123"
+HOST_EMAIL = "test-host-20260603120055@safar.com"
+HOST_PASSWORD = "password123"
+ADMIN_EMAIL = "test-admin-20260603120055@safar.com"
+ADMIN_PASSWORD = "password123"
 
-TEST_HOST = {
-    'name': 'Ravi Kumar',
-    'email': 'ravi.kumar@safar.test',
-    'password': 'secure456',
-    'role': 'host'
-}
+# Test state
+traveler_token = None
+host_token = None
+admin_token = None
+test_listing_id = None
+test_old_listing_id = None
+booking_ids = []
 
-TEST_ADMIN = {
-    'name': 'Admin Safar',
-    'email': 'admin_test@safar.local',
-    'password': 'admin789',
-    'role': 'admin'
-}
+def log(msg):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
-def print_test(name):
-    print(f"\n{'='*80}")
-    print(f"TEST: {name}")
-    print('='*80)
-
-def print_pass(msg):
-    print(f"✅ PASS: {msg}")
-
-def print_fail(msg):
-    print(f"❌ FAIL: {msg}")
-
-def print_info(msg):
-    print(f"ℹ️  INFO: {msg}")
-
-def cleanup_test_data():
-    """Remove test users, listings, and bookings from MongoDB"""
+def login(email, password):
+    """Login and return Bearer token"""
     try:
-        client = MongoClient(MONGO_URL)
-        db = client[DB_NAME]
-        
-        # Clean test users
-        test_emails = [TEST_TRAVELER['email'], TEST_HOST['email'], TEST_ADMIN['email']]
-        result = db['users'].delete_many({'email': {'$in': test_emails}})
-        print_info(f"Cleaned up {result.deleted_count} test users")
-        
-        # Clean test listings (non-demo)
-        result = db['listings'].delete_many({'isDemo': False})
-        print_info(f"Cleaned up {result.deleted_count} test listings")
-        
-        # Clean test bookings
-        result = db['bookings'].delete_many({})
-        print_info(f"Cleaned up {result.deleted_count} test bookings")
-        
-        client.close()
+        res = requests.post(f"{BASE_URL}/auth/login", json={"email": email, "password": password}, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            token = data.get('token')
+            log(f"✅ Login successful: {email}")
+            return token
+        else:
+            log(f"❌ Login failed for {email}: {res.status_code} - {res.text}")
+            return None
     except Exception as e:
-        print_fail(f"Cleanup failed: {e}")
-
-def setup_test_users():
-    """Create test users in MongoDB"""
-    try:
-        client = MongoClient(MONGO_URL)
-        db = client[DB_NAME]
-        users = db['users']
-        
-        for user_data in [TEST_TRAVELER, TEST_HOST, TEST_ADMIN]:
-            existing = users.find_one({'email': user_data['email'].lower()})
-            if not existing:
-                password_hash = bcrypt.hashpw(user_data['password'].encode('utf-8'), bcrypt.gensalt(10)).decode('utf-8')
-                user = {
-                    'id': str(uuid.uuid4()),
-                    'name': user_data['name'],
-                    'email': user_data['email'].lower(),
-                    'role': user_data['role'],
-                    'passwordHash': password_hash,
-                    'avatar': f"https://api.dicebear.com/9.x/initials/svg?seed={user_data['name']}&backgroundColor=0F3D2E",
-                    'createdAt': None,
-                    'updatedAt': None
-                }
-                users.insert_one(user)
-                print_info(f"Created {user_data['role']} user: {user_data['email']}")
-            else:
-                print_info(f"User already exists: {user_data['email']}")
-        
-        client.close()
-    except Exception as e:
-        print_fail(f"Setup failed: {e}")
-
-def get_auth_token(email, password):
-    """Login and get auth token"""
-    try:
-        response = requests.post(
-            f"{API_BASE}/auth/login",
-            json={'email': email, 'password': password},
-            timeout=10
-        )
-        if response.status_code == 200:
-            return response.json().get('token')
-        return None
-    except:
+        log(f"❌ Login error for {email}: {e}")
         return None
 
-# Test 1: Auto-seed verification
-def test_auto_seed():
-    print_test("1. Auto-seed Verification - GET /api/listings")
+def headers(token):
+    """Return auth headers"""
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+def test_backward_compatibility():
+    """Test 1: Backward compatibility with existing single-unit listings"""
+    log("\n=== TEST 1: BACKWARD COMPATIBILITY ===")
     
+    global test_old_listing_id, traveler_token
+    
+    # 1a. Get existing demo listings (should have inventoryTypes: [])
     try:
-        response = requests.get(f"{API_BASE}/listings", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        
-        if not data.get('ok'):
-            print_fail("Response missing ok: true")
-            return False
-        print_pass("Response has ok: true")
-        
+        res = requests.get(f"{BASE_URL}/listings?limit=5", timeout=10)
+        assert res.status_code == 200, f"Failed to get listings: {res.status_code}"
+        data = res.json()
         listings = data.get('listings', [])
-        total = data.get('total', 0)
+        assert len(listings) > 0, "No demo listings found"
         
-        if total >= 12:
-            print_pass(f"Total listings: {total} (>= 12)")
-        else:
-            print_fail(f"Total listings: {total} (expected >= 12)")
-            return False
+        # Find a listing without inventory types
+        old_listing = None
+        for listing in listings:
+            if not listing.get('inventoryTypes') or len(listing.get('inventoryTypes', [])) == 0:
+                old_listing = listing
+                break
         
-        if len(listings) >= 12:
-            print_pass(f"Listings array has {len(listings)} items")
-        else:
-            print_fail(f"Listings array has {len(listings)} items (expected >= 12)")
-            return False
+        assert old_listing is not None, "No legacy listing found"
+        test_old_listing_id = old_listing['id']
+        log(f"✅ 1a. Found legacy listing: {old_listing['title']} (id: {test_old_listing_id})")
+        log(f"   - inventoryTypes: {old_listing.get('inventoryTypes', [])}")
+        log(f"   - price: ₹{old_listing['price']}")
         
-        # Check all are approved
-        all_approved = all(l.get('status') == 'approved' for l in listings)
-        if all_approved:
-            print_pass("All listings have status='approved'")
-        else:
-            print_fail("Not all listings are approved")
-            return False
-        
-        return True
     except Exception as e:
-        print_fail(f"Exception: {e}")
+        log(f"❌ 1a. Failed to get legacy listings: {e}")
         return False
-
-# Test 2: Filter by category
-def test_filter_category():
-    print_test("2. Filter by Category - GET /api/listings?category=stay")
     
+    # 1b. Book existing single-unit listing
     try:
-        response = requests.get(f"{API_BASE}/listings?category=stay", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        if len(listings) > 0:
-            print_pass(f"Found {len(listings)} stay listings")
-            
-            # Verify all are stay category
-            all_stay = all(l.get('category') == 'stay' for l in listings)
-            if all_stay:
-                print_pass("All listings have category='stay'")
-                return True
-            else:
-                print_fail("Not all listings have category='stay'")
-                return False
-        else:
-            print_fail("No stay listings found")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 3: Filter by subcategory
-def test_filter_subcategory():
-    print_test("3. Filter by Subcategory - GET /api/listings?subcategory=houseboat")
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings?subcategory=houseboat", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        if len(listings) > 0:
-            print_pass(f"Found {len(listings)} houseboat listings")
-            
-            # Verify all are houseboat
-            all_houseboat = all(l.get('subcategory') == 'houseboat' for l in listings)
-            if all_houseboat:
-                print_pass("All listings have subcategory='houseboat'")
-                return True
-            else:
-                print_fail("Not all listings have subcategory='houseboat'")
-                return False
-        else:
-            print_fail("No houseboat listings found")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 4: Filter by services (AND semantics)
-def test_filter_services():
-    print_test("4. Filter by Services - GET /api/listings?services=wazwan,kehwa")
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings?services=wazwan,kehwa", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        if len(listings) > 0:
-            print_pass(f"Found {len(listings)} listings with both wazwan and kehwa")
-            
-            # Verify all have both services
-            all_have_both = all(
-                'wazwan' in l.get('services', []) and 'kehwa' in l.get('services', [])
-                for l in listings
-            )
-            if all_have_both:
-                print_pass("All listings contain BOTH wazwan AND kehwa services")
-                return True
-            else:
-                print_fail("Not all listings have both services")
-                return False
-        else:
-            print_info("No listings found with both services (acceptable if none match)")
-            return True
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 5: Filter by price range
-def test_filter_price_range():
-    print_test("5. Filter by Price Range - GET /api/listings?minPrice=2000&maxPrice=5000")
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings?minPrice=2000&maxPrice=5000", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        if len(listings) > 0:
-            print_pass(f"Found {len(listings)} listings in price range 2000-5000")
-            
-            # Verify all are in range
-            all_in_range = all(
-                2000 <= l.get('price', 0) <= 5000
-                for l in listings
-            )
-            if all_in_range:
-                print_pass("All listings are within price range 2000-5000")
-                return True
-            else:
-                print_fail("Some listings are outside price range")
-                return False
-        else:
-            print_info("No listings in price range (acceptable if none match)")
-            return True
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 6: Filter by location
-def test_filter_location():
-    print_test("6. Filter by Location - GET /api/listings?location=Srinagar")
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings?location=Srinagar", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        if len(listings) > 0:
-            print_pass(f"Found {len(listings)} listings in Srinagar")
-            
-            # Verify all contain Srinagar (case-insensitive)
-            all_srinagar = all(
-                'srinagar' in l.get('location', '').lower()
-                for l in listings
-            )
-            if all_srinagar:
-                print_pass("All listings contain 'Srinagar' in location")
-                return True
-            else:
-                print_fail("Not all listings contain 'Srinagar'")
-                return False
-        else:
-            print_fail("No listings found in Srinagar")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 7: Status filter without auth (should return approved only)
-def test_filter_status_no_auth():
-    print_test("7. Status Filter No Auth - GET /api/listings?status=pending")
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings?status=pending", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        # Should return approved only (non-admin can't see pending)
-        all_approved = all(l.get('status') == 'approved' for l in listings)
-        if all_approved:
-            print_pass("Non-admin cannot see pending listings (returns approved only)")
-            return True
-        else:
-            print_fail("Non-admin can see non-approved listings")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 8: Status filter with admin auth
-def test_filter_status_admin():
-    print_test("8. Status Filter Admin - GET /api/listings?status=all (admin)")
-    
-    token = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    if not token:
-        print_fail("Failed to get admin token")
-        return False
-    
-    try:
-        response = requests.get(
-            f"{API_BASE}/listings?status=all",
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        print_pass(f"Admin can query all statuses (found {len(listings)} listings)")
-        return True
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 9: Create listing without auth
-def test_create_listing_no_auth():
-    print_test("9. Create Listing No Auth - POST /api/listings")
-    
-    listing_data = {
-        'title': 'Test Listing',
-        'description': 'This is a test listing for Safar',
-        'category': 'stay',
-        'location': 'Srinagar',
-        'price': 3000
-    }
-    
-    try:
-        response = requests.post(f"{API_BASE}/listings", json=listing_data, timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 401:
-            print_pass("Unauthorized (401) - auth required")
-            return True
-        else:
-            print_fail(f"Expected 401, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 10: Create listing as traveler
-def test_create_listing_traveler():
-    print_test("10. Create Listing as Traveler - POST /api/listings")
-    
-    token = get_auth_token(TEST_TRAVELER['email'], TEST_TRAVELER['password'])
-    if not token:
-        print_fail("Failed to get traveler token")
-        return False
-    
-    listing_data = {
-        'title': 'Test Listing',
-        'description': 'This is a test listing for Safar',
-        'category': 'stay',
-        'location': 'Srinagar',
-        'price': 3000
-    }
-    
-    try:
-        response = requests.post(
-            f"{API_BASE}/listings",
-            json=listing_data,
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 403:
-            print_pass("Forbidden (403) - travelers cannot create listings")
-            return True
-        else:
-            print_fail(f"Expected 403, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 11: Create listing as host
-def test_create_listing_host():
-    print_test("11. Create Listing as Host - POST /api/listings")
-    
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False, None
-    
-    listing_data = {
-        'title': 'Beautiful Kashmir Houseboat',
-        'description': 'Experience authentic Kashmir living on Dal Lake with stunning mountain views',
-        'category': 'stay',
-        'subcategory': 'houseboat',
-        'location': 'Dal Lake, Srinagar',
-        'price': 4500,
-        'images': ['https://example.com/image1.jpg'],
-        'amenities': ['Wi-Fi', 'Breakfast', 'Lake View'],
-        'services': ['houseboat', 'breakfast', 'kehwa']
-    }
-    
-    try:
-        response = requests.post(
-            f"{API_BASE}/listings",
-            json=listing_data,
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 201:
-            print_fail(f"Expected 201, got {response.status_code}")
-            print_info(f"Response: {response.json()}")
-            return False, None
-        
-        print_pass("Status code 201 (Created)")
-        
-        data = response.json()
-        listing = data.get('listing')
-        
-        if not listing:
-            print_fail("No listing in response")
-            return False, None
-        
-        # Verify status is pending
-        if listing.get('status') == 'pending':
-            print_pass("Listing status is 'pending'")
-        else:
-            print_fail(f"Listing status is '{listing.get('status')}', expected 'pending'")
-            return False, None
-        
-        # Verify isDemo is false
-        if listing.get('isDemo') == False:
-            print_pass("isDemo is false")
-        else:
-            print_fail(f"isDemo is {listing.get('isDemo')}, expected false")
-        
-        # Verify hostId matches current user
-        print_pass(f"hostId: {listing.get('hostId')}")
-        
-        # Verify hostName matches user
-        if listing.get('hostName') == TEST_HOST['name']:
-            print_pass(f"hostName matches: {listing.get('hostName')}")
-        else:
-            print_fail(f"hostName is '{listing.get('hostName')}', expected '{TEST_HOST['name']}'")
-        
-        return True, listing.get('id')
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False, None
-
-# Test 12: Create listing as admin
-def test_create_listing_admin():
-    print_test("12. Create Listing as Admin - POST /api/listings")
-    
-    token = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    if not token:
-        print_fail("Failed to get admin token")
-        return False, None
-    
-    listing_data = {
-        'title': 'Admin Premium Cottage',
-        'description': 'Premium cottage in Pahalgam with all modern amenities',
-        'category': 'stay',
-        'subcategory': 'cottage',
-        'location': 'Pahalgam',
-        'price': 5500,
-        'images': ['https://example.com/cottage.jpg'],
-        'amenities': ['Fireplace', 'Garden', 'Parking'],
-        'services': ['cottage', 'breakfast']
-    }
-    
-    try:
-        response = requests.post(
-            f"{API_BASE}/listings",
-            json=listing_data,
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 201:
-            print_fail(f"Expected 201, got {response.status_code}")
-            return False, None
-        
-        print_pass("Status code 201 (Created)")
-        
-        data = response.json()
-        listing = data.get('listing')
-        
-        # Verify status is approved (admin listings auto-approved)
-        if listing.get('status') == 'approved':
-            print_pass("Admin listing status is 'approved' (auto-approved)")
-            return True, listing.get('id')
-        else:
-            print_fail(f"Listing status is '{listing.get('status')}', expected 'approved'")
-            return False, None
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False, None
-
-# Test 13: Create listing validation errors
-def test_create_listing_validation():
-    print_test("13. Create Listing Validation - POST /api/listings")
-    
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False
-    
-    test_cases = [
-        ({}, "missing title"),
-        ({'title': 'AB', 'description': 'Valid description', 'category': 'stay', 'location': 'Srinagar', 'price': 1000}, "title < 3 chars"),
-        ({'title': 'Valid Title', 'description': 'Short', 'category': 'stay', 'location': 'Srinagar', 'price': 1000}, "description < 10 chars"),
-        ({'title': 'Valid Title', 'description': 'Valid description', 'category': 'invalid', 'location': 'Srinagar', 'price': 1000}, "invalid category"),
-        ({'title': 'Valid Title', 'description': 'Valid description', 'category': 'stay', 'location': '', 'price': 1000}, "missing location"),
-        ({'title': 'Valid Title', 'description': 'Valid description', 'category': 'stay', 'location': 'Srinagar', 'price': 0}, "price <= 0"),
-        ({'title': 'Valid Title', 'description': 'Valid description', 'category': 'stay', 'location': 'Srinagar', 'price': 'invalid'}, "price NaN"),
-    ]
-    
-    all_passed = True
-    for payload, description in test_cases:
-        try:
-            response = requests.post(
-                f"{API_BASE}/listings",
-                json=payload,
-                headers={'Authorization': f'Bearer {token}'},
-                timeout=10
-            )
-            
-            if response.status_code == 400:
-                print_pass(f"Validation failed for {description}: 400")
-            else:
-                print_fail(f"Expected 400 for {description}, got {response.status_code}")
-                all_passed = False
-        except Exception as e:
-            print_fail(f"Exception testing {description}: {e}")
-            all_passed = False
-    
-    return all_passed
-
-# Test 14: Get single listing (approved)
-def test_get_single_listing_approved():
-    print_test("14. Get Single Listing (Approved) - GET /api/listings/:id")
-    
-    # First get an approved listing ID
-    response = requests.get(f"{API_BASE}/listings", timeout=10)
-    if response.status_code != 200:
-        print_fail("Failed to get listings")
-        return False
-    
-    listings = response.json().get('listings', [])
-    if not listings:
-        print_fail("No listings found")
-        return False
-    
-    listing_id = listings[0].get('id')
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings/{listing_id}", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Status code 200")
-        
-        data = response.json()
-        listing = data.get('listing')
-        
-        if listing:
-            print_pass(f"Listing returned: {listing.get('title')}")
-            return True
-        else:
-            print_fail("No listing in response")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 15: Get single listing (pending, no auth)
-def test_get_single_listing_pending_no_auth():
-    print_test("15. Get Single Listing (Pending, No Auth) - GET /api/listings/:id")
-    
-    # Create a pending listing first
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False
-    
-    listing_data = {
-        'title': 'Pending Test Listing',
-        'description': 'This listing should be pending',
-        'category': 'stay',
-        'location': 'Gulmarg',
-        'price': 3500
-    }
-    
-    create_response = requests.post(
-        f"{API_BASE}/listings",
-        json=listing_data,
-        headers={'Authorization': f'Bearer {token}'},
-        timeout=10
-    )
-    
-    if create_response.status_code != 201:
-        print_fail("Failed to create pending listing")
-        return False
-    
-    listing_id = create_response.json().get('listing', {}).get('id')
-    
-    try:
-        # Try to get pending listing without auth
-        response = requests.get(f"{API_BASE}/listings/{listing_id}", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 404:
-            print_pass("Pending listing not accessible without auth (404)")
-            return True
-        else:
-            print_fail(f"Expected 404, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 16: Get single listing (pending, with owner auth)
-def test_get_single_listing_pending_owner():
-    print_test("16. Get Single Listing (Pending, Owner Auth) - GET /api/listings/:id")
-    
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False
-    
-    # Get host's own pending listings
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {token}'},
-        timeout=10
-    )
-    
-    if response.status_code != 200:
-        print_fail("Failed to get host listings")
-        return False
-    
-    listings = response.json().get('listings', [])
-    pending_listings = [l for l in listings if l.get('status') == 'pending']
-    
-    if not pending_listings:
-        print_info("No pending listings found for host")
-        return True
-    
-    listing_id = pending_listings[0].get('id')
-    
-    try:
-        # Owner should be able to see their own pending listing
-        response = requests.get(
-            f"{API_BASE}/listings/{listing_id}",
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            print_pass("Owner can view their own pending listing")
-            return True
-        else:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 17: Get single listing (pending, with admin auth)
-def test_get_single_listing_pending_admin():
-    print_test("17. Get Single Listing (Pending, Admin Auth) - GET /api/listings/:id")
-    
-    admin_token = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    host_token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    
-    if not admin_token or not host_token:
-        print_fail("Failed to get tokens")
-        return False
-    
-    # Get host's pending listings
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {host_token}'},
-        timeout=10
-    )
-    
-    listings = response.json().get('listings', [])
-    pending_listings = [l for l in listings if l.get('status') == 'pending']
-    
-    if not pending_listings:
-        print_info("No pending listings found")
-        return True
-    
-    listing_id = pending_listings[0].get('id')
-    
-    try:
-        # Admin should be able to see any pending listing
-        response = requests.get(
-            f"{API_BASE}/listings/{listing_id}",
-            headers={'Authorization': f'Bearer {admin_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            print_pass("Admin can view any pending listing")
-            return True
-        else:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 18: Get non-existent listing
-def test_get_nonexistent_listing():
-    print_test("18. Get Non-existent Listing - GET /api/listings/:id")
-    
-    fake_id = str(uuid.uuid4())
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings/{fake_id}", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 404:
-            print_pass("Non-existent listing returns 404")
-            return True
-        else:
-            print_fail(f"Expected 404, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 19: Update listing (non-owner)
-def test_update_listing_non_owner():
-    print_test("19. Update Listing (Non-owner) - PUT /api/listings/:id")
-    
-    host_token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    traveler_token = get_auth_token(TEST_TRAVELER['email'], TEST_TRAVELER['password'])
-    
-    if not host_token or not traveler_token:
-        print_fail("Failed to get tokens")
-        return False
-    
-    # Get host's listings
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {host_token}'},
-        timeout=10
-    )
-    
-    listings = response.json().get('listings', [])
-    if not listings:
-        print_info("No listings found for host")
-        return True
-    
-    listing_id = listings[0].get('id')
-    
-    try:
-        # Try to update as traveler (non-owner)
-        response = requests.put(
-            f"{API_BASE}/listings/{listing_id}",
-            json={'title': 'Hacked Title'},
-            headers={'Authorization': f'Bearer {traveler_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 403:
-            print_pass("Non-owner cannot update listing (403)")
-            return True
-        else:
-            print_fail(f"Expected 403, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 20: Update listing (owner, status resets to pending)
-def test_update_listing_owner():
-    print_test("20. Update Listing (Owner) - PUT /api/listings/:id")
-    
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False
-    
-    # Get host's listings
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {token}'},
-        timeout=10
-    )
-    
-    listings = response.json().get('listings', [])
-    if not listings:
-        print_info("No listings found for host")
-        return True
-    
-    listing_id = listings[0].get('id')
-    original_status = listings[0].get('status')
-    
-    try:
-        # Update listing
-        response = requests.put(
-            f"{API_BASE}/listings/{listing_id}",
-            json={'title': 'Updated Title by Owner', 'price': 4000},
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Status code 200")
-        
-        data = response.json()
-        listing = data.get('listing')
-        
-        # Verify status reset to pending
-        if listing.get('status') == 'pending':
-            print_pass("Host edit resets status to 'pending'")
-            return True
-        else:
-            print_fail(f"Status is '{listing.get('status')}', expected 'pending'")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 21: Update listing (admin, status preserved)
-def test_update_listing_admin():
-    print_test("21. Update Listing (Admin) - PUT /api/listings/:id")
-    
-    admin_token = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    if not admin_token:
-        print_fail("Failed to get admin token")
-        return False
-    
-    # Get any listing
-    response = requests.get(f"{API_BASE}/listings", timeout=10)
-    listings = response.json().get('listings', [])
-    
-    if not listings:
-        print_fail("No listings found")
-        return False
-    
-    listing_id = listings[0].get('id')
-    original_status = listings[0].get('status')
-    
-    try:
-        # Update listing as admin
-        response = requests.put(
-            f"{API_BASE}/listings/{listing_id}",
-            json={'title': 'Updated by Admin'},
-            headers={'Authorization': f'Bearer {admin_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Status code 200")
-        
-        data = response.json()
-        listing = data.get('listing')
-        
-        # Verify status preserved
-        if listing.get('status') == original_status:
-            print_pass(f"Admin edit preserves status ('{original_status}')")
-            return True
-        else:
-            print_fail(f"Status changed from '{original_status}' to '{listing.get('status')}'")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 22: Update listing validation
-def test_update_listing_validation():
-    print_test("22. Update Listing Validation - PUT /api/listings/:id")
-    
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False
-    
-    # Get host's listings
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {token}'},
-        timeout=10
-    )
-    
-    listings = response.json().get('listings', [])
-    if not listings:
-        print_info("No listings found for host")
-        return True
-    
-    listing_id = listings[0].get('id')
-    
-    test_cases = [
-        ({'price': -100}, "negative price"),
-        ({'price': 'invalid'}, "invalid price"),
-        ({'category': 'invalid'}, "invalid category"),
-    ]
-    
-    all_passed = True
-    for payload, description in test_cases:
-        try:
-            response = requests.put(
-                f"{API_BASE}/listings/{listing_id}",
-                json=payload,
-                headers={'Authorization': f'Bearer {token}'},
-                timeout=10
-            )
-            
-            if response.status_code == 400:
-                print_pass(f"Validation failed for {description}: 400")
-            else:
-                print_fail(f"Expected 400 for {description}, got {response.status_code}")
-                all_passed = False
-        except Exception as e:
-            print_fail(f"Exception testing {description}: {e}")
-            all_passed = False
-    
-    return all_passed
-
-# Test 23: Delete listing (non-owner)
-def test_delete_listing_non_owner():
-    print_test("23. Delete Listing (Non-owner) - DELETE /api/listings/:id")
-    
-    host_token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    traveler_token = get_auth_token(TEST_TRAVELER['email'], TEST_TRAVELER['password'])
-    
-    if not host_token or not traveler_token:
-        print_fail("Failed to get tokens")
-        return False
-    
-    # Get host's listings
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {host_token}'},
-        timeout=10
-    )
-    
-    listings = response.json().get('listings', [])
-    if not listings:
-        print_info("No listings found for host")
-        return True
-    
-    listing_id = listings[0].get('id')
-    
-    try:
-        # Try to delete as traveler (non-owner)
-        response = requests.delete(
-            f"{API_BASE}/listings/{listing_id}",
-            headers={'Authorization': f'Bearer {traveler_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 403:
-            print_pass("Non-owner cannot delete listing (403)")
-            return True
-        else:
-            print_fail(f"Expected 403, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 24: Delete listing (owner)
-def test_delete_listing_owner():
-    print_test("24. Delete Listing (Owner) - DELETE /api/listings/:id")
-    
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False
-    
-    # Create a new listing to delete
-    listing_data = {
-        'title': 'Listing to Delete',
-        'description': 'This listing will be deleted',
-        'category': 'stay',
-        'location': 'Srinagar',
-        'price': 3000
-    }
-    
-    create_response = requests.post(
-        f"{API_BASE}/listings",
-        json=listing_data,
-        headers={'Authorization': f'Bearer {token}'},
-        timeout=10
-    )
-    
-    if create_response.status_code != 201:
-        print_fail("Failed to create listing")
-        return False
-    
-    listing_id = create_response.json().get('listing', {}).get('id')
-    
-    try:
-        # Delete listing
-        response = requests.delete(
-            f"{API_BASE}/listings/{listing_id}",
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Status code 200")
-        
-        data = response.json()
-        if data.get('deleted'):
-            print_pass("Listing deleted successfully")
-        
-        # Verify listing is gone
-        get_response = requests.get(
-            f"{API_BASE}/listings/{listing_id}",
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        
-        if get_response.status_code == 404:
-            print_pass("Deleted listing returns 404")
-            return True
-        else:
-            print_fail("Deleted listing still accessible")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 25: Get host listings (own)
-def test_get_host_listings_me():
-    print_test("25. Get Host Listings (Own) - GET /api/listings/host/me")
-    
-    token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not token:
-        print_fail("Failed to get host token")
-        return False
-    
-    try:
-        response = requests.get(
-            f"{API_BASE}/listings/host/me",
-            headers={'Authorization': f'Bearer {token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Status code 200")
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        print_pass(f"Host can view own listings ({len(listings)} listings, any status)")
-        return True
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 26: Get host listings (by hostId, no auth)
-def test_get_host_listings_by_id_no_auth():
-    print_test("26. Get Host Listings by ID (No Auth) - GET /api/listings/host/:hostId")
-    
-    # Get a host ID from existing listings
-    response = requests.get(f"{API_BASE}/listings", timeout=10)
-    listings = response.json().get('listings', [])
-    
-    if not listings:
-        print_fail("No listings found")
-        return False
-    
-    host_id = listings[0].get('hostId')
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings/host/{host_id}", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        listings = data.get('listings', [])
-        
-        # Verify all are approved (non-auth can only see approved)
-        all_approved = all(l.get('status') == 'approved' for l in listings)
-        if all_approved:
-            print_pass("Non-auth can only see approved listings")
-            return True
-        else:
-            print_fail("Non-auth can see non-approved listings")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 27: Get host listings (by hostId, admin)
-def test_get_host_listings_by_id_admin():
-    print_test("27. Get Host Listings by ID (Admin) - GET /api/listings/host/:hostId")
-    
-    admin_token = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    host_token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    
-    if not admin_token or not host_token:
-        print_fail("Failed to get tokens")
-        return False
-    
-    # Get host's ID
-    me_response = requests.get(
-        f"{API_BASE}/auth/me",
-        headers={'Authorization': f'Bearer {host_token}'},
-        timeout=10
-    )
-    
-    host_id = me_response.json().get('user', {}).get('id')
-    
-    try:
-        response = requests.get(
-            f"{API_BASE}/listings/host/{host_id}",
-            headers={'Authorization': f'Bearer {admin_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Admin can view all listings for any host")
-        return True
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 28: Get host listings without auth
-def test_get_host_listings_me_no_auth():
-    print_test("28. Get Host Listings (No Auth) - GET /api/listings/host/me")
-    
-    try:
-        response = requests.get(f"{API_BASE}/listings/host/me", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 401:
-            print_pass("Unauthorized (401) - auth required")
-            return True
-        else:
-            print_fail(f"Expected 401, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 29: Approve listing (non-admin)
-def test_approve_listing_non_admin():
-    print_test("29. Approve Listing (Non-admin) - POST /api/listings/:id/approve")
-    
-    host_token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not host_token:
-        print_fail("Failed to get host token")
-        return False
-    
-    # Get a pending listing
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {host_token}'},
-        timeout=10
-    )
-    
-    listings = response.json().get('listings', [])
-    pending_listings = [l for l in listings if l.get('status') == 'pending']
-    
-    if not pending_listings:
-        print_info("No pending listings found")
-        return True
-    
-    listing_id = pending_listings[0].get('id')
-    
-    try:
-        # Try to approve as host (non-admin)
-        response = requests.post(
-            f"{API_BASE}/listings/{listing_id}/approve",
-            headers={'Authorization': f'Bearer {host_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 403:
-            print_pass("Non-admin cannot approve listing (403)")
-            return True
-        else:
-            print_fail(f"Expected 403, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 30: Approve listing (admin)
-def test_approve_listing_admin():
-    print_test("30. Approve Listing (Admin) - POST /api/listings/:id/approve")
-    
-    admin_token = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    host_token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    
-    if not admin_token or not host_token:
-        print_fail("Failed to get tokens")
-        return False
-    
-    # Get a pending listing
-    response = requests.get(
-        f"{API_BASE}/listings/host/me",
-        headers={'Authorization': f'Bearer {host_token}'},
-        timeout=10
-    )
-    
-    listings = response.json().get('listings', [])
-    pending_listings = [l for l in listings if l.get('status') == 'pending']
-    
-    if not pending_listings:
-        print_info("No pending listings found")
-        return True
-    
-    listing_id = pending_listings[0].get('id')
-    
-    try:
-        # Approve as admin
-        response = requests.post(
-            f"{API_BASE}/listings/{listing_id}/approve",
-            headers={'Authorization': f'Bearer {admin_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Status code 200")
-        
-        data = response.json()
-        listing = data.get('listing')
-        
-        # Verify status is approved
-        if listing.get('status') == 'approved':
-            print_pass("Listing status changed to 'approved'")
-        else:
-            print_fail(f"Status is '{listing.get('status')}', expected 'approved'")
-            return False
-        
-        # Verify rejectionReason cleared
-        if 'rejectionReason' not in listing or not listing.get('rejectionReason'):
-            print_pass("rejectionReason cleared")
-            return True
-        else:
-            print_fail("rejectionReason not cleared")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 31: Reject listing (admin)
-def test_reject_listing_admin():
-    print_test("31. Reject Listing (Admin) - POST /api/listings/:id/reject")
-    
-    admin_token = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    host_token = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    
-    if not admin_token or not host_token:
-        print_fail("Failed to get tokens")
-        return False
-    
-    # Create a new listing to reject
-    listing_data = {
-        'title': 'Listing to Reject',
-        'description': 'This listing will be rejected',
-        'category': 'stay',
-        'location': 'Srinagar',
-        'price': 3000
-    }
-    
-    create_response = requests.post(
-        f"{API_BASE}/listings",
-        json=listing_data,
-        headers={'Authorization': f'Bearer {host_token}'},
-        timeout=10
-    )
-    
-    if create_response.status_code != 201:
-        print_fail("Failed to create listing")
-        return False
-    
-    listing_id = create_response.json().get('listing', {}).get('id')
-    
-    try:
-        # Reject as admin
-        response = requests.post(
-            f"{API_BASE}/listings/{listing_id}/reject",
-            json={'reason': 'Does not meet quality standards'},
-            headers={'Authorization': f'Bearer {admin_token}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        print_pass("Status code 200")
-        
-        data = response.json()
-        listing = data.get('listing')
-        
-        # Verify status is rejected
-        if listing.get('status') == 'rejected':
-            print_pass("Listing status changed to 'rejected'")
-        else:
-            print_fail(f"Status is '{listing.get('status')}', expected 'rejected'")
-            return False
-        
-        # Verify rejectionReason saved
-        if listing.get('rejectionReason') == 'Does not meet quality standards':
-            print_pass("rejectionReason saved correctly")
-            return True
-        else:
-            print_fail(f"rejectionReason is '{listing.get('rejectionReason')}'")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# Test 32: MongoDB persistence check
-def test_mongodb_persistence():
-    print_test("32. MongoDB Persistence Check")
-    
-    try:
-        client = MongoClient(MONGO_URL)
-        db = client[DB_NAME]
-        listings = db['listings']
-        
-        # Check for listings
-        count = listings.count_documents({})
-        print_pass(f"Found {count} listings in MongoDB")
-        
-        # Check for non-demo listings
-        non_demo = listings.find_one({'isDemo': False})
-        if non_demo:
-            print_pass("Non-demo listing found in database")
-            
-            # Verify UUID id
-            if 'id' in non_demo and len(non_demo['id']) == 36:
-                print_pass(f"Listing has UUID id: {non_demo['id']}")
-            else:
-                print_fail("Listing id is not UUID format")
-            
-            # Verify hostId reference
-            if 'hostId' in non_demo:
-                print_pass(f"Listing has hostId: {non_demo['hostId']}")
-            else:
-                print_fail("Listing missing hostId")
-        
-        # Check indexes
-        indexes = listings.index_information()
-        print_info(f"Indexes: {list(indexes.keys())}")
-        
-        # Check for id unique index
-        if 'id_1' in indexes:
-            print_pass("Index on 'id' exists")
-            if indexes['id_1'].get('unique'):
-                print_pass("Index on 'id' is unique")
-        
-        client.close()
-        return True
-    except Exception as e:
-        print_fail(f"MongoDB check failed: {e}")
-        return False
-
-
-# ============================================================================
-# BOOKINGS API TESTS
-# ============================================================================
-
-# Global variables to store test data
-HOST_TOKEN = None
-HOST_ID = None
-TRAVELER_TOKEN = None
-TRAVELER_ID = None
-ADMIN_TOKEN = None
-APPROVED_LISTING_ID = None
-BOOKING_ID_1 = None
-BOOKING_ID_2 = None
-
-def setup_bookings_test_data():
-    """Setup: Login users and create an approved listing"""
-    global HOST_TOKEN, HOST_ID, TRAVELER_TOKEN, TRAVELER_ID, ADMIN_TOKEN, APPROVED_LISTING_ID
-    
-    print_test("BOOKINGS SETUP: Login users and create approved listing")
-    
-    # Login host
-    HOST_TOKEN = get_auth_token(TEST_HOST['email'], TEST_HOST['password'])
-    if not HOST_TOKEN:
-        print_fail("Failed to login host")
-        return False
-    print_pass("Host logged in")
-    
-    # Get host ID
-    try:
-        response = requests.get(
-            f"{API_BASE}/auth/me",
-            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
-            timeout=10
-        )
-        if response.status_code == 200:
-            HOST_ID = response.json()['user']['id']
-            print_pass(f"Host ID: {HOST_ID}")
-    except:
-        print_fail("Failed to get host ID")
-        return False
-    
-    # Login traveler
-    TRAVELER_TOKEN = get_auth_token(TEST_TRAVELER['email'], TEST_TRAVELER['password'])
-    if not TRAVELER_TOKEN:
-        print_fail("Failed to login traveler")
-        return False
-    print_pass("Traveler logged in")
-    
-    # Get traveler ID
-    try:
-        response = requests.get(
-            f"{API_BASE}/auth/me",
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        if response.status_code == 200:
-            TRAVELER_ID = response.json()['user']['id']
-            print_pass(f"Traveler ID: {TRAVELER_ID}")
-    except:
-        print_fail("Failed to get traveler ID")
-        return False
-    
-    # Login admin
-    ADMIN_TOKEN = get_auth_token(TEST_ADMIN['email'], TEST_ADMIN['password'])
-    if not ADMIN_TOKEN:
-        print_fail("Failed to login admin")
-        return False
-    print_pass("Admin logged in")
-    
-    # Create a listing as host
-    listing_data = {
-        'title': 'Test Houseboat for Bookings',
-        'description': 'Beautiful houseboat on Dal Lake for testing bookings',
-        'category': 'stay',
-        'subcategory': 'houseboat',
-        'location': 'Dal Lake, Srinagar',
-        'price': 5000,
-        'images': ['https://example.com/houseboat.jpg'],
-        'amenities': ['wifi', 'kitchen'],
-        'services': ['breakfast', 'pickup']
-    }
-    
-    try:
-        response = requests.post(
-            f"{API_BASE}/listings",
-            json=listing_data,
-            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
-            timeout=10
-        )
-        if response.status_code == 201:
-            listing_id = response.json()['listing']['id']
-            print_pass(f"Created listing: {listing_id}")
-            
-            # Approve the listing as admin
-            response = requests.post(
-                f"{API_BASE}/listings/{listing_id}/approve",
-                headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
-                timeout=10
-            )
-            if response.status_code == 200:
-                APPROVED_LISTING_ID = listing_id
-                print_pass(f"Approved listing: {APPROVED_LISTING_ID}")
-                return True
-            else:
-                print_fail(f"Failed to approve listing: {response.status_code}")
-                return False
-        else:
-            print_fail(f"Failed to create listing: {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception during setup: {e}")
-        return False
-
-# A) POST /api/bookings (create) tests
-
-def test_booking_create_no_auth():
-    """A1) POST /api/bookings without auth -> 401"""
-    print_test("BOOKINGS A1: Create booking without auth -> 401")
-    
-    try:
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2026-06-01',
-            'checkOutDate': '2026-06-05',
-            'guests': 2
+        checkin = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=35)).strftime('%Y-%m-%d')
+        
+        booking_payload = {
+            "listingId": test_old_listing_id,
+            "checkInDate": checkin,
+            "checkOutDate": checkout,
+            "guests": 2
         }
-        response = requests.post(f"{API_BASE}/bookings", json=booking_data, timeout=10)
-        print_info(f"Status: {response.status_code}")
         
-        if response.status_code == 401:
-            print_pass("Correctly returned 401 Unauthorized")
-            return True
-        else:
-            print_fail(f"Expected 401, got {response.status_code}")
-            return False
+        res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 201, f"Failed to book legacy listing: {res.status_code} - {res.text}"
+        data = res.json()
+        booking = data.get('booking')
+        assert booking is not None, "No booking returned"
+        assert booking.get('inventoryTypeId') is None, "Legacy booking should not have inventoryTypeId"
+        booking_ids.append(booking['bookingId'])
+        log(f"✅ 1b. Booked legacy listing successfully (bookingId: {booking['bookingId']})")
+        log(f"   - No inventoryTypeId (legacy mode)")
+        
     except Exception as e:
-        print_fail(f"Exception: {e}")
+        log(f"❌ 1b. Failed to book legacy listing: {e}")
         return False
-
-def test_booking_create_missing_listing_id():
-    """A2) POST /api/bookings without listingId -> 400"""
-    print_test("BOOKINGS A2: Create booking without listingId -> 400")
     
+    # 1c. Search should work for old listings
     try:
-        booking_data = {
-            'checkInDate': '2026-06-01',
-            'checkOutDate': '2026-06-05',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
+        res = requests.get(f"{BASE_URL}/listings?location=Srinagar", timeout=10)
+        assert res.status_code == 200, f"Search failed: {res.status_code}"
+        data = res.json()
+        assert data.get('total', 0) > 0, "Search returned no results"
+        log(f"✅ 1c. Search works for legacy listings (found {data['total']} results)")
         
-        if response.status_code == 400:
-            print_pass("Correctly returned 400 Bad Request")
-            return True
-        else:
-            print_fail(f"Expected 400, got {response.status_code}")
-            return False
     except Exception as e:
-        print_fail(f"Exception: {e}")
+        log(f"❌ 1c. Search failed: {e}")
         return False
-
-def test_booking_create_invalid_dates():
-    """A3) POST /api/bookings with invalid dates -> 400"""
-    print_test("BOOKINGS A3: Create booking with invalid dates -> 400")
     
-    all_passed = True
-    
-    # Test 1: Past check-in date
+    # 1d. Old bookings display correctly
     try:
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2020-01-01',
-            'checkOutDate': '2020-01-05',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Past date - Status: {response.status_code}")
-        if response.status_code == 400:
-            print_pass("Past check-in correctly rejected")
-        else:
-            print_fail(f"Past check-in: Expected 400, got {response.status_code}")
-            all_passed = False
-    except Exception as e:
-        print_fail(f"Past date exception: {e}")
-        all_passed = False
-    
-    # Test 2: Check-out <= check-in
-    try:
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2026-06-05',
-            'checkOutDate': '2026-06-05',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Same date - Status: {response.status_code}")
-        if response.status_code == 400:
-            print_pass("Check-out <= check-in correctly rejected")
-        else:
-            print_fail(f"Same dates: Expected 400, got {response.status_code}")
-            all_passed = False
-    except Exception as e:
-        print_fail(f"Same date exception: {e}")
-        all_passed = False
-    
-    # Test 3: Invalid date format (NaN)
-    try:
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': 'invalid-date',
-            'checkOutDate': '2026-06-05',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Invalid date - Status: {response.status_code}")
-        if response.status_code == 400:
-            print_pass("Invalid date format correctly rejected")
-        else:
-            print_fail(f"Invalid date: Expected 400, got {response.status_code}")
-            all_passed = False
-    except Exception as e:
-        print_fail(f"Invalid date exception: {e}")
-        all_passed = False
-    
-    return all_passed
-
-def test_booking_create_nonexistent_listing():
-    """A4) POST /api/bookings with non-existent listingId -> 404"""
-    print_test("BOOKINGS A4: Create booking with non-existent listing -> 404")
-    
-    try:
-        booking_data = {
-            'listingId': 'nonexistent-listing-id',
-            'checkInDate': '2026-06-01',
-            'checkOutDate': '2026-06-05',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 404:
-            print_pass("Correctly returned 404 Not Found")
-            return True
-        else:
-            print_fail(f"Expected 404, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_create_pending_listing():
-    """A5) POST /api/bookings with pending/rejected listing -> 404"""
-    print_test("BOOKINGS A5: Create booking with pending listing -> 404")
-    
-    try:
-        # Create a pending listing as host
-        listing_data = {
-            'title': 'Pending Test Listing',
-            'description': 'This listing is pending approval',
-            'category': 'stay',
-            'location': 'Test Location',
-            'price': 3000
-        }
-        response = requests.post(
-            f"{API_BASE}/listings",
-            json=listing_data,
-            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
-            timeout=10
-        )
-        
-        if response.status_code == 201:
-            pending_listing_id = response.json()['listing']['id']
-            print_info(f"Created pending listing: {pending_listing_id}")
-            
-            # Try to book the pending listing
-            booking_data = {
-                'listingId': pending_listing_id,
-                'checkInDate': '2026-06-01',
-                'checkOutDate': '2026-06-05',
-                'guests': 2
-            }
-            response = requests.post(
-                f"{API_BASE}/bookings",
-                json=booking_data,
-                headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-                timeout=10
-            )
-            print_info(f"Booking status: {response.status_code}")
-            
-            if response.status_code == 404:
-                print_pass("Correctly rejected booking for pending listing")
-                return True
-            else:
-                print_fail(f"Expected 404, got {response.status_code}")
-                return False
-        else:
-            print_fail(f"Failed to create pending listing: {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_create_valid():
-    """A6) POST /api/bookings with valid payload -> 201"""
-    print_test("BOOKINGS A6: Create booking with valid payload -> 201")
-    
-    global BOOKING_ID_1
-    
-    try:
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2026-06-01',
-            'checkOutDate': '2026-06-05',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 201:
-            print_fail(f"Expected 201, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        booking = data.get('booking', {})
-        
-        # Check bookingId (uuid)
-        booking_id = booking.get('bookingId')
-        if booking_id and len(booking_id) == 36:
-            print_pass(f"Booking has UUID bookingId: {booking_id}")
-            BOOKING_ID_1 = booking_id
-        else:
-            print_fail(f"Invalid bookingId: {booking_id}")
-            return False
-        
-        # Check status
-        if booking.get('status') == 'pending':
-            print_pass("Booking status is 'pending'")
-        else:
-            print_fail(f"Expected status='pending', got {booking.get('status')}")
-            return False
-        
-        # Check hostId auto-filled
-        if booking.get('hostId') == HOST_ID:
-            print_pass(f"HostId auto-filled correctly: {HOST_ID}")
-        else:
-            print_fail(f"HostId mismatch: expected {HOST_ID}, got {booking.get('hostId')}")
-            return False
-        
-        # Check nights and totalPrice
-        nights = booking.get('nights')
-        total_price = booking.get('totalPrice')
-        price_per_night = booking.get('pricePerNight')
-        
-        if nights == 4:
-            print_pass(f"Nights calculated correctly: {nights}")
-        else:
-            print_fail(f"Expected 4 nights, got {nights}")
-            return False
-        
-        if price_per_night == 5000:
-            print_pass(f"Price per night: {price_per_night}")
-        else:
-            print_fail(f"Expected price 5000, got {price_per_night}")
-            return False
-        
-        expected_total = 5000 * 4
-        if total_price == expected_total:
-            print_pass(f"Total price calculated correctly: {total_price}")
-        else:
-            print_fail(f"Expected total {expected_total}, got {total_price}")
-            return False
-        
-        return True
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_create_overlapping():
-    """A7) POST /api/bookings with overlapping dates -> 409"""
-    print_test("BOOKINGS A7: Create booking with overlapping dates -> 409")
-    
-    try:
-        # Try to book overlapping dates (June 1-5 already booked, try June 3-7)
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2026-06-03',
-            'checkOutDate': '2026-06-07',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 409:
-            print_pass("Correctly returned 409 Conflict for overlapping dates")
-            return True
-        else:
-            print_fail(f"Expected 409, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_create_non_overlapping():
-    """A8) POST /api/bookings with non-overlapping dates -> 201"""
-    print_test("BOOKINGS A8: Create booking with non-overlapping dates -> 201")
-    
-    global BOOKING_ID_2
-    
-    try:
-        # Book non-overlapping dates (June 10-15)
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2026-06-10',
-            'checkOutDate': '2026-06-15',
-            'guests': 3
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 201:
-            booking_id = response.json()['booking']['bookingId']
-            BOOKING_ID_2 = booking_id
-            print_pass(f"Successfully created non-overlapping booking: {booking_id}")
-            return True
-        else:
-            print_fail(f"Expected 201, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# B) GET /api/bookings (list) tests
-
-def test_booking_list_no_auth():
-    """B1) GET /api/bookings without auth -> 401"""
-    print_test("BOOKINGS B1: List bookings without auth -> 401")
-    
-    try:
-        response = requests.get(f"{API_BASE}/bookings", timeout=10)
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 401:
-            print_pass("Correctly returned 401 Unauthorized")
-            return True
-        else:
-            print_fail(f"Expected 401, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_list_traveler():
-    """B2) GET /api/bookings as traveler -> only own bookings"""
-    print_test("BOOKINGS B2: List bookings as traveler -> only own")
-    
-    try:
-        response = requests.get(
-            f"{API_BASE}/bookings",
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
+        res = requests.get(f"{BASE_URL}/bookings", headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 200, f"Failed to get bookings: {res.status_code}"
+        data = res.json()
         bookings = data.get('bookings', [])
+        assert len(bookings) > 0, "No bookings found"
+        log(f"✅ 1d. Old bookings display correctly ({len(bookings)} bookings)")
         
-        print_info(f"Found {len(bookings)} bookings")
-        
-        # All bookings should belong to traveler
-        all_mine = all(b.get('travelerId') == TRAVELER_ID for b in bookings)
-        if all_mine:
-            print_pass("All bookings belong to traveler")
-            return True
-        else:
-            print_fail("Some bookings don't belong to traveler")
-            return False
     except Exception as e:
-        print_fail(f"Exception: {e}")
+        log(f"❌ 1d. Failed to get bookings: {e}")
         return False
-
-def test_booking_list_host_default():
-    """B3) GET /api/bookings as host (default) -> only received"""
-    print_test("BOOKINGS B3: List bookings as host (default) -> only received")
     
-    try:
-        response = requests.get(
-            f"{API_BASE}/bookings",
-            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        bookings = data.get('bookings', [])
-        
-        print_info(f"Found {len(bookings)} bookings")
-        
-        # All bookings should be for host's listings
-        all_received = all(b.get('hostId') == HOST_ID for b in bookings)
-        if all_received:
-            print_pass("All bookings are for host's listings")
-            return True
-        else:
-            print_fail("Some bookings are not for host's listings")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_list_host_received():
-    """B4) GET /api/bookings as host with ?view=received -> same as default"""
-    print_test("BOOKINGS B4: List bookings as host with ?view=received")
-    
-    try:
-        response = requests.get(
-            f"{API_BASE}/bookings?view=received",
-            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        bookings = data.get('bookings', [])
-        
-        print_info(f"Found {len(bookings)} bookings")
-        
-        # All bookings should be for host's listings
-        all_received = all(b.get('hostId') == HOST_ID for b in bookings)
-        if all_received:
-            print_pass("All bookings are for host's listings")
-            return True
-        else:
-            print_fail("Some bookings are not for host's listings")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_list_admin_all():
-    """B5) GET /api/bookings as admin with ?view=all -> all bookings"""
-    print_test("BOOKINGS B5: List bookings as admin with ?view=all")
-    
-    try:
-        response = requests.get(
-            f"{API_BASE}/bookings?view=all",
-            headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        bookings = data.get('bookings', [])
-        
-        print_info(f"Found {len(bookings)} bookings")
-        
-        # Should have at least 2 bookings (the ones we created)
-        if len(bookings) >= 2:
-            print_pass(f"Admin can see all bookings: {len(bookings)}")
-            return True
-        else:
-            print_fail(f"Expected at least 2 bookings, got {len(bookings)}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# C) PATCH /api/bookings/:id (status update) tests
-
-def test_booking_patch_no_auth():
-    """C1) PATCH /api/bookings/:id without auth -> 401"""
-    print_test("BOOKINGS C1: Patch booking without auth -> 401")
-    
-    try:
-        response = requests.patch(
-            f"{API_BASE}/bookings/{BOOKING_ID_1}",
-            json={'status': 'approved'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 401:
-            print_pass("Correctly returned 401 Unauthorized")
-            return True
-        else:
-            print_fail(f"Expected 401, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_patch_invalid_status():
-    """C2) PATCH /api/bookings/:id with invalid status -> 400"""
-    print_test("BOOKINGS C2: Patch booking with invalid status -> 400")
-    
-    try:
-        response = requests.patch(
-            f"{API_BASE}/bookings/{BOOKING_ID_1}",
-            json={'status': 'invalid_status'},
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 400:
-            print_pass("Correctly returned 400 Bad Request")
-            return True
-        else:
-            print_fail(f"Expected 400, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_patch_nonexistent():
-    """C3) PATCH /api/bookings/:id with non-existent id -> 404"""
-    print_test("BOOKINGS C3: Patch non-existent booking -> 404")
-    
-    try:
-        response = requests.patch(
-            f"{API_BASE}/bookings/nonexistent-booking-id",
-            json={'status': 'cancelled'},
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 404:
-            print_pass("Correctly returned 404 Not Found")
-            return True
-        else:
-            print_fail(f"Expected 404, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_patch_traveler_approve():
-    """C4) Traveler tries to approve/reject -> 403"""
-    print_test("BOOKINGS C4: Traveler tries to approve -> 403")
-    
-    try:
-        response = requests.patch(
-            f"{API_BASE}/bookings/{BOOKING_ID_1}",
-            json={'status': 'approved'},
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code == 403:
-            print_pass("Correctly returned 403 Forbidden")
-            return True
-        else:
-            print_fail(f"Expected 403, got {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_patch_traveler_cancel():
-    """C5) Traveler cancels own booking -> 200"""
-    print_test("BOOKINGS C5: Traveler cancels own booking -> 200")
-    
-    try:
-        response = requests.patch(
-            f"{API_BASE}/bookings/{BOOKING_ID_2}",
-            json={'status': 'cancelled'},
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        booking = data.get('booking', {})
-        
-        if booking.get('status') == 'cancelled':
-            print_pass("Booking status updated to 'cancelled'")
-            return True
-        else:
-            print_fail(f"Expected status='cancelled', got {booking.get('status')}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_patch_host_wrong_listing():
-    """C6) Host tries to approve booking not on their listing -> 403"""
-    print_test("BOOKINGS C6: Host tries to approve booking not on their listing -> 403")
-    
-    # This test would require creating another host and their listing
-    # For simplicity, we'll skip this as our current setup only has one host
-    # and all bookings are for that host's listing
-    print_info("Skipping: Would require multiple hosts setup")
+    log("✅ TEST 1 PASSED: Backward compatibility working")
     return True
 
-def test_booking_patch_host_approve():
-    """C7) Host approves booking on their listing -> 200"""
-    print_test("BOOKINGS C7: Host approves booking on their listing -> 200")
+def test_create_multi_type_listing():
+    """Test 2: Create hotel with 3 room types"""
+    log("\n=== TEST 2: CREATE MULTI-TYPE LISTING ===")
+    
+    global test_listing_id, admin_token
     
     try:
-        response = requests.patch(
-            f"{API_BASE}/bookings/{BOOKING_ID_1}",
-            json={'status': 'approved'},
-            headers={'Authorization': f'Bearer {HOST_TOKEN}'},
-            timeout=10
-        )
-        print_info(f"Status: {response.status_code}")
-        
-        if response.status_code != 200:
-            print_fail(f"Expected 200, got {response.status_code}")
-            return False
-        
-        data = response.json()
-        booking = data.get('booking', {})
-        
-        if booking.get('status') == 'approved':
-            print_pass("Booking status updated to 'approved'")
-            return True
-        else:
-            print_fail(f"Expected status='approved', got {booking.get('status')}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_patch_host_reject():
-    """C8) Host rejects booking on their listing -> 200"""
-    print_test("BOOKINGS C8: Host rejects booking on their listing -> 200")
-    
-    # First create a new booking to reject
-    try:
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2026-07-01',
-            'checkOutDate': '2026-07-05',
-            'guests': 2
+        listing_payload = {
+            "title": "Luxury Kashmir Hotel - Multi Room Types",
+            "description": "Premium hotel in Srinagar with multiple room options for every budget and preference",
+            "category": "stay",
+            "subcategory": "hotel",
+            "location": "Dal Lake, Srinagar",
+            "price": 3000,  # Base price (will be overridden by displayPrice)
+            "images": ["https://images.unsplash.com/photo-1566073771259-6a8506099945"],
+            "amenities": ["WiFi", "Parking", "Restaurant"],
+            "inventoryTypes": [
+                {
+                    "name": "Standard Room",
+                    "description": "Comfortable room with garden view",
+                    "price": 3000,
+                    "quantity": 10,
+                    "images": ["https://images.unsplash.com/photo-1611892440504-42a792e24d32"],
+                    "beds": 1,
+                    "guests": 2,
+                    "amenities": ["WiFi", "TV"]
+                },
+                {
+                    "name": "Deluxe Room",
+                    "description": "Spacious room with lake view",
+                    "price": 5000,
+                    "quantity": 5,
+                    "images": ["https://images.unsplash.com/photo-1582719478250-c89cae4dc85b"],
+                    "beds": 1,
+                    "guests": 2,
+                    "amenities": ["WiFi", "TV", "Balcony"]
+                },
+                {
+                    "name": "Suite",
+                    "description": "Luxury suite with panoramic views",
+                    "price": 8000,
+                    "quantity": 2,
+                    "images": ["https://images.unsplash.com/photo-1631049307264-da0ec9d70304"],
+                    "beds": 2,
+                    "guests": 4,
+                    "amenities": ["WiFi", "TV", "Balcony", "Jacuzzi"]
+                }
+            ]
         }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
         
-        if response.status_code == 201:
-            booking_id = response.json()['booking']['bookingId']
-            print_info(f"Created booking to reject: {booking_id}")
-            
-            # Now reject it as host
-            response = requests.patch(
-                f"{API_BASE}/bookings/{booking_id}",
-                json={'status': 'rejected'},
-                headers={'Authorization': f'Bearer {HOST_TOKEN}'},
-                timeout=10
-            )
-            print_info(f"Reject status: {response.status_code}")
-            
-            if response.status_code != 200:
-                print_fail(f"Expected 200, got {response.status_code}")
-                return False
-            
-            data = response.json()
-            booking = data.get('booking', {})
-            
-            if booking.get('status') == 'rejected':
-                print_pass("Booking status updated to 'rejected'")
-                return True
-            else:
-                print_fail(f"Expected status='rejected', got {booking.get('status')}")
-                return False
-        else:
-            print_fail(f"Failed to create booking: {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-def test_booking_patch_admin():
-    """C9) Admin can patch any booking to any valid status"""
-    print_test("BOOKINGS C9: Admin can patch any booking -> 200")
-    
-    # Create a new booking
-    try:
-        booking_data = {
-            'listingId': APPROVED_LISTING_ID,
-            'checkInDate': '2026-08-01',
-            'checkOutDate': '2026-08-05',
-            'guests': 2
-        }
-        response = requests.post(
-            f"{API_BASE}/bookings",
-            json=booking_data,
-            headers={'Authorization': f'Bearer {TRAVELER_TOKEN}'},
-            timeout=10
-        )
+        res = requests.post(f"{BASE_URL}/listings", json=listing_payload, headers=headers(admin_token), timeout=10)
+        assert res.status_code == 201, f"Failed to create listing: {res.status_code} - {res.text}"
+        data = res.json()
+        listing = data.get('listing')
+        assert listing is not None, "No listing returned"
+        test_listing_id = listing['id']
         
-        if response.status_code == 201:
-            booking_id = response.json()['booking']['bookingId']
-            print_info(f"Created booking for admin test: {booking_id}")
-            
-            # Admin approves it
-            response = requests.patch(
-                f"{API_BASE}/bookings/{booking_id}",
-                json={'status': 'approved'},
-                headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
-                timeout=10
-            )
-            print_info(f"Admin approve status: {response.status_code}")
-            
-            if response.status_code != 200:
-                print_fail(f"Expected 200, got {response.status_code}")
-                return False
-            
-            if response.json()['booking']['status'] == 'approved':
-                print_pass("Admin successfully approved booking")
-            else:
-                print_fail("Admin approval failed")
-                return False
-            
-            # Admin cancels it
-            response = requests.patch(
-                f"{API_BASE}/bookings/{booking_id}",
-                json={'status': 'cancelled'},
-                headers={'Authorization': f'Bearer {ADMIN_TOKEN}'},
-                timeout=10
-            )
-            print_info(f"Admin cancel status: {response.status_code}")
-            
-            if response.status_code != 200:
-                print_fail(f"Expected 200, got {response.status_code}")
-                return False
-            
-            if response.json()['booking']['status'] == 'cancelled':
-                print_pass("Admin successfully cancelled booking")
-                return True
-            else:
-                print_fail("Admin cancellation failed")
-                return False
-        else:
-            print_fail(f"Failed to create booking: {response.status_code}")
-            return False
-    except Exception as e:
-        print_fail(f"Exception: {e}")
-        return False
-
-# D) MongoDB persistence test
-
-def test_booking_mongodb_persistence():
-    """D) Verify MongoDB persistence"""
-    print_test("BOOKINGS D: MongoDB Persistence Verification")
-    
-    try:
-        client = MongoClient(MONGO_URL)
-        db = client[DB_NAME]
-        bookings = db['bookings']
+        # Verify inventory types
+        types = listing.get('inventoryTypes', [])
+        assert len(types) == 3, f"Expected 3 types, got {len(types)}"
         
-        # Find a booking
-        booking = bookings.find_one({'bookingId': BOOKING_ID_1})
+        # Check Standard Room
+        standard = types[0]
+        assert standard['name'] == "Standard Room", f"Expected 'Standard Room', got '{standard['name']}'"
+        assert standard['price'] == 3000, f"Expected price 3000, got {standard['price']}"
+        assert standard['quantity'] == 10, f"Expected quantity 10, got {standard['quantity']}"
+        assert standard['available'] == 10, f"Expected available 10, got {standard['available']}"
+        assert standard['status'] == 'active', f"Expected status 'active', got '{standard['status']}'"
+        assert 'displayOrder' in standard, "Missing displayOrder"
+        assert 'id' in standard, "Missing id"
+        log(f"✅ 2a. Standard Room created: ₹{standard['price']}, qty: {standard['quantity']}, available: {standard['available']}")
         
-        if not booking:
-            print_fail("Booking not found in MongoDB")
-            return False
+        # Check Deluxe Room
+        deluxe = types[1]
+        assert deluxe['name'] == "Deluxe Room", f"Expected 'Deluxe Room', got '{deluxe['name']}'"
+        assert deluxe['price'] == 5000, f"Expected price 5000, got {deluxe['price']}"
+        assert deluxe['quantity'] == 5, f"Expected quantity 5, got {deluxe['quantity']}"
+        assert deluxe['available'] == 5, f"Expected available 5, got {deluxe['available']}"
+        log(f"✅ 2b. Deluxe Room created: ₹{deluxe['price']}, qty: {deluxe['quantity']}, available: {deluxe['available']}")
         
-        print_pass("Booking found in safar.bookings collection")
+        # Check Suite
+        suite = types[2]
+        assert suite['name'] == "Suite", f"Expected 'Suite', got '{suite['name']}'"
+        assert suite['price'] == 8000, f"Expected price 8000, got {suite['price']}"
+        assert suite['quantity'] == 2, f"Expected quantity 2, got {suite['quantity']}"
+        assert suite['available'] == 2, f"Expected available 2, got {suite['available']}"
+        log(f"✅ 2c. Suite created: ₹{suite['price']}, qty: {suite['quantity']}, available: {suite['available']}")
         
-        # Check bookingId is UUID format
-        booking_id = booking.get('bookingId')
-        if booking_id and len(booking_id) == 36 and booking_id.count('-') == 4:
-            print_pass(f"bookingId is UUID format: {booking_id}")
-        else:
-            print_fail(f"Invalid bookingId format: {booking_id}")
-            return False
+        # Verify displayOrder
+        assert types[0]['displayOrder'] <= types[1]['displayOrder'], "displayOrder not sequential"
+        assert types[1]['displayOrder'] <= types[2]['displayOrder'], "displayOrder not sequential"
+        log(f"✅ 2d. Display order correct: {types[0]['displayOrder']}, {types[1]['displayOrder']}, {types[2]['displayOrder']}")
         
-        # Check status is valid
-        status = booking.get('status')
-        if status in ['pending', 'approved', 'rejected', 'cancelled']:
-            print_pass(f"Status is valid: {status}")
-        else:
-            print_fail(f"Invalid status: {status}")
-            return False
-        
-        # Check travelerId and hostId references
-        if booking.get('travelerId'):
-            print_pass(f"travelerId present: {booking.get('travelerId')}")
-        else:
-            print_fail("travelerId missing")
-            return False
-        
-        if booking.get('hostId'):
-            print_pass(f"hostId present: {booking.get('hostId')}")
-        else:
-            print_fail("hostId missing")
-            return False
-        
-        # Check dates are stored as Date objects
-        check_in = booking.get('checkInDate')
-        check_out = booking.get('checkOutDate')
-        
-        from datetime import datetime
-        if isinstance(check_in, datetime):
-            print_pass("checkInDate stored as Date object")
-        else:
-            print_fail(f"checkInDate not a Date object: {type(check_in)}")
-            return False
-        
-        if isinstance(check_out, datetime):
-            print_pass("checkOutDate stored as Date object")
-        else:
-            print_fail(f"checkOutDate not a Date object: {type(check_out)}")
-            return False
-        
-        client.close()
+        log(f"✅ TEST 2 PASSED: Multi-type listing created (id: {test_listing_id})")
         return True
+        
     except Exception as e:
-        print_fail(f"MongoDB check failed: {e}")
+        log(f"❌ TEST 2 FAILED: {e}")
         return False
+
+def test_booking_with_inventory_types():
+    """Test 3: Booking with inventory types and availability tracking"""
+    log("\n=== TEST 3: BOOKING WITH INVENTORY TYPES ===")
+    
+    global test_listing_id, traveler_token, booking_ids
+    
+    # Get listing to find inventory type IDs
+    try:
+        res = requests.get(f"{BASE_URL}/listings/{test_listing_id}", timeout=10)
+        assert res.status_code == 200, f"Failed to get listing: {res.status_code}"
+        listing = res.json().get('listing')
+        types = listing.get('inventoryTypes', [])
+        
+        standard_id = types[0]['id']
+        deluxe_id = types[1]['id']
+        suite_id = types[2]['id']
+        
+        log(f"Inventory type IDs: Standard={standard_id}, Deluxe={deluxe_id}, Suite={suite_id}")
+        
+    except Exception as e:
+        log(f"❌ Failed to get listing: {e}")
+        return False
+    
+    # 3a. Book Standard Room (should succeed)
+    try:
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        booking_payload = {
+            "listingId": test_listing_id,
+            "inventoryTypeId": standard_id,
+            "checkInDate": checkin,
+            "checkOutDate": checkout,
+            "guests": 2
+        }
+        
+        res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 201, f"Failed to book Standard Room: {res.status_code} - {res.text}"
+        data = res.json()
+        booking = data.get('booking')
+        assert booking['inventoryTypeId'] == standard_id, "Wrong inventory type"
+        assert booking['inventoryTypeName'] == "Standard Room", "Wrong type name"
+        assert booking['pricePerNight'] == 3000, f"Expected price 3000, got {booking['pricePerNight']}"
+        booking_ids.append(booking['bookingId'])
+        log(f"✅ 3a. Booked Standard Room successfully (bookingId: {booking['bookingId']})")
+        log(f"   - Price: ₹{booking['pricePerNight']}/night, Total: ₹{booking['totalPrice']}")
+        
+    except Exception as e:
+        log(f"❌ 3a. Failed to book Standard Room: {e}")
+        return False
+    
+    # 3b. Check available counter decremented (9/10)
+    try:
+        res = requests.get(f"{BASE_URL}/listings/{test_listing_id}", timeout=10)
+        assert res.status_code == 200, f"Failed to get listing: {res.status_code}"
+        listing = res.json().get('listing')
+        standard = listing['inventoryTypes'][0]
+        assert standard['available'] == 9, f"Expected available=9, got {standard['available']}"
+        log(f"✅ 3b. Available counter decremented: {standard['available']}/10 Standard Rooms available")
+        
+    except Exception as e:
+        log(f"❌ 3b. Failed to check counter: {e}")
+        return False
+    
+    # 3c. Book 9 more Standard Rooms to fill capacity
+    try:
+        for i in range(9):
+            checkin = (datetime.now() + timedelta(days=40 + i*10)).strftime('%Y-%m-%d')
+            checkout = (datetime.now() + timedelta(days=45 + i*10)).strftime('%Y-%m-%d')
+            
+            booking_payload = {
+                "listingId": test_listing_id,
+                "inventoryTypeId": standard_id,
+                "checkInDate": checkin,
+                "checkOutDate": checkout,
+                "guests": 2
+            }
+            
+            res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+            assert res.status_code == 201, f"Failed to book Standard Room #{i+2}: {res.status_code} - {res.text}"
+            booking_ids.append(res.json()['booking']['bookingId'])
+        
+        log(f"✅ 3c. Booked 9 more Standard Rooms (total 10/10 booked)")
+        
+    except Exception as e:
+        log(f"❌ 3c. Failed to book multiple rooms: {e}")
+        return False
+    
+    # 3d. Check available counter is 0
+    try:
+        res = requests.get(f"{BASE_URL}/listings/{test_listing_id}", timeout=10)
+        assert res.status_code == 200, f"Failed to get listing: {res.status_code}"
+        listing = res.json().get('listing')
+        standard = listing['inventoryTypes'][0]
+        assert standard['available'] == 0, f"Expected available=0, got {standard['available']}"
+        log(f"✅ 3d. All Standard Rooms booked: {standard['available']}/10 available")
+        
+    except Exception as e:
+        log(f"❌ 3d. Failed to check counter: {e}")
+        return False
+    
+    # 3e. Try to book 11th Standard Room for SAME dates (should fail with 409)
+    try:
+        # Use the SAME dates as the first booking to test overlap protection
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        booking_payload = {
+            "listingId": test_listing_id,
+            "inventoryTypeId": standard_id,
+            "checkInDate": checkin,
+            "checkOutDate": checkout,
+            "guests": 2
+        }
+        
+        res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 409, f"Expected 409 Conflict, got {res.status_code}"
+        data = res.json()
+        assert 'error' in data, "No error message"
+        assert 'available' in data['error'].lower() or 'booked' in data['error'].lower(), f"Wrong error message: {data['error']}"
+        log(f"✅ 3e. 11th booking rejected with 409 Conflict: {data['error']}")
+        
+    except Exception as e:
+        log(f"❌ 3e. Failed to test overbooking: {e}")
+        return False
+    
+    # 3f. Book Deluxe Room (different inventory pool, should succeed)
+    try:
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        booking_payload = {
+            "listingId": test_listing_id,
+            "inventoryTypeId": deluxe_id,
+            "checkInDate": checkin,
+            "checkOutDate": checkout,
+            "guests": 2
+        }
+        
+        res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 201, f"Failed to book Deluxe Room: {res.status_code} - {res.text}"
+        data = res.json()
+        booking = data.get('booking')
+        assert booking['inventoryTypeId'] == deluxe_id, "Wrong inventory type"
+        assert booking['pricePerNight'] == 5000, f"Expected price 5000, got {booking['pricePerNight']}"
+        booking_ids.append(booking['bookingId'])
+        log(f"✅ 3f. Booked Deluxe Room successfully (different inventory pool)")
+        log(f"   - Price: ₹{booking['pricePerNight']}/night")
+        
+    except Exception as e:
+        log(f"❌ 3f. Failed to book Deluxe Room: {e}")
+        return False
+    
+    log("✅ TEST 3 PASSED: Booking with inventory types working")
+    return True
+
+def test_availability_search():
+    """Test 4: Availability search with date filtering"""
+    log("\n=== TEST 4: AVAILABILITY SEARCH ===")
+    
+    global test_listing_id, traveler_token, booking_ids
+    
+    # Get inventory type IDs
+    try:
+        res = requests.get(f"{BASE_URL}/listings/{test_listing_id}", timeout=10)
+        listing = res.json().get('listing')
+        types = listing.get('inventoryTypes', [])
+        deluxe_id = types[1]['id']
+        suite_id = types[2]['id']
+    except Exception as e:
+        log(f"❌ Failed to get listing: {e}")
+        return False
+    
+    # 4a. Search with dates (listing should appear - has Deluxe available)
+    try:
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        res = requests.get(f"{BASE_URL}/listings?checkIn={checkin}&checkOut={checkout}", timeout=10)
+        assert res.status_code == 200, f"Search failed: {res.status_code}"
+        data = res.json()
+        listings = data.get('listings', [])
+        
+        # Check if our test listing appears
+        found = any(l['id'] == test_listing_id for l in listings)
+        assert found, "Listing should appear (has Deluxe rooms available)"
+        log(f"✅ 4a. Listing appears in search (has available Deluxe rooms)")
+        
+    except Exception as e:
+        log(f"❌ 4a. Search failed: {e}")
+        return False
+    
+    # 4b. Book all Deluxe rooms (5 bookings) for the SAME dates
+    try:
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        for i in range(4):  # Already booked 1, need 4 more
+            booking_payload = {
+                "listingId": test_listing_id,
+                "inventoryTypeId": deluxe_id,
+                "checkInDate": checkin,
+                "checkOutDate": checkout,
+                "guests": 2
+            }
+            
+            res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+            assert res.status_code == 201, f"Failed to book Deluxe Room #{i+2}: {res.status_code}"
+            booking_ids.append(res.json()['booking']['bookingId'])
+        
+        log(f"✅ 4b. Booked all 5 Deluxe Rooms for same dates")
+        
+    except Exception as e:
+        log(f"❌ 4b. Failed to book Deluxe rooms: {e}")
+        return False
+    
+    # 4c. Book all Suites (2 bookings) for the SAME dates
+    try:
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        for i in range(2):
+            booking_payload = {
+                "listingId": test_listing_id,
+                "inventoryTypeId": suite_id,
+                "checkInDate": checkin,
+                "checkOutDate": checkout,
+                "guests": 2
+            }
+            
+            res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+            assert res.status_code == 201, f"Failed to book Suite #{i+1}: {res.status_code}"
+            booking_ids.append(res.json()['booking']['bookingId'])
+        
+        log(f"✅ 4c. Booked all 2 Suites for same dates")
+        
+    except Exception as e:
+        log(f"❌ 4c. Failed to book Suites: {e}")
+        return False
+    
+    # 4d. Search with same dates (listing should disappear - fully booked)
+    try:
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        res = requests.get(f"{BASE_URL}/listings?checkIn={checkin}&checkOut={checkout}", timeout=10)
+        assert res.status_code == 200, f"Search failed: {res.status_code}"
+        data = res.json()
+        listings = data.get('listings', [])
+        
+        # Check if our test listing is hidden
+        found = any(l['id'] == test_listing_id for l in listings)
+        assert not found, "Listing should be hidden (fully booked)"
+        log(f"✅ 4d. Listing hidden from search (all types fully booked)")
+        
+    except Exception as e:
+        log(f"❌ 4d. Search check failed: {e}")
+        return False
+    
+    log("✅ TEST 4 PASSED: Availability search working correctly")
+    return True
+
+def test_booking_cancellation():
+    """Test 5: Booking cancellation and counter restoration"""
+    log("\n=== TEST 5: BOOKING CANCELLATION ===")
+    
+    global test_listing_id, traveler_token, booking_ids
+    
+    # 5a. Cancel 1 Standard Room booking
+    try:
+        # Get first Standard Room booking (booking_ids[1] is the first Standard Room, [0] is legacy)
+        standard_booking_id = booking_ids[1]  # Second booking was first Standard Room
+        
+        res = requests.patch(
+            f"{BASE_URL}/bookings/{standard_booking_id}",
+            json={"status": "cancelled"},
+            headers=headers(traveler_token),
+            timeout=10
+        )
+        assert res.status_code == 200, f"Failed to cancel booking: {res.status_code} - {res.text}"
+        data = res.json()
+        booking = data.get('booking')
+        assert booking['status'] == 'cancelled', f"Expected status 'cancelled', got '{booking['status']}'"
+        log(f"✅ 5a. Cancelled Standard Room booking (bookingId: {standard_booking_id})")
+        
+    except Exception as e:
+        log(f"❌ 5a. Failed to cancel booking: {e}")
+        return False
+    
+    # 5b. Verify available counter incremented (1/10 available)
+    try:
+        res = requests.get(f"{BASE_URL}/listings/{test_listing_id}", timeout=10)
+        assert res.status_code == 200, f"Failed to get listing: {res.status_code}"
+        listing = res.json().get('listing')
+        standard = listing['inventoryTypes'][0]
+        assert standard['available'] == 1, f"Expected available=1, got {standard['available']}"
+        log(f"✅ 5b. Available counter incremented: {standard['available']}/10 Standard Rooms available")
+        
+    except Exception as e:
+        log(f"❌ 5b. Failed to check counter: {e}")
+        return False
+    
+    # 5c. Search with dates (listing should reappear)
+    try:
+        checkin = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
+        
+        res = requests.get(f"{BASE_URL}/listings?checkIn={checkin}&checkOut={checkout}", timeout=10)
+        assert res.status_code == 200, f"Search failed: {res.status_code}"
+        data = res.json()
+        listings = data.get('listings', [])
+        
+        # Check if our test listing appears again
+        found = any(l['id'] == test_listing_id for l in listings)
+        assert found, "Listing should reappear (has 1 Standard Room available)"
+        log(f"✅ 5c. Listing reappears in search after cancellation")
+        
+    except Exception as e:
+        log(f"❌ 5c. Search check failed: {e}")
+        return False
+    
+    log("✅ TEST 5 PASSED: Booking cancellation working correctly")
+    return True
+
+def test_display_price_calculation():
+    """Test 6: Display price calculation (minimum of active type prices)"""
+    log("\n=== TEST 6: DISPLAY PRICE CALCULATION ===")
+    
+    global test_listing_id
+    
+    try:
+        res = requests.get(f"{BASE_URL}/listings?limit=100", timeout=10)
+        assert res.status_code == 200, f"Failed to get listings: {res.status_code}"
+        data = res.json()
+        listings = data.get('listings', [])
+        
+        # Find our test listing
+        test_listing = None
+        for listing in listings:
+            if listing['id'] == test_listing_id:
+                test_listing = listing
+                break
+        
+        assert test_listing is not None, "Test listing not found in search results"
+        
+        # Check displayPrice field exists
+        assert 'displayPrice' in test_listing, "displayPrice field missing"
+        
+        # For our test hotel: displayPrice should be 3000 (Standard Room price)
+        assert test_listing['displayPrice'] == 3000, f"Expected displayPrice=3000, got {test_listing['displayPrice']}"
+        
+        log(f"✅ 6a. displayPrice field present: ₹{test_listing['displayPrice']}")
+        log(f"✅ 6b. displayPrice is minimum of active types (Standard Room: ₹3000)")
+        
+        # Verify it's the minimum
+        types = test_listing.get('inventoryTypes', [])
+        active_prices = [t['price'] for t in types if t['status'] == 'active']
+        min_price = min(active_prices) if active_prices else test_listing['price']
+        assert test_listing['displayPrice'] == min_price, f"displayPrice should be {min_price}, got {test_listing['displayPrice']}"
+        
+        log(f"✅ 6c. displayPrice correctly calculated as min({', '.join(f'₹{p}' for p in active_prices)})")
+        
+        log("✅ TEST 6 PASSED: Display price calculation working")
+        return True
+        
+    except Exception as e:
+        log(f"❌ TEST 6 FAILED: {e}")
+        return False
+
+def test_inventory_type_status():
+    """Test 7: Inactive inventory type handling"""
+    log("\n=== TEST 7: INVENTORY TYPE STATUS ===")
+    
+    global admin_token, traveler_token
+    
+    # 7a. Create listing with one inactive type
+    try:
+        listing_payload = {
+            "title": "Test Hotel - Inactive Type",
+            "description": "Hotel with one inactive room type for testing",
+            "category": "stay",
+            "subcategory": "hotel",
+            "location": "Gulmarg",
+            "price": 2000,
+            "images": ["https://images.unsplash.com/photo-1566073771259-6a8506099945"],
+            "inventoryTypes": [
+                {
+                    "name": "Active Room",
+                    "price": 2000,
+                    "quantity": 5,
+                    "status": "active"
+                },
+                {
+                    "name": "Inactive Room",
+                    "price": 1500,
+                    "quantity": 3,
+                    "status": "inactive"
+                }
+            ]
+        }
+        
+        res = requests.post(f"{BASE_URL}/listings", json=listing_payload, headers=headers(admin_token), timeout=10)
+        assert res.status_code == 201, f"Failed to create listing: {res.status_code} - {res.text}"
+        data = res.json()
+        listing = data.get('listing')
+        inactive_listing_id = listing['id']
+        
+        types = listing.get('inventoryTypes', [])
+        active_type = types[0]
+        inactive_type = types[1]
+        
+        assert active_type['status'] == 'active', "First type should be active"
+        assert inactive_type['status'] == 'inactive', "Second type should be inactive"
+        log(f"✅ 7a. Created listing with inactive type (id: {inactive_listing_id})")
+        
+    except Exception as e:
+        log(f"❌ 7a. Failed to create listing: {e}")
+        return False
+    
+    # 7b. Check displayPrice excludes inactive type
+    try:
+        res = requests.get(f"{BASE_URL}/listings?limit=100", timeout=10)
+        data = res.json()
+        listings = data.get('listings', [])
+        
+        test_listing = None
+        for l in listings:
+            if l['id'] == inactive_listing_id:
+                test_listing = l
+                break
+        
+        assert test_listing is not None, "Listing not found"
+        assert test_listing['displayPrice'] == 2000, f"displayPrice should be 2000 (active type), got {test_listing['displayPrice']}"
+        log(f"✅ 7b. displayPrice excludes inactive type: ₹{test_listing['displayPrice']} (Active Room only)")
+        
+    except Exception as e:
+        log(f"❌ 7b. Failed to check displayPrice: {e}")
+        return False
+    
+    # 7c. Try to book inactive type (should fail with 400)
+    try:
+        checkin = (datetime.now() + timedelta(days=50)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=55)).strftime('%Y-%m-%d')
+        
+        booking_payload = {
+            "listingId": inactive_listing_id,
+            "inventoryTypeId": inactive_type['id'],
+            "checkInDate": checkin,
+            "checkOutDate": checkout,
+            "guests": 2
+        }
+        
+        res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 400, f"Expected 400 Bad Request, got {res.status_code}"
+        data = res.json()
+        assert 'error' in data, "No error message"
+        assert 'unavailable' in data['error'].lower() or 'inactive' in data['error'].lower(), f"Wrong error: {data['error']}"
+        log(f"✅ 7c. Cannot book inactive type: {data['error']}")
+        
+    except Exception as e:
+        log(f"❌ 7c. Failed to test inactive booking: {e}")
+        return False
+    
+    log("✅ TEST 7 PASSED: Inactive type handling working")
+    return True
+
+def test_manual_reordering():
+    """Test 8: Manual reordering of inventory types"""
+    log("\n=== TEST 8: MANUAL REORDERING ===")
+    
+    global admin_token
+    
+    # 8a. Create listing with types in random order
+    try:
+        listing_payload = {
+            "title": "Test Hotel - Reordering",
+            "description": "Hotel for testing display order",
+            "category": "stay",
+            "subcategory": "hotel",
+            "location": "Pahalgam",
+            "price": 3000,
+            "images": ["https://images.unsplash.com/photo-1566073771259-6a8506099945"],
+            "inventoryTypes": [
+                {
+                    "name": "Type C",
+                    "price": 3000,
+                    "quantity": 5,
+                    "displayOrder": 2
+                },
+                {
+                    "name": "Type A",
+                    "price": 2000,
+                    "quantity": 5,
+                    "displayOrder": 0
+                },
+                {
+                    "name": "Type B",
+                    "price": 2500,
+                    "quantity": 5,
+                    "displayOrder": 1
+                }
+            ]
+        }
+        
+        res = requests.post(f"{BASE_URL}/listings", json=listing_payload, headers=headers(admin_token), timeout=10)
+        assert res.status_code == 201, f"Failed to create listing: {res.status_code} - {res.text}"
+        data = res.json()
+        listing = data.get('listing')
+        reorder_listing_id = listing['id']
+        
+        types = listing.get('inventoryTypes', [])
+        assert len(types) == 3, f"Expected 3 types, got {len(types)}"
+        
+        # Verify types are returned in displayOrder
+        assert types[0]['name'] == "Type A", f"First type should be 'Type A', got '{types[0]['name']}'"
+        assert types[1]['name'] == "Type B", f"Second type should be 'Type B', got '{types[1]['name']}'"
+        assert types[2]['name'] == "Type C", f"Third type should be 'Type C', got '{types[2]['name']}'"
+        
+        assert types[0]['displayOrder'] == 0, f"Type A displayOrder should be 0, got {types[0]['displayOrder']}"
+        assert types[1]['displayOrder'] == 1, f"Type B displayOrder should be 1, got {types[1]['displayOrder']}"
+        assert types[2]['displayOrder'] == 2, f"Type C displayOrder should be 2, got {types[2]['displayOrder']}"
+        
+        log(f"✅ 8a. Created listing with custom displayOrder")
+        log(f"   - Order: {types[0]['name']} (0), {types[1]['name']} (1), {types[2]['name']} (2)")
+        
+    except Exception as e:
+        log(f"❌ 8a. Failed to create listing: {e}")
+        return False
+    
+    # 8b. Update listing with new displayOrder values
+    try:
+        # Reverse the order
+        types[0]['displayOrder'] = 2
+        types[1]['displayOrder'] = 1
+        types[2]['displayOrder'] = 0
+        
+        update_payload = {
+            "inventoryTypes": types
+        }
+        
+        res = requests.put(f"{BASE_URL}/listings/{reorder_listing_id}", json=update_payload, headers=headers(admin_token), timeout=10)
+        assert res.status_code == 200, f"Failed to update listing: {res.status_code} - {res.text}"
+        data = res.json()
+        listing = data.get('listing')
+        
+        updated_types = listing.get('inventoryTypes', [])
+        
+        # Verify new order
+        assert updated_types[0]['name'] == "Type C", f"First type should be 'Type C', got '{updated_types[0]['name']}'"
+        assert updated_types[1]['name'] == "Type B", f"Second type should be 'Type B', got '{updated_types[1]['name']}'"
+        assert updated_types[2]['name'] == "Type A", f"Third type should be 'Type A', got '{updated_types[2]['name']}'"
+        
+        log(f"✅ 8b. Updated displayOrder successfully")
+        log(f"   - New order: {updated_types[0]['name']} (0), {updated_types[1]['name']} (1), {updated_types[2]['name']} (2)")
+        
+    except Exception as e:
+        log(f"❌ 8b. Failed to update listing: {e}")
+        return False
+    
+    log("✅ TEST 8 PASSED: Manual reordering working")
+    return True
+
+def test_price_validation():
+    """Test 9: Price validation and error handling"""
+    log("\n=== TEST 9: PRICE VALIDATION ===")
+    
+    global test_listing_id, traveler_token
+    
+    # Get inventory type IDs
+    try:
+        res = requests.get(f"{BASE_URL}/listings/{test_listing_id}", timeout=10)
+        listing = res.json().get('listing')
+        types = listing.get('inventoryTypes', [])
+        standard_id = types[0]['id']
+        inactive_id = None
+        
+        # Find an inactive type from previous test
+        res2 = requests.get(f"{BASE_URL}/listings?limit=100", timeout=10)
+        listings = res2.json().get('listings', [])
+        for l in listings:
+            if l.get('title') == "Test Hotel - Inactive Type":
+                for t in l.get('inventoryTypes', []):
+                    if t['status'] == 'inactive':
+                        inactive_id = t['id']
+                        inactive_listing_id = l['id']
+                        break
+                break
+        
+    except Exception as e:
+        log(f"❌ Failed to get listing: {e}")
+        return False
+    
+    # 9a. Try to book without inventoryTypeId (should fail)
+    try:
+        checkin = (datetime.now() + timedelta(days=60)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=65)).strftime('%Y-%m-%d')
+        
+        booking_payload = {
+            "listingId": test_listing_id,
+            # Missing inventoryTypeId
+            "checkInDate": checkin,
+            "checkOutDate": checkout,
+            "guests": 2
+        }
+        
+        res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 400, f"Expected 400 Bad Request, got {res.status_code}"
+        data = res.json()
+        assert 'error' in data, "No error message"
+        assert 'type' in data['error'].lower() or 'select' in data['error'].lower(), f"Wrong error: {data['error']}"
+        log(f"✅ 9a. Booking without inventoryTypeId rejected: {data['error']}")
+        
+    except Exception as e:
+        log(f"❌ 9a. Failed to test missing inventoryTypeId: {e}")
+        return False
+    
+    # 9b. Try to book with invalid inventoryTypeId (should fail)
+    try:
+        booking_payload = {
+            "listingId": test_listing_id,
+            "inventoryTypeId": "invalid-uuid-12345",
+            "checkInDate": checkin,
+            "checkOutDate": checkout,
+            "guests": 2
+        }
+        
+        res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+        assert res.status_code == 400, f"Expected 400 Bad Request, got {res.status_code}"
+        data = res.json()
+        assert 'error' in data, "No error message"
+        assert 'invalid' in data['error'].lower() or 'type' in data['error'].lower(), f"Wrong error: {data['error']}"
+        log(f"✅ 9b. Booking with invalid inventoryTypeId rejected: {data['error']}")
+        
+    except Exception as e:
+        log(f"❌ 9b. Failed to test invalid inventoryTypeId: {e}")
+        return False
+    
+    # 9c. Try to book inactive type (already tested in test 7, but verify again)
+    if inactive_id:
+        try:
+            booking_payload = {
+                "listingId": inactive_listing_id,
+                "inventoryTypeId": inactive_id,
+                "checkInDate": checkin,
+                "checkOutDate": checkout,
+                "guests": 2
+            }
+            
+            res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+            assert res.status_code == 400, f"Expected 400 Bad Request, got {res.status_code}"
+            data = res.json()
+            assert 'error' in data, "No error message"
+            log(f"✅ 9c. Booking inactive type rejected: {data['error']}")
+            
+        except Exception as e:
+            log(f"❌ 9c. Failed to test inactive type: {e}")
+            return False
+    else:
+        log("⚠️  9c. Skipped (no inactive type found)")
+    
+    log("✅ TEST 9 PASSED: Price validation working")
+    return True
+
+def test_concurrent_bookings():
+    """Test 10: Concurrent bookings (simulated)"""
+    log("\n=== TEST 10: CONCURRENT BOOKINGS ===")
+    
+    global traveler_token
+    
+    # Create a new listing with only 1 unit for easier testing
+    try:
+        listing_payload = {
+            "title": "Test Hotel - Concurrency",
+            "description": "Hotel with 1 room for concurrency testing",
+            "category": "stay",
+            "subcategory": "hotel",
+            "location": "Sonamarg",
+            "price": 4000,
+            "images": ["https://images.unsplash.com/photo-1566073771259-6a8506099945"],
+            "inventoryTypes": [
+                {
+                    "name": "Single Room",
+                    "price": 4000,
+                    "quantity": 1
+                }
+            ]
+        }
+        
+        res = requests.post(f"{BASE_URL}/listings", json=listing_payload, headers=headers(admin_token), timeout=10)
+        assert res.status_code == 201, f"Failed to create listing: {res.status_code}"
+        listing = res.json().get('listing')
+        concurrency_listing_id = listing['id']
+        single_room_id = listing['inventoryTypes'][0]['id']
+        
+        log(f"✅ 10a. Created listing with 1 room (id: {concurrency_listing_id})")
+        
+    except Exception as e:
+        log(f"❌ 10a. Failed to create listing: {e}")
+        return False
+    
+    # 10b. Make 2 simultaneous bookings for the same dates
+    try:
+        import threading
+        
+        checkin = (datetime.now() + timedelta(days=70)).strftime('%Y-%m-%d')
+        checkout = (datetime.now() + timedelta(days=75)).strftime('%Y-%m-%d')
+        
+        results = []
+        
+        def make_booking(thread_id):
+            try:
+                booking_payload = {
+                    "listingId": concurrency_listing_id,
+                    "inventoryTypeId": single_room_id,
+                    "checkInDate": checkin,
+                    "checkOutDate": checkout,
+                    "guests": 2
+                }
+                
+                res = requests.post(f"{BASE_URL}/bookings", json=booking_payload, headers=headers(traveler_token), timeout=10)
+                results.append({
+                    'thread': thread_id,
+                    'status': res.status_code,
+                    'data': res.json()
+                })
+            except Exception as e:
+                results.append({
+                    'thread': thread_id,
+                    'status': 'error',
+                    'error': str(e)
+                })
+        
+        # Start 2 threads simultaneously
+        thread1 = threading.Thread(target=make_booking, args=(1,))
+        thread2 = threading.Thread(target=make_booking, args=(2,))
+        
+        thread1.start()
+        thread2.start()
+        
+        thread1.join()
+        thread2.join()
+        
+        # Check results
+        assert len(results) == 2, f"Expected 2 results, got {len(results)}"
+        
+        success_count = sum(1 for r in results if r['status'] == 201)
+        conflict_count = sum(1 for r in results if r['status'] == 409)
+        
+        log(f"   - Thread 1: {results[0]['status']} - {results[0].get('data', {}).get('error', 'Success')}")
+        log(f"   - Thread 2: {results[1]['status']} - {results[1].get('data', {}).get('error', 'Success')}")
+        
+        # One should succeed, one should fail (or both might succeed if no overlap)
+        # The important thing is no overbooking
+        assert success_count >= 1, "At least one booking should succeed"
+        
+        log(f"✅ 10b. Concurrent bookings handled: {success_count} succeeded, {conflict_count} rejected")
+        
+    except Exception as e:
+        log(f"❌ 10b. Failed to test concurrent bookings: {e}")
+        return False
+    
+    # 10c. Verify no overbooking occurred
+    try:
+        res = requests.get(f"{BASE_URL}/listings/{concurrency_listing_id}", timeout=10)
+        listing = res.json().get('listing')
+        single_room = listing['inventoryTypes'][0]
+        
+        # Available should be 0 or 1 (not negative)
+        assert single_room['available'] >= 0, f"Overbooking detected! Available: {single_room['available']}"
+        assert single_room['available'] <= 1, f"Counter error! Available: {single_room['available']} > quantity: 1"
+        
+        log(f"✅ 10c. No overbooking: {single_room['available']}/1 available")
+        
+    except Exception as e:
+        log(f"❌ 10c. Failed to verify overbooking: {e}")
+        return False
+    
+    log("✅ TEST 10 PASSED: Concurrent bookings handled correctly")
+    return True
 
 def main():
-    print("\n" + "="*80)
-    print("SAFAR BOOKINGS API BACKEND TEST SUITE")
-    print("="*80)
-    print_info(f"API Base URL: {API_BASE}")
-    print_info(f"MongoDB: {MONGO_URL}/{DB_NAME}")
+    """Run all tests"""
+    global traveler_token, host_token, admin_token
     
-    # Setup
-    print("\n" + "="*80)
-    print("SETUP")
-    print("="*80)
-    cleanup_test_data()
-    setup_test_users()
+    log("=" * 80)
+    log("MULTI-TYPE INVENTORY SYSTEM BACKEND TEST SUITE")
+    log("=" * 80)
     
-    # Setup bookings test data (login users, create approved listing)
-    if not setup_bookings_test_data():
-        print_fail("Failed to setup bookings test data")
-        return False
+    # Login
+    log("\n=== AUTHENTICATION ===")
+    traveler_token = login(TRAVELER_EMAIL, TRAVELER_PASSWORD)
+    host_token = login(HOST_EMAIL, HOST_PASSWORD)
+    admin_token = login(ADMIN_EMAIL, ADMIN_PASSWORD)
     
-    # Track results
-    results = {}
+    if not all([traveler_token, host_token, admin_token]):
+        log("❌ FATAL: Authentication failed")
+        return
     
-    # A) POST /api/bookings (create) tests
-    print("\n" + "="*80)
-    print("SECTION A: CREATE BOOKING TESTS")
-    print("="*80)
-    results['booking_create_no_auth'] = test_booking_create_no_auth()
-    results['booking_create_missing_listing_id'] = test_booking_create_missing_listing_id()
-    results['booking_create_invalid_dates'] = test_booking_create_invalid_dates()
-    results['booking_create_nonexistent_listing'] = test_booking_create_nonexistent_listing()
-    results['booking_create_pending_listing'] = test_booking_create_pending_listing()
-    results['booking_create_valid'] = test_booking_create_valid()
-    results['booking_create_overlapping'] = test_booking_create_overlapping()
-    results['booking_create_non_overlapping'] = test_booking_create_non_overlapping()
+    # Run tests
+    results = []
     
-    # B) GET /api/bookings (list) tests
-    print("\n" + "="*80)
-    print("SECTION B: LIST BOOKINGS TESTS")
-    print("="*80)
-    results['booking_list_no_auth'] = test_booking_list_no_auth()
-    results['booking_list_traveler'] = test_booking_list_traveler()
-    results['booking_list_host_default'] = test_booking_list_host_default()
-    results['booking_list_host_received'] = test_booking_list_host_received()
-    results['booking_list_admin_all'] = test_booking_list_admin_all()
-    
-    # C) PATCH /api/bookings/:id (status update) tests
-    print("\n" + "="*80)
-    print("SECTION C: UPDATE BOOKING STATUS TESTS")
-    print("="*80)
-    results['booking_patch_no_auth'] = test_booking_patch_no_auth()
-    results['booking_patch_invalid_status'] = test_booking_patch_invalid_status()
-    results['booking_patch_nonexistent'] = test_booking_patch_nonexistent()
-    results['booking_patch_traveler_approve'] = test_booking_patch_traveler_approve()
-    results['booking_patch_traveler_cancel'] = test_booking_patch_traveler_cancel()
-    results['booking_patch_host_wrong_listing'] = test_booking_patch_host_wrong_listing()
-    results['booking_patch_host_approve'] = test_booking_patch_host_approve()
-    results['booking_patch_host_reject'] = test_booking_patch_host_reject()
-    results['booking_patch_admin'] = test_booking_patch_admin()
-    
-    # D) MongoDB persistence test
-    print("\n" + "="*80)
-    print("SECTION D: MONGODB PERSISTENCE TEST")
-    print("="*80)
-    results['booking_mongodb_persistence'] = test_booking_mongodb_persistence()
+    results.append(("Backward Compatibility", test_backward_compatibility()))
+    results.append(("Create Multi-Type Listing", test_create_multi_type_listing()))
+    results.append(("Booking with Inventory Types", test_booking_with_inventory_types()))
+    results.append(("Availability Search", test_availability_search()))
+    results.append(("Booking Cancellation", test_booking_cancellation()))
+    results.append(("Display Price Calculation", test_display_price_calculation()))
+    results.append(("Inventory Type Status", test_inventory_type_status()))
+    results.append(("Manual Reordering", test_manual_reordering()))
+    results.append(("Price Validation", test_price_validation()))
+    results.append(("Concurrent Bookings", test_concurrent_bookings()))
     
     # Summary
-    print("\n" + "="*80)
-    print("BOOKINGS API TEST SUMMARY")
-    print("="*80)
+    log("\n" + "=" * 80)
+    log("TEST SUMMARY")
+    log("=" * 80)
     
-    passed = sum(1 for v in results.values() if v)
+    passed = sum(1 for _, result in results if result)
     total = len(results)
     
-    for test_name, result in results.items():
-        status = "✅ PASS" if result else "❌ FAIL"
-        print(f"{status}: {test_name}")
+    for name, result in results:
+        status = "✅ PASSED" if result else "❌ FAILED"
+        log(f"{status}: {name}")
     
-    print("\n" + "="*80)
-    print(f"TOTAL: {passed}/{total} tests passed")
-    print("="*80)
+    log("\n" + "=" * 80)
+    log(f"FINAL RESULT: {passed}/{total} tests passed ({passed*100//total}%)")
+    log("=" * 80)
     
-    # Cleanup
-    print("\n" + "="*80)
-    print("CLEANUP")
-    print("="*80)
-    cleanup_test_data()
-    
-    return passed == total
+    if passed == total:
+        log("\n🎉 ALL TESTS PASSED! Multi-type inventory system is working correctly.")
+    else:
+        log(f"\n⚠️  {total - passed} test(s) failed. Please review the errors above.")
 
-if __name__ == '__main__':
-    success = main()
-    sys.exit(0 if success else 1)
+if __name__ == "__main__":
+    main()

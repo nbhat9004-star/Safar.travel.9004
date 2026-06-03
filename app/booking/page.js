@@ -41,17 +41,25 @@ function BookingContent() {
   const router = useRouter();
   const { user } = useAuth();
   const listingId = params.get('id') || params.get('listingId');
+  const typeId = params.get('typeId');
   const { listing } = useListing(listingId || '');
   const { bookedRanges } = useAvailability(listingId);
   // Fallback to demo data if no listingId (preview mode)
   const fallback = LISTINGS[0];
+  
+  // Find selected type if typeId is provided
+  const selectedType = (listing && typeId && listing.inventoryTypes?.length > 0) 
+    ? listing.inventoryTypes.find(t => t.id === typeId) 
+    : null;
+  
   const item = listing ? {
     id: listing.id,
     title: listing.title,
     location: listing.location,
-    price: listing.price,
+    price: selectedType ? selectedType.price : listing.price,
     guests: listing.guests,
-    image: (listing.images && listing.images[0]) || fallback.image,
+    image: selectedType?.images?.[0] || (listing.images && listing.images[0]) || fallback.image,
+    typeName: selectedType?.name || null,
   } : fallback;
 
   const [step, setStep] = useState(0);
@@ -260,7 +268,13 @@ function BookingContent() {
                       if (!listingId) { toast.error('No listing selected. Pick a stay from Explore first.'); return; }
                       if (!canContinueDates) { toast.error('Please pick valid, available dates.'); setStep(0); return; }
                       setSubmitting(true);
-                      const { ok, data } = await bookingsApi.create({ listingId, checkInDate: checkIn, checkOutDate: checkOut, guests });
+                      const { ok, data } = await bookingsApi.create({ 
+                        listingId, 
+                        checkInDate: checkIn, 
+                        checkOutDate: checkOut, 
+                        guests,
+                        inventoryTypeId: typeId || null
+                      });
                       setSubmitting(false);
                       if (!ok) { toast.error(data?.error || 'Booking failed'); return; }
                       setBookingId(data.booking.bookingId);

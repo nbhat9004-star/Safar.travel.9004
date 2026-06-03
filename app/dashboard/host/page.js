@@ -135,7 +135,7 @@ function HostDashboardInner() {
               </div>
               {bookings.map((b) => (
                 <div key={b.bookingId} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
-                  <div className="col-span-4 flex items-center gap-3">{b.listingImage && <img src={b.listingImage} className="size-10 rounded-lg object-cover" alt="" />}<div><div className="font-semibold text-sm line-clamp-1">{b.listingTitle}</div><div className="text-xs text-muted-foreground">₹{(b.totalPrice||0).toLocaleString('en-IN')} · {b.nights}n</div></div></div>
+                  <div className="col-span-4 flex items-center gap-3">{b.listingImage && <img src={b.listingImage} className="size-10 rounded-lg object-cover" alt="" />}<div><div className="font-semibold text-sm line-clamp-1">{b.listingTitle}</div>{b.inventoryTypeName && <div className="text-xs text-emerald2 font-medium">{b.inventoryTypeName}</div>}<div className="text-xs text-muted-foreground">₹{(b.totalPrice||0).toLocaleString('en-IN')} · {b.nights}n</div></div></div>
                   <div className="col-span-3"><div className="text-sm">{b.travelerName}</div><div className="text-xs text-muted-foreground">{b.guests} guests</div></div>
                   <div className="col-span-2 text-xs">{new Date(b.checkInDate).toLocaleDateString()} →<br/>{new Date(b.checkOutDate).toLocaleDateString()}</div>
                   <div className="col-span-1"><span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${b.status==='approved'?'bg-emerald-50 text-emerald2 border-emerald-200':b.status==='pending'?'bg-amber-50 text-amber-700 border-amber-200':b.status==='rejected'?'bg-rose-50 text-rose-600 border-rose-200':'bg-secondary text-muted-foreground border-border'}`}>{b.status}</span></div>
@@ -171,7 +171,7 @@ function HostDashboardInner() {
               </div>
               {myListings.map((l)=>(
                 <div key={l.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
-                  <div className="col-span-5 flex items-center gap-3"><img src={(l.images && l.images[0]) || ''} className="size-12 rounded-xl object-cover bg-secondary" alt="" /><div><div className="font-semibold text-sm line-clamp-1">{l.title}</div><div className="text-xs text-muted-foreground">{l.location}</div></div></div>
+                  <div className="col-span-5 flex items-center gap-3"><img src={(l.images && l.images[0]) || ''} className="size-12 rounded-xl object-cover bg-secondary" alt="" /><div><div className="font-semibold text-sm line-clamp-1">{l.title}</div><div className="text-xs text-muted-foreground">{l.location}</div>{l.inventoryTypes && l.inventoryTypes.length > 0 && <div className="text-xs text-emerald2 font-medium mt-0.5">{l.inventoryTypes.length} type{l.inventoryTypes.length > 1 ? 's' : ''} · {l.inventoryTypes.reduce((sum, t) => sum + t.quantity, 0)} units</div>}</div></div>
                   <div className="col-span-2 text-sm font-semibold">₹{l.price.toLocaleString('en-IN')}</div>
                   <div className="col-span-2"><StatusPill s={l.status} /></div>
                   <div className="col-span-2 text-sm flex items-center gap-1"><Star className="size-3.5 text-gold fill-gold" /> {l.rating || '—'}</div>

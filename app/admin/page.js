@@ -220,6 +220,53 @@ function AdminInner() {
             </div>
           )}
         </section>
+
+        {/* Inventory Overview */}
+        <section className="mt-10 mb-12">
+          <h2 className="font-display text-2xl font-bold">Inventory Overview</h2>
+          <p className="text-sm text-muted-foreground mt-1">Multi-unit listings and availability</p>
+          {!loading && all.length > 0 && (
+            <div className="mt-4 space-y-4">
+              {all.filter(l => l.inventoryTypes && l.inventoryTypes.length > 0).map((listing) => (
+                <div key={listing.id} className="rounded-2xl border bg-white p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex gap-3">
+                      <img src={listing.images?.[0] || ''} className="size-14 rounded-xl object-cover bg-secondary" alt="" />
+                      <div>
+                        <div className="font-semibold">{listing.title}</div>
+                        <div className="text-xs text-muted-foreground">{listing.location}</div>
+                        <StatusPill s={listing.status} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {listing.inventoryTypes.map((type) => (
+                      <div key={type.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/30">
+                        <div className="flex items-center gap-3">
+                          <div className="font-medium text-sm">{type.name}</div>
+                          <div className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${type.status === 'active' ? 'bg-emerald-50 text-emerald2 border border-emerald-200' : 'bg-secondary text-muted-foreground border'}`}>
+                            {type.status}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <div className="text-muted-foreground">₹{type.price.toLocaleString('en-IN')}</div>
+                          <div className={`font-semibold ${type.available === 0 ? 'text-rose-500' : 'text-emerald2'}`}>
+                            {type.available} / {type.quantity} available
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {all.filter(l => l.inventoryTypes && l.inventoryTypes.length > 0).length === 0 && (
+                <div className="rounded-2xl border bg-white p-8 text-center text-muted-foreground">
+                  No multi-unit listings yet
+                </div>
+              )}
+            </div>
+          )}
+        </section>
       </div>
       <Footer />
     </main>
