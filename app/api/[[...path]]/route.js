@@ -192,12 +192,51 @@ async function route(request, { params }) {
       const co = new Date(checkOutStr);
       if (!isNaN(ci) && !isNaN(co) && co > ci) {
         const bookings = await getCollection('bookings');
-        const conflicts = await bookings.find({
-          status: { $in: ['pending', 'approved'] },
-          checkInDate: { $lt: co },
-          checkOutDate: { $gt: ci },
-        }, { projection: { listingId: 1, _id: 0 } }).toArray();
-        unavailableIds = [...new Set(conflicts.map((b) => b.listingId))];
+        
+        // Get all listings that match other filters first
+        const candidateListings = await listings.find(filter, { projection: { id: 1, inventoryTypes: 1 } }).toArray();
+        
+        unavailableIds = [];
+        for (const listing of candidateListings) {
+          const hasTypes = listing.inventoryTypes && Array.isArray(listing.inventoryTypes) && listing.inventoryTypes.length > 0;
+          
+          if (!hasTypes) {
+            // LEGACY SINGLE-UNIT: Check if ANY booking exists
+            const overlap = await bookings.findOne({
+              listingId: listing.id,
+              status: { $in: ['pending', 'approved'] },
+              checkInDate: { $lt: co },
+              checkOutDate: { $gt: ci },
+            });
+            if (overlap) {
+              unavailableIds.push(listing.id);
+            }
+          } else {
+            // MULTI-TYPE: Check if ALL types are fully booked
+            let hasAvailability = false;
+            const activeTypes = listing.inventoryTypes.filter(t => t.status === 'active');
+            
+            for (const type of activeTypes) {
+              const bookedCount = await bookings.countDocuments({
+                listingId: listing.id,
+                inventoryTypeId: type.id,
+                status: { $in: ['pending', 'approved'] },
+                checkInDate: { $lt: co },
+                checkOutDate: { $gt: ci },
+              });
+              
+              if (type.quantity > bookedCount) {
+                hasAvailability = true;
+                break;
+              }
+            }
+            
+            if (!hasAvailability) {
+              unavailableIds.push(listing.id);
+            }
+          }
+        }
+        
         if (unavailableIds.length) filter.id = { $nin: unavailableIds };
       }
     }
@@ -206,6 +245,23 @@ async function route(request, { params }) {
     const docs = await listings.find(filter, { projection: { _id: 0 } })
       .sort({ featured: -1, createdAt: -1 })
       .skip((page - 1) * limit).limit(limit).toArray();
+    
+    // Calculate displayPrice (lowest active type price or listing price)
+    docs.forEach(listing => {
+      if (listing.inventoryTypes && listing.inventoryTypes.length > 0) {
+        const activePrices = listing.inventoryTypes
+          .filter(t => t.status === 'active')
+          .map(t => t.price);
+        if (activePrices.length > 0) {
+          listing.displayPrice = Math.min(...activePrices);
+        } else {
+          listing.displayPrice = listing.price;
+        }
+      } else {
+        listing.displayPrice = listing.price;
+      }
+    });
+    
     return ok({ listings: docs, total, page, limit });
   }
 
@@ -214,7 +270,7 @@ async function route(request, { params }) {
     const me = await getCurrentUser(request);
     const g = requireRole(me, ['host','admin']); if (!g.ok) return err(g.error, g.status);
     const body = await readBody(request);
-    const { title, description, category, subcategory, location, price, images, amenities, services, duration } = body;
+    const { title, description, category, subcategory, location, price, images, amenities, services, duration, inventoryTypes } = body;
     if (!title || title.trim().length < 3) return err('Title is required (min 3 chars)');
     if (!description || description.trim().length < 10) return err('Description is required (min 10 chars)');
     if (!CATEGORIES.includes(category)) return err(`Category must be one of: ${CATEGORIES.join(', ')}`);
@@ -222,6 +278,42 @@ async function route(request, { params }) {
     const priceNum = Number(price);
     if (!Number.isFinite(priceNum) || priceNum <= 0) return err('Price must be a positive number');
     const imgs = Array.isArray(images) ? images.filter((s) => typeof s === 'string' && s.length) : [];
+
+    // Process inventory types if provided
+    let processedTypes = [];
+    if (inventoryTypes && Array.isArray(inventoryTypes) && inventoryTypes.length > 0) {
+      let order = 0;
+      for (const type of inventoryTypes) {
+        if (!type.name || type.name.trim().length < 2) {
+          return err('Inventory type name is required (min 2 chars)');
+        }
+        const typePrice = Number(type.price);
+        if (!Number.isFinite(typePrice) || typePrice <= 0) {
+          return err(`Invalid price for type "${type.name}"`);
+        }
+        const quantity = Number(type.quantity);
+        if (!Number.isFinite(quantity) || quantity < 1) {
+          return err(`Quantity must be at least 1 for type "${type.name}"`);
+        }
+        
+        processedTypes.push({
+          id: uuid(),
+          name: type.name.trim(),
+          description: type.description || '',
+          price: typePrice,
+          quantity,
+          available: quantity,
+          images: Array.isArray(type.images) ? type.images.filter(s => typeof s === 'string' && s.length) : [],
+          status: type.status === 'inactive' ? 'inactive' : 'active',
+          displayOrder: type.displayOrder !== undefined ? Number(type.displayOrder) : order++,
+          beds: type.beds || null,
+          guests: type.guests || null,
+          amenities: Array.isArray(type.amenities) ? type.amenities : [],
+        });
+      }
+      // Sort by displayOrder
+      processedTypes.sort((a, b) => a.displayOrder - b.displayOrder);
+    }
 
     const now = new Date();
     const doc = {
@@ -245,6 +337,7 @@ async function route(request, { params }) {
       status: me.role === 'admin' ? 'approved' : 'pending',
       featured: false,
       isDemo: false,
+      inventoryTypes: processedTypes,
       createdAt: now,
       updatedAt: now,
     };
@@ -297,13 +390,53 @@ async function route(request, { params }) {
       if (me.role !== 'admin' && me.id !== doc.hostId) return err('Forbidden', 403);
       const body = await readBody(request);
       const update = {};
-      const allowed = ['title','description','category','subcategory','location','price','images','amenities','services','duration','badge'];
+      const allowed = ['title','description','category','subcategory','location','price','images','amenities','services','duration','badge','inventoryTypes'];
       for (const k of allowed) if (body[k] !== undefined) update[k] = body[k];
       if (update.price !== undefined) {
         const p = Number(update.price); if (!Number.isFinite(p) || p <= 0) return err('Invalid price');
         update.price = p;
       }
       if (update.category && !CATEGORIES.includes(update.category)) return err('Invalid category');
+      
+      // Process inventory types if provided
+      if (update.inventoryTypes !== undefined) {
+        if (!Array.isArray(update.inventoryTypes)) {
+          return err('inventoryTypes must be an array');
+        }
+        const processedTypes = [];
+        let order = 0;
+        for (const type of update.inventoryTypes) {
+          if (!type.name || type.name.trim().length < 2) {
+            return err('Inventory type name is required (min 2 chars)');
+          }
+          const typePrice = Number(type.price);
+          if (!Number.isFinite(typePrice) || typePrice <= 0) {
+            return err(`Invalid price for type "${type.name}"`);
+          }
+          const quantity = Number(type.quantity);
+          if (!Number.isFinite(quantity) || quantity < 1) {
+            return err(`Quantity must be at least 1 for type "${type.name}"`);
+          }
+          
+          processedTypes.push({
+            id: type.id || uuid(),
+            name: type.name.trim(),
+            description: type.description || '',
+            price: typePrice,
+            quantity,
+            available: type.available !== undefined ? Number(type.available) : quantity,
+            images: Array.isArray(type.images) ? type.images.filter(s => typeof s === 'string' && s.length) : [],
+            status: type.status === 'inactive' ? 'inactive' : 'active',
+            displayOrder: type.displayOrder !== undefined ? Number(type.displayOrder) : order++,
+            beds: type.beds || null,
+            guests: type.guests || null,
+            amenities: Array.isArray(type.amenities) ? type.amenities : [],
+          });
+        }
+        processedTypes.sort((a, b) => a.displayOrder - b.displayOrder);
+        update.inventoryTypes = processedTypes;
+      }
+      
       // hosts editing a listing reset to pending re-approval (admins keep status)
       if (me.role !== 'admin') update.status = 'pending';
       update.updatedAt = new Date();
@@ -382,7 +515,7 @@ async function route(request, { params }) {
   if (path === '/bookings' && method === 'POST') {
     const me = await getCurrentUser(request);
     if (!me) return err('Authentication required', 401);
-    const { listingId, checkInDate, checkOutDate, guests } = await readBody(request);
+    const { listingId, checkInDate, checkOutDate, guests, inventoryTypeId } = await readBody(request);
     if (!listingId) return err('listingId is required');
     const ci = new Date(checkInDate), co = new Date(checkOutDate);
     if (isNaN(ci) || isNaN(co)) return err('Invalid dates');
@@ -395,23 +528,65 @@ async function route(request, { params }) {
     const listing = await listings.findOne({ id: listingId });
     if (!listing || listing.status !== 'approved') return err('Listing not available for booking', 404);
 
-    // Prevent overlapping bookings for same listing
-    const bookings = await getCollection('bookings');
-    const overlap = await bookings.findOne({
-      listingId,
-      status: { $in: ['pending','approved'] },
-      checkInDate: { $lt: co },
-      checkOutDate: { $gt: ci },
-    });
-    if (overlap) return err('These dates overlap with an existing booking. Please pick other dates.', 409);
+    // Determine inventory type and pricing
+    let selectedType = null;
+    let pricePerNight = listing.price;
+    let bookingImage = (listing.images && listing.images[0]) || null;
 
+    const hasInventoryTypes = listing.inventoryTypes && Array.isArray(listing.inventoryTypes) && listing.inventoryTypes.length > 0;
+
+    if (hasInventoryTypes) {
+      // MULTI-TYPE LISTING: Must select a type
+      if (!inventoryTypeId) {
+        return err('Please select a room/vehicle type', 400);
+      }
+      selectedType = listing.inventoryTypes.find(t => t.id === inventoryTypeId);
+      if (!selectedType) {
+        return err('Invalid inventory type selected', 400);
+      }
+      if (selectedType.status === 'inactive') {
+        return err(`${selectedType.name} is currently unavailable`, 400);
+      }
+      pricePerNight = selectedType.price;
+      bookingImage = (selectedType.images && selectedType.images[0]) || bookingImage;
+
+      // Check availability for this specific type
+      const bookings = await getCollection('bookings');
+      const bookedCount = await bookings.countDocuments({
+        listingId,
+        inventoryTypeId,
+        status: { $in: ['pending', 'approved'] },
+        checkInDate: { $lt: co },
+        checkOutDate: { $gt: ci },
+      });
+
+      const available = selectedType.quantity - bookedCount;
+      if (available < 1) {
+        return err(`No ${selectedType.name} available for these dates. ${available === 0 ? 'All units are booked.' : 'Try different dates or another type.'}`, 409);
+      }
+    } else {
+      // LEGACY SINGLE-UNIT LISTING: Use old overlap logic
+      const bookings = await getCollection('bookings');
+      const overlap = await bookings.findOne({
+        listingId,
+        status: { $in: ['pending', 'approved'] },
+        checkInDate: { $lt: co },
+        checkOutDate: { $gt: ci },
+      });
+      if (overlap) {
+        return err('These dates overlap with an existing booking. Please pick other dates.', 409);
+      }
+    }
+
+    // Create booking
+    const bookings = await getCollection('bookings');
     const nights = Math.max(1, Math.round((co - ci) / 86400000));
-    const totalPrice = listing.price * nights;
+    const totalPrice = pricePerNight * nights;
     const doc = {
       bookingId: uuid(),
       listingId,
       listingTitle: listing.title,
-      listingImage: (listing.images && listing.images[0]) || null,
+      listingImage: bookingImage,
       travelerId: me.id,
       travelerName: me.name,
       travelerEmail: me.email,
@@ -421,13 +596,24 @@ async function route(request, { params }) {
       checkOutDate: co,
       guests: g,
       nights,
-      pricePerNight: listing.price,
+      pricePerNight,
       totalPrice,
       status: 'pending',
+      inventoryTypeId: inventoryTypeId || null,
+      inventoryTypeName: selectedType?.name || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     await bookings.insertOne(doc);
+
+    // Update available counter (if multi-type)
+    if (selectedType) {
+      await listings.updateOne(
+        { id: listingId, 'inventoryTypes.id': inventoryTypeId },
+        { $inc: { 'inventoryTypes.$.available': -1 } }
+      );
+    }
+
     const { _id, ...rest } = doc;
     return ok({ booking: rest }, 201);
   }
@@ -464,7 +650,19 @@ async function route(request, { params }) {
     const isTraveler = me.id === b.travelerId;
     if (status === 'cancelled' && !(isTraveler || isAdmin)) return err('Forbidden', 403);
     if ((status === 'approved' || status === 'rejected') && !(isHost || isAdmin)) return err('Forbidden', 403);
+    
+    // Update booking status
     await bookings.updateOne({ bookingId: id }, { $set: { status, updatedAt: new Date() } });
+    
+    // Restore inventory counter if booking is cancelled or rejected
+    if ((status === 'cancelled' || status === 'rejected') && b.inventoryTypeId) {
+      const listings = await getCollection('listings');
+      await listings.updateOne(
+        { id: b.listingId, 'inventoryTypes.id': b.inventoryTypeId },
+        { $inc: { 'inventoryTypes.$.available': 1 } }
+      );
+    }
+    
     const fresh = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
     return ok({ booking: fresh });
   }
