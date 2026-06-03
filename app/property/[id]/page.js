@@ -11,6 +11,7 @@ import ServiceBadges from '@/components/safar/ServiceBadges';
 import { Button } from '@/components/ui/button';
 import { useListing, useAvailability } from '@/lib/listings-api';
 import { SERVICE_GROUPS, SERVICE_INDEX } from '@/lib/services';
+import WhatsAppButton from '@/components/safar/WhatsAppButton';
 
 const AMENITY_ICONS = { 'Wi-Fi': Wifi, 'Heater': Wind, 'Kahwa': Coffee, 'Parking': ParkingCircle };
 
@@ -275,9 +276,16 @@ function App() {
             {hasTypes && !selectedTypeId && (
               <div className="mt-2 text-xs text-amber-600 text-center">Please select a type to continue</div>
             )}
-            <Button variant="outline" className="w-full mt-2 h-11 rounded-2xl" asChild>
-              <a href={`https://wa.me/911234567890?text=Hi%20${encodeURIComponent(item.hostName||'host')}%2C%20I%27m%20interested%20in%20%22${encodeURIComponent(item.title)}%22%20on%20Safar.`} target="_blank" rel="noreferrer"><MessageCircle className="size-4 mr-2" /> Chat with Host on WhatsApp</a>
-            </Button>
+            <WhatsAppButton 
+              phone={item.hostPhone}
+              listingTitle={item.title}
+              location={item.location}
+              checkIn={checkIn}
+              checkOut={checkOut}
+              guests={guests}
+              variant="outline"
+              className="w-full mt-2 h-11 rounded-2xl"
+            />
             <div className="mt-5 pt-5 border-t space-y-2 text-sm">
               <div className="flex justify-between"><span>₹{item.price.toLocaleString('en-IN')} × {nights} nights</span><span>₹{subtotal.toLocaleString('en-IN')}</span></div>
               <div className="flex justify-between text-muted-foreground"><span>Cleaning fee</span><span>₹800</span></div>

@@ -126,6 +126,40 @@ async function route(request, { params }) {
     const list = await users.find({}, { projection: { passwordHash: 0, _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
     return ok({ users: list });
   }
+  // PATCH /api/users/me - Update current user profile
+  if (path === '/users/me' && method === 'PATCH') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const { name, phone, avatar } = await readBody(request);
+    const update = {};
+    if (name && typeof name === 'string' && name.trim().length >= 2) {
+      update.name = name.trim();
+    }
+    if (phone !== undefined) {
+      // Validate phone number (basic validation)
+      if (phone && typeof phone === 'string') {
+        const cleaned = phone.replace(/[^\d+]/g, '');
+        if (cleaned.length >= 10) {
+          update.phone = cleaned;
+        } else {
+          return err('Invalid phone number format');
+        }
+      } else if (phone === null || phone === '') {
+        update.phone = null;
+      }
+    }
+    if (avatar && typeof avatar === 'string') {
+      update.avatar = avatar;
+    }
+    if (Object.keys(update).length === 0) {
+      return err('No valid fields to update');
+    }
+    update.updatedAt = new Date();
+    const users = await getCollection('users');
+    await users.updateOne({ id: me.id }, { $set: update });
+    const fresh = await users.findOne({ id: me.id }, { projection: { passwordHash: 0, _id: 0 } });
+    return ok({ user: fresh });
+  }
   if (path === '/host/me' && method === 'GET') {
     const me = await getCurrentUser(request);
     const g = requireRole(me, ['host','admin']); if (!g.ok) return err(g.error, g.status);
@@ -378,6 +412,14 @@ async function route(request, { params }) {
       if (!doc) return err('Listing not found', 404);
       if (doc.status !== 'approved') {
         if (!me || (me.role !== 'admin' && me.id !== doc.hostId)) return err('Listing not found', 404);
+      }
+      // Fetch host phone for WhatsApp integration
+      if (doc.hostId) {
+        const users = await getCollection('users');
+        const host = await users.findOne({ id: doc.hostId }, { projection: { phone: 1, _id: 0 } });
+        if (host && host.phone) {
+          doc.hostPhone = host.phone;
+        }
       }
       return ok({ listing: doc });
     }
