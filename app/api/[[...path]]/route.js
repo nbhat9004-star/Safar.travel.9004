@@ -7,6 +7,16 @@ import {
 } from '@/lib/auth';
 import { getCollection, ensureIndexes } from '@/lib/db';
 import { LISTINGS as DEMO_LISTINGS } from '@/lib/data';
+import {
+  sendWelcomeEmail,
+  sendBookingConfirmation,
+  sendBookingNotificationToHost,
+  sendBookingCancellationEmail,
+  sendBookingApprovedEmail,
+  sendBookingRejectedEmail,
+  sendInvoiceEmail,
+  sendContactFormEmail,
+} from '@/lib/email';
 
 const json = (data, status = 200) => NextResponse.json(data, { status });
 const ok = (data = {}, status = 200) => json({ ok: true, ...data }, status);
@@ -93,6 +103,12 @@ async function route(request, { params }) {
     };
     await users.insertOne(user);
     const token = signToken({ uid: user.id, role: user.role });
+    
+    // Send welcome email (async, don't block response)
+    sendWelcomeEmail(user).catch((error) => {
+      console.error('Failed to send welcome email:', error);
+    });
+    
     const res = ok({ user: publicUser(user), token });
     return setAuthCookie(res, token);
   }
@@ -656,6 +672,23 @@ async function route(request, { params }) {
       );
     }
 
+    // Fetch host details for email
+    const users = await getCollection('users');
+    const traveler = await users.findOne({ id: me.id });
+    const host = await users.findOne({ id: listing.hostId });
+
+    // Send booking confirmation emails (async, don't block response)
+    if (traveler) {
+      sendBookingConfirmation(doc, traveler).catch((error) => {
+        console.error('Failed to send booking confirmation to traveler:', error);
+      });
+    }
+    if (host) {
+      sendBookingNotificationToHost(doc, host).catch((error) => {
+        console.error('Failed to send booking notification to host:', error);
+      });
+    }
+
     const { _id, ...rest } = doc;
     return ok({ booking: rest }, 201);
   }
@@ -681,7 +714,7 @@ async function route(request, { params }) {
     const me = await getCurrentUser(request);
     if (!me) return err('Authentication required', 401);
     const id = segments[1];
-    const { status } = await readBody(request);
+    const { status, reason } = await readBody(request);
     if (!['approved','rejected','cancelled'].includes(status)) return err('Invalid status');
     const bookings = await getCollection('bookings');
     const b = await bookings.findOne({ bookingId: id });
@@ -706,7 +739,91 @@ async function route(request, { params }) {
     }
     
     const fresh = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    
+    // Send appropriate emails based on status change
+    const users = await getCollection('users');
+    const traveler = await users.findOne({ id: b.travelerId });
+    const host = await users.findOne({ id: b.hostId });
+    
+    if (status === 'approved' && traveler) {
+      // Send approval email to traveler and invoice
+      sendBookingApprovedEmail(fresh, traveler).catch((error) => {
+        console.error('Failed to send booking approved email:', error);
+      });
+      
+      // Generate and send invoice
+      const invoiceId = `INV-${Date.now()}-${fresh.bookingId.slice(0, 8).toUpperCase()}`;
+      sendInvoiceEmail(fresh, traveler, invoiceId).catch((error) => {
+        console.error('Failed to send invoice email:', error);
+      });
+    } else if (status === 'rejected' && traveler) {
+      // Send rejection email to traveler
+      sendBookingRejectedEmail(fresh, traveler, reason).catch((error) => {
+        console.error('Failed to send booking rejected email:', error);
+      });
+    } else if (status === 'cancelled') {
+      // Send cancellation emails to both parties
+      if (traveler) {
+        sendBookingCancellationEmail(fresh, traveler, false).catch((error) => {
+          console.error('Failed to send cancellation email to traveler:', error);
+        });
+      }
+      if (host) {
+        sendBookingCancellationEmail(fresh, host, true).catch((error) => {
+          console.error('Failed to send cancellation email to host:', error);
+        });
+      }
+    }
+    
     return ok({ booking: fresh });
+  }
+
+  // ---------- CONTACT FORM ----------
+  // POST /api/contact  (public endpoint for contact form submissions)
+  if (path === '/contact' && method === 'POST') {
+    const { name, email, phone, subject, message } = await readBody(request);
+    
+    // Validate required fields
+    if (!name || !name.trim() || name.trim().length < 2) {
+      return err('Name is required (min 2 characters)');
+    }
+    if (!isEmail(email)) {
+      return err('Valid email is required');
+    }
+    if (!message || !message.trim() || message.trim().length < 10) {
+      return err('Message is required (min 10 characters)');
+    }
+    
+    // Store contact form submission in database
+    const contacts = await getCollection('contacts');
+    const submission = {
+      id: uuid(),
+      name: name.trim(),
+      email: email.toLowerCase(),
+      phone: phone?.trim() || null,
+      subject: subject?.trim() || 'General Inquiry',
+      message: message.trim(),
+      status: 'new',
+      createdAt: new Date(),
+    };
+    
+    await contacts.insertOne(submission);
+    
+    // Send email notification to admin (async)
+    const formData = {
+      name: submission.name,
+      email: submission.email,
+      phone: submission.phone,
+      subject: submission.subject,
+      message: submission.message,
+    };
+    
+    sendContactFormEmail(formData).catch((error) => {
+      console.error('Failed to send contact form notification:', error);
+    });
+    
+    const { _id, ...rest } = submission;
+    return ok({ contact: rest, message: 'Your message has been sent successfully' }, 201);
   }
 
   // Health

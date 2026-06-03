@@ -7,7 +7,9 @@ import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
+import ProfileSettings from '@/components/safar/ProfileSettings';
 import { useAuth } from '@/lib/auth-context';
 import { listingsApi, bookingsApi } from '@/lib/listings-api';
 
@@ -87,23 +89,30 @@ function HostDashboardInner() {
           <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold"><Link href="/add-listing"><Plus className="size-4 mr-2" /> Add new listing</Link></Button>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-          {[
-            {l:'Listings',     v: counts.total,    d:`+${counts.pending} pending`, i: BarChart3},
-            {l:'Approved',     v: counts.approved, d:`live`, i: Eye},
-            {l:'Avg rating',   v: '4.94',          d:'+0.04', i: Star},
-            {l:'Earnings (mo)',v: '₹ 4,82,400',   d:'+18%', i: Wallet},
-          ].map((k,i)=>{const Ico=k.i;return(
-            <motion.div key={k.l} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }} className="rounded-3xl border bg-white p-5">
-              <div className="flex items-center justify-between"><Ico className="size-5 text-emerald2" /><div className="text-xs text-emerald-600 font-semibold flex items-center gap-1">{k.d} <ArrowUpRight className="size-3" /></div></div>
-              <div className="font-display text-2xl font-bold mt-3">{k.v}</div>
-              <div className="text-xs text-muted-foreground">{k.l}</div>
-            </motion.div>
-          );})}
-        </div>
+        <Tabs defaultValue="dashboard" className="mt-8">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="dashboard" className="space-y-8">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                {l:'Listings',     v: counts.total,    d:`+${counts.pending} pending`, i: BarChart3},
+                {l:'Approved',     v: counts.approved, d:`live`, i: Eye},
+                {l:'Avg rating',   v: '4.94',          d:'+0.04', i: Star},
+                {l:'Earnings (mo)',v: '₹ 4,82,400',   d:'+18%', i: Wallet},
+              ].map((k,i)=>{const Ico=k.i;return(
+                <motion.div key={k.l} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }} className="rounded-3xl border bg-white p-5">
+                  <div className="flex items-center justify-between"><Ico className="size-5 text-emerald2" /><div className="text-xs text-emerald-600 font-semibold flex items-center gap-1">{k.d} <ArrowUpRight className="size-3" /></div></div>
+                  <div className="font-display text-2xl font-bold mt-3">{k.v}</div>
+                  <div className="text-xs text-muted-foreground">{k.l}</div>
+                </motion.div>
+              );})}
+            </div>
 
-        <div className="mt-8 grid lg:grid-cols-3 gap-5">
+        <div className="grid lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 rounded-3xl border bg-white p-6">
             <div className="flex items-center justify-between"><div><div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Earnings</div><div className="font-display text-2xl font-bold">₹ 4.82L this month</div></div><BarChart3 className="size-5 text-emerald2" /></div>
             <div className="mt-5"><Bars data={earnings} /></div>
@@ -120,7 +129,7 @@ function HostDashboardInner() {
         </div>
 
         {/* Booking Requests */}
-        <section className="mt-10">
+        <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display text-2xl font-bold">Booking requests</h2>
             <span className="text-sm text-muted-foreground">{bookings.filter(b=>b.status==='pending').length} pending</span>
@@ -152,7 +161,7 @@ function HostDashboardInner() {
         </section>
 
         {/* My Listings */}
-        <section className="mt-10">
+        <section>
           <h2 className="font-display text-2xl font-bold">My listings</h2>
           {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
           {error && <div className="mt-4 p-6 border rounded-3xl bg-rose-50/40 border-rose-200 text-center"><AlertTriangle className="size-6 mx-auto text-rose-500" /><div className="mt-2 text-sm">{error}</div></div>}
@@ -184,8 +193,12 @@ function HostDashboardInner() {
             </div>
           )}
         </section>
-
-        <div className="h-12" />
+          </TabsContent>
+          
+          <TabsContent value="settings" className="space-y-6">
+            <ProfileSettings user={user} onUpdate={load} />
+          </TabsContent>
+        </Tabs>
       </div>
       <Footer />
     </main>
