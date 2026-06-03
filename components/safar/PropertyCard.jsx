@@ -72,7 +72,10 @@ export default function PropertyCard({ item, index = 0 }) {
           </div>
           <div className="mt-2 flex items-baseline justify-between">
             <div>
-              <span className="font-display font-bold text-charcoal text-lg">₹{item.price.toLocaleString('en-IN')}</span>
+              {item.displayPrice && item.displayPrice < item.price && (
+                <span className="text-xs text-muted-foreground mr-1">From</span>
+              )}
+              <span className="font-display font-bold text-charcoal text-lg">₹{(item.displayPrice || item.price).toLocaleString('en-IN')}</span>
               <span className="text-xs text-muted-foreground ml-1">/ {item.duration ? item.duration : 'night'}</span>
             </div>
             {isSuperhost && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald2 bg-emerald-50 px-2 py-0.5 rounded-full">Superhost</span>}
