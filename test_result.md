@@ -177,6 +177,47 @@ backend:
           JWT Structure Verified:
           ✅ Token has 3 dot-separated segments (valid JWT format)
           ✅ Cookie set with HttpOnly, Secure, SameSite=Lax attributes
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ AUTH API RE-TESTED BEFORE FRONTEND FIX - ALL ENDPOINTS WORKING (12/12 tests passed)
+          
+          Test file: /app/auth_backend_test.py
+          Credentials saved: /app/memory/test_credentials.md
+          
+          Registration Tests:
+          ✅ POST /api/auth/register - Traveler registration successful (200)
+          ✅ Response format: { ok: true, user: {...}, token: "..." }
+          ✅ User has id (UUID), email (lowercased), name, role='traveler'
+          ✅ safar_token cookie set correctly
+          ✅ POST /api/auth/register - Host registration successful (200, role='host')
+          
+          Login Tests:
+          ✅ POST /api/auth/login - Valid credentials return 200 + { ok: true, user, token }
+          ✅ safar_token cookie set on login
+          ✅ POST /api/auth/login - Wrong password returns 401 with error message
+          
+          Auth Me Tests:
+          ✅ GET /api/auth/me - No auth returns 401
+          ✅ GET /api/auth/me - With cookie returns 200 + { ok: true, user }
+          ✅ GET /api/auth/me - With Bearer token returns 200 + { ok: true, user }
+          
+          Admin Tests:
+          ✅ Admin user created via MongoDB (register as host, then update role to admin)
+          ✅ GET /api/users - Admin can access (200 + users list)
+          ✅ GET /api/users - Traveler blocked (403 Forbidden)
+          
+          MongoDB Persistence:
+          ✅ Users stored in safar.users collection with UUID id
+          ✅ Passwords bcrypt-hashed (starts with $2a$10$)
+          ✅ No plain password field in database
+          
+          Test Credentials:
+          ✅ Traveler: test-traveler-20260603120055@safar.com / password123
+          ✅ Host: test-host-20260603120055@safar.com / password123
+          ✅ Admin: test-admin-20260603120055@safar.com / password123
+          
+          BACKEND AUTH IS FULLY WORKING - READY FOR FRONTEND TESTING
 
   - task: "Role-based authorization (admin/host/traveler)"
     implemented: true
@@ -631,7 +672,7 @@ agent_communication:
 
 test_plan:
   current_focus:
-    - "Listings CRUD API (create/read/update/delete) at /api/listings/*"
+    - "Auth UI: AuthModal, AuthButtons in Navbar, ProtectedRoute for dashboards"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -639,42 +680,77 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      Please test the new Safar listings backend at /api/listings/*. Use NEXT_PUBLIC_BASE_URL + /api.
-      Auto-seed should populate 12 demo listings on first GET /api/listings.
+      BUG FIX COMPLETED: "Something went wrong" error toast after successful login
       
-      Critical tests:
-      1) GET /api/listings (no auth) -> 200, ok:true, listings[] with 12+ items, all status=approved.
-      2) GET /api/listings?category=stay -> only stays.
-      3) GET /api/listings?subcategory=houseboat -> only houseboats.
-      4) GET /api/listings?services=wazwan,kehwa -> only listings with BOTH services.
-      5) GET /api/listings?minPrice=2000&maxPrice=5000 -> only in price range.
-      6) GET /api/listings?status=pending (no auth) -> still returns approved (status filter ignored for non-admin).
-      7) GET /api/listings?status=all + admin auth -> returns all statuses including pending/rejected.
-      8) POST /api/listings without auth -> 401.
-      9) POST /api/listings with traveler -> 403.
-      10) POST /api/listings with host -> 201; new listing has status='pending', hostId=host.id,
-          isDemo=false.
-      11) POST /api/listings with admin -> 201; status='approved'.
-      12) Validation: missing title, short title (<3), short description (<10), invalid category,
-          missing location, price<=0 or non-number -> 400.
-      13) GET /api/listings/:id (approved) -> 200 + listing.
-      14) GET /api/listings/:id (pending, not auth) -> 404. With owner auth -> 200. With admin -> 200.
-      15) PUT /api/listings/:id by non-owner non-admin -> 403.
-      16) PUT /api/listings/:id by host owner -> 200, status resets to 'pending'.
-      17) PUT /api/listings/:id by admin -> 200, status preserved.
-      18) DELETE by non-owner non-admin -> 403. By owner -> 200, deleted from DB.
-      19) GET /api/listings/host/me with host auth -> own listings (any status).
-      20) GET /api/listings/host/:hostId without auth -> approved only; with admin -> all.
-      21) POST /api/listings/:id/approve as admin -> status='approved', rejectionReason removed.
-      22) POST /api/listings/:id/reject as admin with {reason} -> status='rejected', rejectionReason saved.
-      23) Non-admin trying approve/reject -> 403.
-      24) Non-existent listing id -> 404 on all endpoints.
+      ROOT CAUSE:
+      - AuthModal.jsx was checking `res.ok` but auth-context.js returns `res.success`
+      - The inconsistent property name caused error toast to show even on successful login
       
-      To create an admin: register as host, then promote via:
-        mongosh safar --eval 'db.users.updateOne({email:"x@x.com"},{$set:{role:"admin"}})'
-      OR upsert directly. Use bcrypt for password hash if creating fresh.
+      FIX:
+      - Changed line 32 in /app/components/safar/AuthModal.jsx from `if (!res.ok)` to `if (!res.success)`
       
-      Auth endpoints already verified — focus this run ONLY on /api/listings/*.
+      FRONTEND TESTING REQUIRED:
+      Please test the complete login flow for all three user roles using Playwright:
+      
+      1) TRAVELER LOGIN & DASHBOARD:
+         - Navigate to home page
+         - Click "Sign in" button to open auth modal
+         - Switch to "Sign in" tab
+         - Enter traveler credentials from /app/memory/test_credentials.md
+         - Submit form
+         - VERIFY: Success toast appears with "Welcome back, [name]!"
+         - VERIFY: NO error toast with "Something went wrong" appears
+         - VERIFY: Modal closes automatically
+         - VERIFY: User is redirected to /dashboard/traveler
+         - VERIFY: Dashboard loads with user name displayed
+         - VERIFY: Bookings section loads (even if empty)
+         - VERIFY: No console errors
+      
+      2) HOST LOGIN & DASHBOARD:
+         - Sign out if logged in
+         - Navigate to home page
+         - Click "Sign in" button
+         - Enter host credentials from /app/memory/test_credentials.md
+         - Submit form
+         - VERIFY: Success toast appears
+         - VERIFY: NO error toast appears
+         - VERIFY: Redirected to /dashboard/host
+         - VERIFY: Host dashboard loads with "Salaam, [name]" greeting
+         - VERIFY: Listings section loads (check for API errors)
+         - VERIFY: Booking requests section loads
+         - VERIFY: No console errors
+      
+      3) ADMIN LOGIN & DASHBOARD:
+         - Sign out if logged in
+         - Navigate to home page
+         - Click "Sign in"
+         - Enter admin credentials from /app/memory/test_credentials.md
+         - Submit form
+         - VERIFY: Success toast appears
+         - VERIFY: NO error toast appears
+         - VERIFY: Redirected to /admin
+         - VERIFY: Admin console loads with all sections
+         - VERIFY: Pending approvals section loads
+         - VERIFY: All listings section loads
+         - VERIFY: Users section loads
+         - VERIFY: No console errors
+      
+      4) REGISTRATION FLOW:
+         - Test new traveler registration
+         - Test new host registration
+         - VERIFY: Success toast appears for both
+         - VERIFY: NO error toast appears
+         - VERIFY: User is created and logged in
+      
+      5) FAILED LOGIN:
+         - Test with wrong password
+         - VERIFY: Error toast with appropriate message appears
+         - VERIFY: User stays on modal (doesn't close)
+      
+      CRITICAL: Check browser console for any JavaScript errors during login and dashboard load.
+      CRITICAL: Verify no red error toast appears after successful login for any role.
+      
+      Test credentials are stored in /app/memory/test_credentials.md
 
 frontend:
   - task: "Auth UI: AuthModal, AuthButtons in Navbar, ProtectedRoute for dashboards"
@@ -682,8 +758,8 @@ frontend:
     working: "NA"
     file: "/app/components/safar/AuthModal.jsx, /app/components/safar/AuthButtons.jsx, /app/components/safar/ProtectedRoute.jsx, /app/lib/auth-context.jsx"
     stuck_count: 0
-    priority: "medium"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
@@ -692,6 +768,28 @@ frontend:
           Navbar Sign in/Sign up buttons trigger modal; logged-in user shows avatar + dropdown menu
           (Dashboard, Wishlist, Sign out). Mobile sheet uses MobileAuthButtons. Dashboards wrapped
           with ProtectedRoute: traveler/host/admin protect by role. Will test after backend passes.
+      - working: "NA"
+        agent: "main"
+        comment: |
+          BUG FIX: Fixed "Something went wrong" error toast appearing after successful login.
+          
+          ROOT CAUSE IDENTIFIED:
+          - File: /app/components/safar/AuthModal.jsx, line 32
+          - Issue: AuthModal was checking `res.ok` but auth-context.js returns `res.success`
+          - The login() and register() functions in auth-context.js return { success, error, user }
+          - But AuthModal.jsx was checking `if (!res.ok)` instead of `if (!res.success)`
+          - This caused the error condition to trigger even on successful login (res.ok was undefined)
+          
+          FIX APPLIED:
+          - Changed line 32 in AuthModal.jsx from `if (!res.ok)` to `if (!res.success)`
+          - Now correctly checks the success field returned by auth functions
+          
+          TESTING NEEDED:
+          - Test traveler login → should see success toast, NO error toast
+          - Test host login → should see success toast, NO error toast  
+          - Test admin login → should see success toast, NO error toast
+          - Test registration for all roles → should work without error toast
+          - Verify dashboard loads correctly for each role without errors
 
 metadata:
   created_by: "main_agent"
@@ -793,3 +891,29 @@ agent_communication:
       - Impact: Low priority - edge case, defaults to valid value
       
       All critical features working correctly. System is production-ready.
+
+
+  - agent: "testing"
+    message: |
+      ✅ AUTH API BACKEND RE-TESTED - ALL ENDPOINTS WORKING CORRECTLY (12/12 tests passed)
+      
+      Test file: /app/auth_backend_test.py
+      Test credentials: /app/memory/test_credentials.md
+      
+      VERIFIED BEFORE FRONTEND FIX TESTING:
+      ✅ POST /api/auth/register - Returns { ok: true, user: {...}, token: "..." }
+      ✅ POST /api/auth/login - Returns { ok: true, user: {...}, token: "..." }
+      ✅ GET /api/auth/me - Returns { ok: true, user: {...} }
+      ✅ safar_token cookie set correctly on register/login
+      ✅ All three roles working: traveler, host, admin
+      ✅ Role-based access control working (403 for unauthorized, 401 for unauthenticated)
+      ✅ MongoDB persistence verified (bcrypt-hashed passwords, UUID ids)
+      
+      BACKEND IS READY FOR FRONTEND TESTING:
+      The backend correctly returns { ok: true, ... } format for all auth endpoints.
+      The frontend fix (checking res.success instead of res.ok) should now work correctly
+      because the backend response structure is confirmed to be { ok: true, user, token }.
+      
+      Test credentials saved with all three roles (traveler, host, admin) for frontend testing.
+      
+      BACKEND AUTH STATUS: ✅ FULLY WORKING - NO ISSUES FOUND

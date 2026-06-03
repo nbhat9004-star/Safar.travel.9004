@@ -29,7 +29,7 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
     if (mode === 'login') res = await login(email, password);
     else res = await register(name, email, password, role);
     setLoading(false);
-    if (!res.ok) { toast.error(res.error || 'Something went wrong'); return; }
+    if (!res.success) { toast.error(res.error || 'Something went wrong'); return; }
     toast.success(mode === 'login' ? `Welcome back, ${res.user.name.split(' ')[0]}!` : `Account created. Welcome to Safar, ${res.user.name.split(' ')[0]}!`);
     onClose?.();
   };
