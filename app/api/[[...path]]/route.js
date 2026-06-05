@@ -16,6 +16,7 @@ import {
   sendBookingRejectedEmail,
   sendInvoiceEmail,
   sendContactFormEmail,
+  sendPasswordResetEmail,
 } from '@/lib/email';
 
 const json = (data, status = 200) => NextResponse.json(data, { status });
@@ -128,6 +129,57 @@ async function route(request, { params }) {
   if (path === '/auth/logout' && method === 'POST') {
     return clearAuthCookie(ok({ message: 'Logged out' }));
   }
+  
+  // POST /api/auth/forgot-password
+  if (path === '/auth/forgot-password' && method === 'POST') {
+    const { email } = await readBody(request);
+    if (!isEmail(email)) return err('Valid email required');
+    
+    const users = await getCollection('users');
+    const user = await users.findOne({ email: email.toLowerCase() });
+    if (!user) return ok({ message: 'If email exists, reset link sent' });
+    
+    const crypto = await import('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000);
+    
+    await users.updateOne(
+      { id: user.id },
+      { $set: { resetToken, resetTokenExpiry } }
+    );
+    
+    const resetLink = `${process.env.NEXT_PUBLIC_BASE_URL}/auth/reset-password?token=${resetToken}`;
+    await sendPasswordResetEmail(user, resetLink);
+    
+    return ok({ message: 'If email exists, reset link sent' });
+  }
+
+  // POST /api/auth/reset-password
+  if (path === '/auth/reset-password' && method === 'POST') {
+    const { token, password } = await readBody(request);
+    if (!token || !password) return err('Token and password required');
+    if (password.length < 8) return err('Password must be at least 8 characters');
+    
+    const users = await getCollection('users');
+    const user = await users.findOne({ 
+      resetToken: token,
+      resetTokenExpiry: { $gt: new Date() }
+    });
+    
+    if (!user) return err('Invalid or expired reset token', 400);
+    
+    const hashedPassword = await hashPassword(password);
+    await users.updateOne(
+      { id: user.id },
+      { 
+        $set: { passwordHash: hashedPassword },
+        $unset: { resetToken: '', resetTokenExpiry: '' }
+      }
+    );
+    
+    return ok({ message: 'Password reset successful' });
+  }
+  
   if (path === '/auth/me' && method === 'GET') {
     const me = await getCurrentUser(request);
     if (!me) return err('Not authenticated', 401);

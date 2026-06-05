@@ -85,6 +85,11 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
             )}
             <Field icon={Mail} type="email" placeholder="Email address" value={email} onChange={setEmail} autoFocus={mode==='login'} />
             <Field icon={Lock} type="password" placeholder={mode==='signup' ? 'Create password (min 6)' : 'Password'} value={password} onChange={setPassword} />
+            {mode === 'login' && (
+              <div className="text-right">
+                <a href="/auth/forgot-password" className="text-xs text-emerald2 hover:underline">Forgot password?</a>
+              </div>
+            )}
 
             <Button type="submit" disabled={loading} className="w-full h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep text-white font-semibold mt-2">
               {loading ? <Loader2 className="size-4 animate-spin" /> : (mode === 'login' ? <>Sign in <ChevronRight className="size-4 ml-1" /></> : <>Create account <ChevronRight className="size-4 ml-1" /></>)}
