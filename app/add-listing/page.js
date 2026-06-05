@@ -17,7 +17,7 @@ import { IMG } from '@/lib/data';
 import AuthModal from '@/components/safar/AuthModal';
 import { useAuth } from '@/lib/auth-context';
 
-const STEPS = ['Services','Basics','Photos','Amenities','Pricing','Inventory','Review'];
+const STEPS = ['Category','Details','Pricing & Publish'];
 const AMEN = [{i:Wifi,t:'Wi-Fi'},{i:Coffee,t:'Kahwa'},{i:Wind,t:'Heater'},{i:ParkingCircle,t:'Parking'},{i:ImageIcon,t:'Mountain view'},{i:ListChecks,t:'Breakfast'}];
 
 // Map first selected service -> API category
@@ -165,6 +165,7 @@ function AddListingInner() {
 
       <div className="container mt-8 grid lg:grid-cols-3 gap-6 pb-16">
         <motion.div key={step} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-2 rounded-3xl border bg-white shadow-xl p-6 md:p-8">
+          {/* STEP 0: Category & Services */}
           {step===0 && (
             <div>
               <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -179,15 +180,55 @@ function AddListingInner() {
               <div className="mt-6"><ServiceSelector value={services} onChange={setServices} /></div>
             </div>
           )}
+
+          {/* STEP 1: Details (Name, Description, Location, Photos, Amenities) */}
           {step===1 && (
-            <div className="space-y-4">
-              <h2 className="font-display text-2xl font-bold">Basic details</h2>
-              <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Listing title" className="w-full px-4 py-3 rounded-xl border" />
-              <textarea value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Describe your space and what makes it special..." rows={5} className="w-full px-4 py-3 rounded-xl border" />
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl border">
-                <MapPin className="size-5 text-emerald2" />
-                <input value={location} onChange={(e)=>setLocation(e.target.value)} placeholder="Location e.g. Dal Lake, Srinagar" className="flex-1 outline-none" />
+            <div className="space-y-8">
+              <div>
+                <h2 className="font-display text-2xl font-bold mb-4">Listing Details</h2>
+                <div className="space-y-4">
+                  <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Listing title" className="w-full px-4 py-3 rounded-xl border" />
+                  <textarea value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Describe your space and what makes it special..." rows={5} className="w-full px-4 py-3 rounded-xl border" />
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-xl border">
+                    <MapPin className="size-5 text-emerald2" />
+                    <input value={location} onChange={(e)=>setLocation(e.target.value)} placeholder="Location e.g. Dal Lake, Srinagar" className="flex-1 outline-none" />
+                  </div>
+                </div>
               </div>
+
+              <div>
+                <h3 className="font-display text-xl font-bold mb-3">Photos</h3>
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl py-8 cursor-pointer hover:bg-secondary/40 transition">
+                  <Upload className="size-6 text-emerald2" />
+                  <div className="font-semibold text-sm">Click to upload</div>
+                  <div className="text-xs text-muted-foreground">JPG, PNG · multiple allowed</div>
+                  <input type="file" multiple accept="image/*" onChange={onPhotos} className="hidden" />
+                </label>
+                <div className="mt-3">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Or paste image URLs</div>
+                  {photoUrls.map((u, i) => (
+                    <div key={i} className="flex items-center gap-2 mb-2">
+                      <input value={u} onChange={(e)=>{ const next=[...photoUrls]; next[i]=e.target.value; setPhotoUrls(next); }} placeholder="https://images.unsplash.com/..." className="flex-1 px-4 py-2.5 rounded-xl border text-sm" />
+                      {i === photoUrls.length-1 && <button type="button" onClick={()=>setPhotoUrls([...photoUrls, ''])} className="px-3 py-2.5 rounded-xl bg-secondary text-xs font-semibold">+ Add</button>}
+                    </div>
+                  ))}
+                </div>
+                {(photos.length>0 || photoUrls.some(u=>u.startsWith('http'))) && (
+                  <div className="mt-3 grid grid-cols-3 md:grid-cols-4 gap-2">
+                    {[...photoUrls.filter(u=>u.startsWith('http')), ...photos].map((p,i)=><img key={i} src={p} className="aspect-square rounded-xl object-cover" alt="" />)}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="font-display text-xl font-bold mb-3">Amenities</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {AMEN.map((a)=>{const I=a.i;const on=amen.includes(a.t);return(
+                    <button key={a.t} onClick={()=>setAmen(on?amen.filter(x=>x!==a.t):[...amen,a.t])} className={`p-3 rounded-xl border-2 text-left transition flex items-center gap-2 ${on?'border-emerald-600 bg-emerald-50/40':'border-border hover:border-charcoal/40'}`}><I className="size-5 text-emerald2" /><span className="text-sm font-medium">{a.t}</span></button>
+                  );})}
+                </div>
+              </div>
+
               {services.length > 0 && (
                 <div className="pt-2">
                   <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Your selected services</div>
@@ -196,191 +237,104 @@ function AddListingInner() {
               )}
             </div>
           )}
-          {step===2 && (
-            <div>
-              <h2 className="font-display text-2xl font-bold">Add photos</h2>
-              <p className="text-sm text-muted-foreground mt-1">Upload device photos or paste image URLs.</p>
-              <label className="mt-5 flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-2xl py-10 cursor-pointer hover:bg-secondary/40 transition">
-                <Upload className="size-7 text-emerald2" />
-                <div className="font-semibold">Click to upload</div>
-                <div className="text-xs text-muted-foreground">JPG, PNG · multiple allowed</div>
-                <input type="file" multiple accept="image/*" onChange={onPhotos} className="hidden" />
-              </label>
-              <div className="mt-4">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Or paste image URLs</div>
-                {photoUrls.map((u, i) => (
-                  <div key={i} className="flex items-center gap-2 mb-2">
-                    <input value={u} onChange={(e)=>{ const next=[...photoUrls]; next[i]=e.target.value; setPhotoUrls(next); }} placeholder="https://images.unsplash.com/..." className="flex-1 px-4 py-2.5 rounded-xl border text-sm" />
-                    {i === photoUrls.length-1 && <button type="button" onClick={()=>setPhotoUrls([...photoUrls, ''])} className="px-3 py-2.5 rounded-xl bg-secondary text-xs font-semibold">+ Add</button>}
-                  </div>
-                ))}
-              </div>
-              {(photos.length>0 || photoUrls.some(u=>u.startsWith('http'))) && (
-                <div className="mt-4 grid grid-cols-3 md:grid-cols-4 gap-2">
-                  {[...photoUrls.filter(u=>u.startsWith('http')), ...photos].map((p,i)=><img key={i} src={p} className="aspect-square rounded-xl object-cover" alt="" />)}
-                </div>
-              )}
-            </div>
-          )}
-          {step===3 && (
-            <div>
-              <h2 className="font-display text-2xl font-bold">Select amenities</h2>
-              <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-3">
-                {AMEN.map((a)=>{const I=a.i;const on=amen.includes(a.t);return(
-                  <button key={a.t} onClick={()=>setAmen(on?amen.filter(x=>x!==a.t):[...amen,a.t])} className={`p-4 rounded-2xl border-2 text-left transition flex items-center gap-3 ${on?'border-emerald-600 bg-emerald-50/40':'border-border hover:border-charcoal/40'}`}><I className="size-5 text-emerald2" /><span className="font-medium">{a.t}</span></button>
-                );})}
-              </div>
-            </div>
-          )}
-          {step===4 && (
-            <div className="space-y-4">
-              <h2 className="font-display text-2xl font-bold">Set your price</h2>
-              <div className="flex items-baseline gap-2"><span className="text-2xl">₹</span><input value={price} onChange={(e)=>setPrice(e.target.value)} type="number" className="flex-1 font-display text-5xl font-bold outline-none border-b-2 pb-2" /></div>
-              <p className="text-sm text-muted-foreground">Suggested for similar listings: ₹ 3,800 — ₹ 6,200 / night</p>
-              <div className="grid grid-cols-2 gap-3 mt-3"><div className="p-4 rounded-xl border"><div className="text-xs text-muted-foreground">You earn (90%)</div><div className="font-bold">₹ {Math.round(price*0.9).toLocaleString('en-IN')}</div></div><div className="p-4 rounded-xl border"><div className="text-xs text-muted-foreground">Safar fee (10%)</div><div className="font-bold">₹ {Math.round(price*0.1).toLocaleString('en-IN')}</div></div></div>
-            </div>
-          )}
-          {step===5 && (
-            <div>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="font-display text-2xl font-bold">Inventory Types</h2>
-                  <p className="text-sm text-muted-foreground mt-1">For hotels, homestays, or fleets: Create room/vehicle types with different pricing.</p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={useInventoryTypes ? "default" : "outline"}
-                  onClick={() => {
-                    setUseInventoryTypes(!useInventoryTypes);
-                    if (!useInventoryTypes && inventoryTypes.length === 0) {
-                      addInventoryType();
-                    }
-                  }}
-                  className="rounded-full"
-                >
-                  {useInventoryTypes ? 'Enabled' : 'Enable Multi-Type'}
-                </Button>
-              </div>
-              
-              {!useInventoryTypes && (
-                <div className="mt-5 p-5 rounded-xl border bg-secondary/20">
-                  <div className="text-sm text-muted-foreground">
-                    Skip this if you have a single-unit property. Enable Multi-Type for hotels with multiple room types or vehicle rentals with different vehicles.
-                  </div>
-                </div>
-              )}
 
-              {useInventoryTypes && (
-                <div className="mt-5 space-y-4">
-                  {inventoryTypes.map((type, idx) => (
-                    <div key={type.id} className="p-5 rounded-xl border bg-white">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className="text-sm font-semibold text-emerald2">Type {idx + 1}</div>
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => moveTypeUp(idx)}
-                              disabled={idx === 0}
-                              className="p-1 hover:bg-secondary rounded disabled:opacity-30"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveTypeDown(idx)}
-                              disabled={idx === inventoryTypes.length - 1}
-                              className="p-1 hover:bg-secondary rounded disabled:opacity-30"
-                            >
-                              ↓
-                            </button>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeInventoryType(type.id)}
-                          className="text-xs text-rose-500 hover:underline"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          placeholder="Name (e.g., Standard Room, Swift Car)"
-                          value={type.name}
-                          onChange={(e) => updateInventoryType(type.id, 'name', e.target.value)}
-                          className="px-3 py-2 rounded-xl border text-sm"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Price per night/day"
-                          value={type.price}
-                          onChange={(e) => updateInventoryType(type.id, 'price', e.target.value)}
-                          className="px-3 py-2 rounded-xl border text-sm"
-                        />
-                        <input
-                          type="number"
-                          placeholder="Quantity available"
-                          min="1"
-                          value={type.quantity}
-                          onChange={(e) => updateInventoryType(type.id, 'quantity', e.target.value)}
-                          className="px-3 py-2 rounded-xl border text-sm"
-                        />
-                        <select
-                          value={type.status}
-                          onChange={(e) => updateInventoryType(type.id, 'status', e.target.value)}
-                          className="px-3 py-2 rounded-xl border text-sm"
-                        >
-                          <option value="active">Active</option>
-                          <option value="inactive">Inactive</option>
-                        </select>
-                      </div>
-                      <textarea
-                        placeholder="Description (optional)"
-                        value={type.description}
-                        onChange={(e) => updateInventoryType(type.id, 'description', e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border text-sm mt-3"
-                        rows={2}
-                      />
-                    </div>
-                  ))}
-                  
+          {/* STEP 2: Pricing, Inventory (Collapsible), Review & Publish */}
+          {step===2 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="font-display text-2xl font-bold mb-4">Set your price</h2>
+                <div className="flex items-baseline gap-2"><span className="text-2xl">₹</span><input value={price} onChange={(e)=>setPrice(e.target.value)} type="number" className="flex-1 font-display text-5xl font-bold outline-none border-b-2 pb-2" /></div>
+                <p className="text-sm text-muted-foreground mt-2">Suggested for similar listings: ₹ 3,800 — ₹ 6,200 / night</p>
+                <div className="grid grid-cols-2 gap-3 mt-4"><div className="p-4 rounded-xl border"><div className="text-xs text-muted-foreground">You earn (90%)</div><div className="font-bold">₹ {Math.round(price*0.9).toLocaleString('en-IN')}</div></div><div className="p-4 rounded-xl border"><div className="text-xs text-muted-foreground">Safar fee (10%)</div><div className="font-bold">₹ {Math.round(price*0.1).toLocaleString('en-IN')}</div></div></div>
+              </div>
+
+              {/* Collapsible Inventory Section */}
+              <details className="rounded-2xl border bg-secondary/10">
+                <summary className="px-5 py-4 cursor-pointer font-semibold text-sm flex items-center justify-between hover:bg-secondary/20 transition rounded-2xl">
+                  <span>⚙️ Advanced: Multi-Type Inventory (Optional)</span>
+                  <span className="text-xs text-muted-foreground">Click to expand</span>
+                </summary>
+                <div className="px-5 pb-5 pt-2">
+                  <p className="text-sm text-muted-foreground mb-4">For hotels, homestays, or fleets: Create room/vehicle types with different pricing.</p>
                   <Button
                     type="button"
-                    onClick={addInventoryType}
-                    variant="outline"
-                    className="w-full rounded-full"
+                    size="sm"
+                    variant={useInventoryTypes ? "default" : "outline"}
+                    onClick={() => {
+                      setUseInventoryTypes(!useInventoryTypes);
+                      if (!useInventoryTypes && inventoryTypes.length === 0) {
+                        addInventoryType();
+                      }
+                    }}
+                    className="rounded-full mb-4"
                   >
-                    + Add Another Type
+                    {useInventoryTypes ? 'Enabled' : 'Enable Multi-Type'}
                   </Button>
-                </div>
-              )}
-            </div>
-          )}
-          {step===6 && (
-            <div>
-              <h2 className="font-display text-2xl font-bold">Review and publish</h2>
-              <div className="mt-5 p-5 rounded-2xl border bg-secondary/40">
-                <div className="text-xs uppercase tracking-wider text-emerald2 font-semibold capitalize">{category}</div>
-                <div className="font-display font-bold mt-1">{title || `New ${category} listing in Kashmir`}</div>
-                <div className="text-xs text-muted-foreground mt-1">{location || 'Location not set'} · {useInventoryTypes ? `${inventoryTypes.length} type(s)` : `₹${Number(price).toLocaleString('en-IN')}`}</div>
-                <div className="mt-4"><div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Services ({services.length})</div><ServiceBadges ids={services} max={20} /></div>
-                {useInventoryTypes && inventoryTypes.length > 0 && (
-                  <div className="mt-3 space-y-1">
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Inventory Types</div>
-                    {inventoryTypes.map(t => (
-                      <div key={t.id} className="text-xs flex justify-between">
-                        <span>{t.name}</span>
-                        <span className="text-emerald2 font-semibold">₹{Number(t.price).toLocaleString('en-IN')} × {t.quantity} units</span>
+                  
+                  {!useInventoryTypes && (
+                    <div className="p-4 rounded-xl border bg-white/50">
+                      <div className="text-sm text-muted-foreground">
+                        Skip this if you have a single-unit property. Enable for hotels with multiple room types or vehicle rentals.
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  )}
+
+                  {useInventoryTypes && (
+                    <div className="space-y-4">
+                      {inventoryTypes.map((type, idx) => (
+                        <div key={type.id} className="p-4 rounded-xl border bg-white">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-semibold text-emerald2">Type {idx + 1}</div>
+                              <div className="flex gap-1">
+                                <button type="button" onClick={() => moveTypeUp(idx)} disabled={idx === 0} className="p-1 hover:bg-secondary rounded disabled:opacity-30 text-xs">↑</button>
+                                <button type="button" onClick={() => moveTypeDown(idx)} disabled={idx === inventoryTypes.length - 1} className="p-1 hover:bg-secondary rounded disabled:opacity-30 text-xs">↓</button>
+                              </div>
+                            </div>
+                            <button type="button" onClick={() => removeInventoryType(type.id)} className="text-xs text-rose-500 hover:underline">Remove</button>
+                          </div>
+                          <div className="grid sm:grid-cols-2 gap-2">
+                            <input type="text" placeholder="Name (e.g., Standard Room)" value={type.name} onChange={(e) => updateInventoryType(type.id, 'name', e.target.value)} className="px-3 py-2 rounded-xl border text-sm" />
+                            <input type="number" placeholder="Price per night" value={type.price} onChange={(e) => updateInventoryType(type.id, 'price', e.target.value)} className="px-3 py-2 rounded-xl border text-sm" />
+                            <input type="number" placeholder="Quantity" min="1" value={type.quantity} onChange={(e) => updateInventoryType(type.id, 'quantity', e.target.value)} className="px-3 py-2 rounded-xl border text-sm" />
+                            <select value={type.status} onChange={(e) => updateInventoryType(type.id, 'status', e.target.value)} className="px-3 py-2 rounded-xl border text-sm">
+                              <option value="active">Active</option>
+                              <option value="inactive">Inactive</option>
+                            </select>
+                          </div>
+                          <textarea placeholder="Description (optional)" value={type.description} onChange={(e) => updateInventoryType(type.id, 'description', e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm mt-2" rows={2} />
+                        </div>
+                      ))}
+                      <Button type="button" onClick={addInventoryType} variant="outline" className="w-full rounded-full text-sm">+ Add Another Type</Button>
+                    </div>
+                  )}
+                </div>
+              </details>
+
+              {/* Review Summary */}
+              <div>
+                <h3 className="font-display text-xl font-bold mb-3">Review Summary</h3>
+                <div className="p-5 rounded-2xl border bg-secondary/40">
+                  <div className="text-xs uppercase tracking-wider text-emerald2 font-semibold capitalize">{category}</div>
+                  <div className="font-display font-bold mt-1">{title || `New ${category} listing in Kashmir`}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{location || 'Location not set'} · {useInventoryTypes ? `${inventoryTypes.length} type(s)` : `₹${Number(price).toLocaleString('en-IN')}`}</div>
+                  <div className="mt-4"><div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Services ({services.length})</div><ServiceBadges ids={services} max={20} /></div>
+                  {useInventoryTypes && inventoryTypes.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Inventory Types</div>
+                      {inventoryTypes.map(t => (
+                        <div key={t.id} className="text-xs flex justify-between">
+                          <span>{t.name}</span>
+                          <span className="text-emerald2 font-semibold">₹{Number(t.price).toLocaleString('en-IN')} × {t.quantity} units</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <Button onClick={handlePublish} disabled={submitting} className="mt-5 w-full rounded-full bg-emerald2 hover:bg-emerald2-deep h-12 font-semibold">
+
+              {/* Publish Button */}
+              <Button onClick={handlePublish} disabled={submitting} className="w-full rounded-full bg-emerald2 hover:bg-emerald2-deep h-12 font-semibold text-base">
                 {submitting ? <Loader2 className="size-4 animate-spin" /> : 'Publish listing'}
               </Button>
             </div>
