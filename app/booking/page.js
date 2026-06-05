@@ -132,7 +132,6 @@ function BookingContent() {
     try {
       setPdfGenerating(true);
       
-      // Generate simple invoice PDF using HTML canvas
       const invoiceData = {
         bookingId: bookingId,
         title: item.title,
@@ -148,52 +147,130 @@ function BookingContent() {
         userEmail: user?.email || ''
       };
 
-      // Create simple text-based invoice
-      const content = `
-SAFAR KASHMIR - INVOICE
+      // Generate styled HTML invoice
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice - ${invoiceData.bookingId.slice(0, 8).toUpperCase()}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; color: #1f2937; }
+    .header { text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(to right, #10b981, #059669); color: white; border-radius: 12px; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .header p { margin: 5px 0 0 0; opacity: 0.9; }
+    .invoice-meta { display: flex; justify-content: space-between; margin-bottom: 30px; padding: 15px; background: #f9fafb; border-radius: 8px; }
+    .section { margin-bottom: 25px; }
+    .section-title { font-size: 14px; font-weight: 600; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+    .info-row { display: flex; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+    .info-label { width: 150px; color: #6b7280; font-size: 14px; }
+    .info-value { flex: 1; font-weight: 500; font-size: 14px; }
+    .payment-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .payment-table td { padding: 12px; border-bottom: 1px solid #e5e7eb; }
+    .payment-table .label { color: #6b7280; }
+    .payment-table .amount { text-align: right; font-weight: 500; }
+    .total-row { background: #f9fafb; font-weight: 600; font-size: 18px; }
+    .total-row .amount { color: #10b981; }
+    .footer { text-align: center; margin-top: 40px; padding: 20px; background: #f9fafb; border-radius: 8px; color: #6b7280; font-size: 14px; }
+    @media print { body { margin: 0; } .no-print { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>SAFAR KASHMIR</h1>
+    <p>Tax Invoice</p>
+  </div>
 
-Booking ID: ${invoiceData.bookingId.slice(0, 8).toUpperCase()}
-Date: ${new Date().toLocaleDateString('en-IN')}
+  <div class="invoice-meta">
+    <div>
+      <strong>Invoice #${invoiceData.bookingId.slice(0, 8).toUpperCase()}</strong><br>
+      <span style="color: #6b7280;">Date: ${new Date().toLocaleDateString('en-IN')}</span>
+    </div>
+    <div style="text-align: right;">
+      <strong>Booking ID</strong><br>
+      <span style="color: #6b7280;">${invoiceData.bookingId}</span>
+    </div>
+  </div>
 
-============================================
+  <div class="section">
+    <div class="section-title">Guest Information</div>
+    <div class="info-row">
+      <div class="info-label">Name</div>
+      <div class="info-value">${invoiceData.userName}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label">Email</div>
+      <div class="info-value">${invoiceData.userEmail}</div>
+    </div>
+  </div>
 
-GUEST INFORMATION
-Name: ${invoiceData.userName}
-Email: ${invoiceData.userEmail}
+  <div class="section">
+    <div class="section-title">Booking Details</div>
+    <div class="info-row">
+      <div class="info-label">Property</div>
+      <div class="info-value">${invoiceData.title}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label">Location</div>
+      <div class="info-value">${invoiceData.location}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label">Check-in</div>
+      <div class="info-value">${invoiceData.checkIn}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label">Check-out</div>
+      <div class="info-value">${invoiceData.checkOut}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label">Guests</div>
+      <div class="info-value">${invoiceData.guests}</div>
+    </div>
+    <div class="info-row">
+      <div class="info-label">Nights</div>
+      <div class="info-value">${invoiceData.nights}</div>
+    </div>
+  </div>
 
-BOOKING DETAILS
-Property: ${invoiceData.title}
-Location: ${invoiceData.location}
-Check-in: ${invoiceData.checkIn}
-Check-out: ${invoiceData.checkOut}
-Guests: ${invoiceData.guests}
-Nights: ${invoiceData.nights}
+  <div class="section">
+    <div class="section-title">Payment Summary</div>
+    <table class="payment-table">
+      <tr>
+        <td class="label">Subtotal</td>
+        <td class="amount">INR ${invoiceData.subtotal.toLocaleString('en-IN')}</td>
+      </tr>
+      <tr>
+        <td class="label">GST (12%)</td>
+        <td class="amount">INR ${invoiceData.tax.toLocaleString('en-IN')}</td>
+      </tr>
+      <tr>
+        <td class="label">Service Fee</td>
+        <td class="amount">INR 800</td>
+      </tr>
+      <tr class="total-row">
+        <td class="label">TOTAL</td>
+        <td class="amount">INR ${invoiceData.total.toLocaleString('en-IN')}</td>
+      </tr>
+    </table>
+  </div>
 
-============================================
+  <div class="footer">
+    <p><strong>Thank you for booking with Safar Kashmir!</strong></p>
+    <p>For support, visit ${typeof window !== 'undefined' ? window.location.origin : ''}</p>
+  </div>
 
-PAYMENT BREAKDOWN
-Subtotal: INR ${invoiceData.subtotal.toLocaleString('en-IN')}
-GST (12%): INR ${invoiceData.tax.toLocaleString('en-IN')}
-Service Fee: INR 800
-============================================
-TOTAL: INR ${invoiceData.total.toLocaleString('en-IN')}
+  <div class="no-print" style="text-align: center; margin-top: 30px;">
+    <button onclick="window.print()" style="padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer;">Print Invoice</button>
+  </div>
+</body>
+</html>`;
 
-Thank you for booking with Safar Kashmir!
-Visit us at ${typeof window !== 'undefined' ? window.location.origin : ''}
-      `.trim();
-
-      // Create blob and download
-      const blob = new Blob([content], { type: 'text/plain' });
+      // Open HTML in new window
+      const blob = new Blob([htmlContent], { type: 'text/html' });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Safar-Invoice-${invoiceData.bookingId.slice(0, 8)}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      window.open(url, '_blank');
       window.URL.revokeObjectURL(url);
       
-      toast.success('Invoice downloaded!');
+      toast.success('Invoice opened in new tab!');
     } catch (error) {
       console.error('PDF generation error:', error);
       toast.error('Failed to generate invoice');
