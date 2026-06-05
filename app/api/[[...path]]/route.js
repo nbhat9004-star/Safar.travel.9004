@@ -778,6 +778,37 @@ async function route(request, { params }) {
     return ok({ booking: fresh });
   }
 
+  // POST /api/bookings/:id/send-invoice (send invoice email for existing booking)
+  if (segments[0] === 'bookings' && segments[1] && segments[2] === 'send-invoice' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const id = segments[1];
+    
+    const bookings = await getCollection('bookings');
+    const booking = await bookings.findOne({ bookingId: id });
+    if (!booking) return err('Booking not found', 404);
+    
+    // Only traveler or admin can request invoice
+    if (booking.travelerId !== me.id && me.role !== 'admin') {
+      return err('Forbidden', 403);
+    }
+    
+    const users = await getCollection('users');
+    const traveler = await users.findOne({ id: booking.travelerId });
+    
+    if (!traveler) return err('Traveler not found', 404);
+    
+    const invoiceId = `INV-${Date.now()}-${booking.bookingId.slice(0, 8).toUpperCase()}`;
+    
+    try {
+      await sendInvoiceEmail(booking, traveler, invoiceId);
+      return ok({ message: 'Invoice email sent successfully', invoiceId });
+    } catch (error) {
+      console.error('Failed to send invoice email:', error);
+      return err('Failed to send invoice email', 500);
+    }
+  }
+
   // ---------- CONTACT FORM ----------
   // POST /api/contact  (public endpoint for contact form submissions)
   if (path === '/contact' && method === 'POST') {

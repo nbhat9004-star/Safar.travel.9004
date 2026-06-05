@@ -71,6 +71,8 @@ function BookingContent() {
   const [submitting, setSubmitting] = useState(false);
   const [bookingId, setBookingId] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
+  const [emailingSending, setEmailSending] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   const todayStr = ymdOffset(0);
 
   // Derived values from actual state
@@ -85,6 +87,120 @@ function BookingContent() {
   const conflict = useMemo(() => rangeOverlaps(checkIn, checkOut, bookedRanges), [checkIn, checkOut, bookedRanges]);
   const canContinueDates = validRange && !conflict;
   const maxGuests = item.guests || 30;
+
+  // Email invoice handler
+  const handleEmailInvoice = async () => {
+    if (!bookingId) {
+      toast.error('No booking ID available');
+      return;
+    }
+    if (!user) {
+      toast.error('Please log in to send invoice');
+      return;
+    }
+    setEmailSending(true);
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/send-invoice`, { 
+        method: 'POST',
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success('Invoice email sent successfully!');
+      } else {
+        toast.error(data.error || 'Failed to send invoice');
+      }
+    } catch (error) {
+      console.error('Email invoice error:', error);
+      toast.error('Failed to send invoice email');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // Download PDF handler
+  const handleDownloadPDF = () => {
+    if (!bookingId) {
+      toast.error('No booking ID available');
+      return;
+    }
+    if (!user) {
+      toast.error('Please log in to download invoice');
+      return;
+    }
+    
+    try {
+      setPdfGenerating(true);
+      
+      // Generate simple invoice PDF using HTML canvas
+      const invoiceData = {
+        bookingId: bookingId,
+        title: item.title,
+        location: item.location,
+        checkIn: fmt(checkIn),
+        checkOut: fmt(checkOut),
+        guests: guests,
+        nights: nights,
+        subtotal: subtotal,
+        tax: tax,
+        total: total,
+        userName: user?.name || 'Guest',
+        userEmail: user?.email || ''
+      };
+
+      // Create simple text-based invoice
+      const content = `
+SAFAR KASHMIR - INVOICE
+
+Booking ID: ${invoiceData.bookingId.slice(0, 8).toUpperCase()}
+Date: ${new Date().toLocaleDateString('en-IN')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GUEST INFORMATION
+Name: ${invoiceData.userName}
+Email: ${invoiceData.userEmail}
+
+BOOKING DETAILS
+Property: ${invoiceData.title}
+Location: ${invoiceData.location}
+Check-in: ${invoiceData.checkIn}
+Check-out: ${invoiceData.checkOut}
+Guests: ${invoiceData.guests}
+Nights: ${invoiceData.nights}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PAYMENT BREAKDOWN
+Subtotal: ₹${invoiceData.subtotal.toLocaleString('en-IN')}
+GST (12%): ₹${invoiceData.tax.toLocaleString('en-IN')}
+Service Fee: ₹800
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOTAL: ₹${invoiceData.total.toLocaleString('en-IN')}
+
+Thank you for booking with Safar Kashmir!
+Visit us at ${typeof window !== 'undefined' ? window.location.origin : ''}
+      `.trim();
+
+      // Create blob and download
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Safar-Invoice-${invoiceData.bookingId.slice(0, 8)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Invoice downloaded!');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast.error('Failed to generate invoice');
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-background">
@@ -242,8 +358,14 @@ function BookingContent() {
                 <h2 className="font-display text-3xl font-bold mt-5">Booking confirmed!</h2>
                 <p className="text-muted-foreground mt-2 max-w-md mx-auto">Your reservation at {item.title} from {fmt(checkIn)} — {fmt(checkOut)} is confirmed. We've sent the details to your email.</p>
                 <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-3">
-                  <Button variant="outline" className="rounded-full"><Mail className="size-4 mr-2" /> Email invoice</Button>
-                  <Button variant="outline" className="rounded-full"><Download className="size-4 mr-2" /> Download PDF</Button>
+                  <Button variant="outline" className="rounded-full" onClick={handleEmailInvoice} disabled={emailingSending}>
+                    {emailingSending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Mail className="size-4 mr-2" />} 
+                    {emailingSending ? 'Sending...' : 'Email invoice'}
+                  </Button>
+                  <Button variant="outline" className="rounded-full" onClick={handleDownloadPDF} disabled={pdfGenerating}>
+                    {pdfGenerating ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Download className="size-4 mr-2" />}
+                    {pdfGenerating ? 'Generating...' : 'Download PDF'}
+                  </Button>
                   <Button asChild className="rounded-full bg-gradient-emerald"><Link href="/dashboard/traveler">Go to dashboard</Link></Button>
                 </div>
                 <div className="mt-8 max-w-md mx-auto text-left rounded-2xl border bg-secondary/40 p-5">
