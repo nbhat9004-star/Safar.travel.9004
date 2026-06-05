@@ -155,7 +155,7 @@ SAFAR KASHMIR - INVOICE
 Booking ID: ${invoiceData.bookingId.slice(0, 8).toUpperCase()}
 Date: ${new Date().toLocaleDateString('en-IN')}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+============================================
 
 GUEST INFORMATION
 Name: ${invoiceData.userName}
@@ -169,14 +169,14 @@ Check-out: ${invoiceData.checkOut}
 Guests: ${invoiceData.guests}
 Nights: ${invoiceData.nights}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+============================================
 
 PAYMENT BREAKDOWN
-Subtotal: ₹${invoiceData.subtotal.toLocaleString('en-IN')}
-GST (12%): ₹${invoiceData.tax.toLocaleString('en-IN')}
-Service Fee: ₹800
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TOTAL: ₹${invoiceData.total.toLocaleString('en-IN')}
+Subtotal: INR ${invoiceData.subtotal.toLocaleString('en-IN')}
+GST (12%): INR ${invoiceData.tax.toLocaleString('en-IN')}
+Service Fee: INR 800
+============================================
+TOTAL: INR ${invoiceData.total.toLocaleString('en-IN')}
 
 Thank you for booking with Safar Kashmir!
 Visit us at ${typeof window !== 'undefined' ? window.location.origin : ''}
