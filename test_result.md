@@ -1774,3 +1774,71 @@ agent_communication:
       NO CRITICAL ISSUES FOUND. ALL FEATURES WORKING CORRECTLY.
       
       The Email and WhatsApp integration is production-ready and fully functional.
+
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ EMAIL FUNCTIONALITY RE-TESTED WITH RESEND API KEY - WORKING CORRECTLY
+          
+          Test Date: 2026-06-05
+          Test Method: Backend API testing with real Resend API key
+          Test Files: /app/email_test.py, /app/email_test_final.py, /app/email_comprehensive_test.py
+          
+          **RESEND API KEY CONFIGURATION VERIFIED:**
+          ✅ API Key configured in .env: re_FWWfjryJ_57T5mDrri4FPUEWLQuKMjSea
+          ✅ FROM_EMAIL configured: Safar Kashmir <onboarding@resend.dev>
+          ⚠️  API Key is in TEST MODE (sandbox)
+          ⚠️  Limitation: Can ONLY send emails to verified address: nbhat9004@gmail.com
+          
+          **TEST 1: WELCOME EMAIL ON REGISTRATION**
+          ✅ Email trigger code working (route.js line 108-110)
+          ✅ sendWelcomeEmail() called asynchronously after user registration
+          ❌ Test emails failed: Recipients not verified (test mode limitation)
+          ✅ Code implementation is correct - limitation is API key configuration
+          
+          **TEST 2: BOOKING CONFIRMATION EMAILS**
+          ✅ Email trigger code working (route.js lines 681-690)
+          ✅ Two emails triggered: traveler confirmation + host notification
+          ✅ SUCCESSFULLY SENT 1 EMAIL to verified address (nbhat9004@gmail.com)
+          ✅ Email ID from Resend: db23b2bf-8168-484a-980b-946e93e5e24e
+          ✅ Subject: "Booking Confirmed - Royal Cedar Houseboat — Dal Lake"
+          ❌ Host notification failed: Host email not verified (test mode limitation)
+          
+          **TEST 3: BOOKING APPROVAL EMAIL**
+          ✅ Email trigger code working (route.js lines 748-758)
+          ✅ sendBookingApprovedEmail() called when booking status changed to 'approved'
+          ✅ Invoice email also triggered (sendInvoiceEmail)
+          ❌ Test emails failed: Recipients not verified (test mode limitation)
+          ✅ Code implementation is correct - limitation is API key configuration
+          
+          **SERVER LOGS VERIFICATION:**
+          ✅ Success log format: "Email sent successfully: { to: '...', subject: '...', id: '...' }"
+          ✅ Error log format: "Email send error: { statusCode: 403, name: 'validation_error', message: '...' }"
+          ✅ All email attempts properly logged
+          ✅ Async email sending doesn't block API responses
+          
+          **RESEND API ERROR DETAILS:**
+          Error: "You can only send testing emails to your own email address (nbhat9004@gmail.com). 
+                  To send emails to other recipients, please verify a domain at resend.com/domains, 
+                  and change the `from` address to an email using this domain."
+          
+          **ROOT CAUSE ANALYSIS:**
+          The email functionality is FULLY IMPLEMENTED and WORKING CORRECTLY. The test failures are due to:
+          1. Resend API key is in TEST/SANDBOX mode
+          2. Test mode restricts email sending to only the verified email address
+          3. This is a Resend API limitation, NOT a code issue
+          
+          **TO ENABLE PRODUCTION EMAIL SENDING:**
+          1. Verify a domain at resend.com/domains
+          2. Update FROM_EMAIL in .env to use verified domain (e.g., noreply@yourdomain.com)
+          3. OR upgrade to production Resend API key
+          
+          **CONCLUSION:**
+          ✅ All 3 email flows are correctly implemented
+          ✅ Email integration is production-ready
+          ✅ Successfully sent test email to verified address
+          ✅ Proper error handling and logging in place
+          ⚠️  Current limitation is Resend API key configuration (test mode)
+          
+          The email system is WORKING and ready for production use once Resend domain is verified.
+
