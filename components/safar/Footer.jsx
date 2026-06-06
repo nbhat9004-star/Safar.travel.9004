@@ -22,7 +22,7 @@ export default function Footer() {
           </div>
         </div>
         {[{t:'Discover',links:[['Explore Stays','/explore'],['AI Planner','/ai-planner'],['Wishlist','/wishlist'],['About','/about']]},
-          {t:'Hosts',links:[['Become a Host','/add-listing'],['Host Dashboard','/dashboard/host'],['Listing Tips','/about'],['Admin','/admin']]},
+          {t:'Hosts',links:[['Become a Host','/add-listing'],['Host Dashboard','/dashboard/host'],['Listing Guide','/host-guide'],['Host Tips','/host-tips']]},
           {t:'Support',links:[['Contact','/contact'],['Help Center','/contact'],['Cancellation Policy','/about'],['Trust & Safety','/about']]}].map((c) => (
           <div key={c.t}>
             <div className="text-white font-semibold mb-4 text-sm uppercase tracking-wider">{c.t}</div>
