@@ -71,7 +71,7 @@ function App() {
           fetchPriority="high"
           sizes="100vw"
           quality={70}
-          className="object-cover scale-[1.04]"
+          className="object-cover"
         />
         {/* Soft top-to-bottom dark gradient for premium readability */}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
