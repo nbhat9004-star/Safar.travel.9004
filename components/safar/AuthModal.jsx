@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User as UserIcon, Sparkles, MapPin, Shield, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,7 +19,31 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('traveler');
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { login, register } = useAuth();
+
+  // Mark client-mounted so createPortal is SSR-safe.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setMounted(true); }, []);
+
+  // Lock body scroll while the modal is open; restore on close/unmount.
+  // Also close on Escape.
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    // Compensate for the disappearing scrollbar so layout doesn't shift.
+    const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = 'hidden';
+    if (scrollbarW > 0) document.body.style.paddingRight = `${scrollbarW}px`;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -34,13 +59,17 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
     onClose?.();
   };
 
-  return (
+  const modalNode = (
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60] bg-charcoal/55 backdrop-blur-md flex items-center justify-center p-0 md:p-6" onClick={onClose}>
+        // Full-viewport backdrop: fixed + dvh keeps it correct on mobile address-bar changes.
+        // Rendered via portal to document.body so no transformed ancestor can rebase the
+        // containing block of `position: fixed`.
+        style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh' }}
+        className="z-[1000] bg-charcoal/55 backdrop-blur-md flex items-center justify-center p-0 md:p-6 overflow-y-auto overscroll-contain" onClick={onClose}>
         <motion.div onClick={(e) => e.stopPropagation()} initial={{ y: 40, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 30, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 240, damping: 26 }}
-          className="w-full md:max-w-md bg-white md:rounded-3xl shadow-2xl border overflow-hidden max-h-[100svh] md:max-h-[92svh] overflow-y-auto">
+          className="w-full md:max-w-md bg-white md:rounded-3xl shadow-2xl border overflow-hidden max-h-[100dvh] md:max-h-[92dvh] overflow-y-auto my-auto">
           {/* Header */}
           <div className="px-6 pt-6 pb-5 bg-gradient-emerald text-white relative">
             <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 size-9 grid place-items-center rounded-full hover:bg-white/15"><X className="size-5" /></button>
@@ -104,6 +133,12 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
       </motion.div>
     </AnimatePresence>
   );
+
+  // Render through a root-level portal so the modal is a direct child of <body>.
+  // Bypasses any transformed/filtered/will-change ancestor that would otherwise
+  // rebase the containing block of `position: fixed` and break viewport centering.
+  if (!mounted || typeof document === 'undefined') return null;
+  return createPortal(modalNode, document.body);
 }
 
 function Field({ icon: Ico, type = 'text', placeholder, value, onChange, autoFocus }) {
