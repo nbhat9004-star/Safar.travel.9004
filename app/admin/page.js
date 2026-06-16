@@ -1,8 +1,9 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -88,7 +89,46 @@ function AdminInner() {
             <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Admin Console</div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Safar Operations</h1>
           </div>
-          <div className="flex items-center gap-2 bg-white border rounded-full px-4 py-2.5 w-full md:w-80"><Search className="size-4 text-muted-foreground" /><input placeholder="Search users, hosts, bookings..." className="flex-1 text-sm outline-none" /></div>
+          <div className="flex items-center gap-2 w-full md:w-auto md:flex-row flex-col-reverse md:items-center">
+            <div className="flex items-center gap-2 bg-white border rounded-full px-4 py-2.5 w-full md:w-80"><Search className="size-4 text-muted-foreground" /><input placeholder="Search users, hosts, bookings..." className="flex-1 text-sm outline-none" /></div>
+            <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold shrink-0">
+              <Link href="/admin/import"><Upload className="size-4 mr-2" /> Import Listings</Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Quick actions */}
+        <div className="mt-6 grid md:grid-cols-3 gap-4">
+          <Link href="/admin/import" className="group rounded-3xl border bg-white p-5 hover:border-emerald2 hover:shadow-lg transition flex items-center gap-4">
+            <div className="size-12 rounded-2xl bg-emerald-50 grid place-items-center shrink-0 group-hover:bg-emerald2 group-hover:text-white transition">
+              <FileSpreadsheet className="size-6 text-emerald2 group-hover:text-white transition" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-display font-bold text-base">Import CSV</div>
+              <div className="text-xs text-muted-foreground line-clamp-2">Bulk-add hotels, houseboats, guides, drivers &amp; experiences. Imported listings stay pending.</div>
+            </div>
+            <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-emerald2 transition shrink-0" />
+          </Link>
+          <a href="#approvals" className="group rounded-3xl border bg-white p-5 hover:border-emerald2 hover:shadow-lg transition flex items-center gap-4">
+            <div className="size-12 rounded-2xl bg-amber-50 grid place-items-center shrink-0">
+              <ShieldAlert className="size-6 text-amber-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-display font-bold text-base">Pending approvals</div>
+              <div className="text-xs text-muted-foreground">{counts.pending} listing{counts.pending===1?'':'s'} waiting for review.</div>
+            </div>
+            <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-emerald2 transition shrink-0" />
+          </a>
+          <a href="#users" className="group rounded-3xl border bg-white p-5 hover:border-emerald2 hover:shadow-lg transition flex items-center gap-4">
+            <div className="size-12 rounded-2xl bg-blue-50 grid place-items-center shrink-0">
+              <Users className="size-6 text-blue-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-display font-bold text-base">Manage users</div>
+              <div className="text-xs text-muted-foreground">{counts.travelers} travelers &middot; {counts.hosts} hosts</div>
+            </div>
+            <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-emerald2 transition shrink-0" />
+          </a>
         </div>
 
         {/* KPIs */}
