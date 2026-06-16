@@ -4,10 +4,22 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Heart, Star, MapPin } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth-context';
+import { useWishlist } from '@/lib/safar-storage';
 
 export default function PropertyCard({ item, index = 0 }) {
-  const [liked, setLiked] = useState(false);
+  const { user } = useAuth();
+  const { has, toggle } = useWishlist(user?.id);
+  const liked = has(item.id);
   const [imgIdx, setImgIdx] = useState(0);
+
+  const onHeartClick = (e) => {
+    e.preventDefault();
+    const wasLiked = liked;
+    toggle(item.id);
+    toast.success(wasLiked ? 'Removed from wishlist' : 'Saved to wishlist');
+  };
   // Support both demo-data shape (image+gallery+host{}) and API shape (images[]+hostName+superhost)
   const gallery = (item.gallery && item.gallery.length ? item.gallery : null)
     || (Array.isArray(item.images) && item.images.length ? item.images : null)
@@ -43,7 +55,7 @@ export default function PropertyCard({ item, index = 0 }) {
           {item.badge && (
             <div className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-white/90 text-charcoal shadow-md backdrop-blur">{item.badge}</div>
           )}
-          <button onClick={(e) => { e.preventDefault(); setLiked(!liked); }} aria-label="Wishlist"
+          <button onClick={onHeartClick} aria-label="Wishlist"
             className="absolute top-3 right-3 size-9 grid place-items-center rounded-full bg-white/85 hover:bg-white transition shadow-md backdrop-blur">
             <Heart className={`size-4 transition ${liked ? 'fill-rose-500 text-rose-500' : 'text-charcoal'}`} />
           </button>

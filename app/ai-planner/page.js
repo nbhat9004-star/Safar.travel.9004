@@ -1,14 +1,28 @@
 'use client';
-import { useState } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Wand2, Send, Sparkles, MapPin, Calendar, Wallet, Users, ArrowRight, Mountain, Camera, Coffee } from 'lucide-react';
+import {
+  Wand2, Send, Sparkles, MapPin, Calendar, Wallet, Users, ArrowRight,
+  Mountain, Camera, Coffee, Save, X, Mail, Phone, User, BookOpen,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
 import { LISTINGS, AI_PROMPT_SUGGESTIONS, IMG } from '@/lib/data';
+import { useAuth } from '@/lib/auth-context';
+import { useSavedPlans, saveLead, getPlan } from '@/lib/safar-storage';
 
-function App() {
+function PlannerInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const planIdParam = searchParams.get('plan');
+  const { user } = useAuth();
+  const { plans, save: persistPlan } = useSavedPlans(user?.id);
+
   const [messages, setMessages] = useState([
     { role: 'ai', text: 'Salaam! I’m your Kashmir AI concierge. Tell me your travel style, budget and dates — I’ll craft an unforgettable trip.' },
   ]);
@@ -17,6 +31,30 @@ function App() {
   const [budget, setBudget] = useState(40000);
   const [travelers, setTravelers] = useState(2);
   const [showPlan, setShowPlan] = useState(false);
+
+  // Lead Capture modal state
+  const [showLeadModal, setShowLeadModal] = useState(false);
+  const [lead, setLead] = useState({ name: '', email: '', phone: '' });
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  // Reopen a previously saved plan
+  useEffect(() => {
+    if (!planIdParam) return;
+    const existing = getPlan(user?.id, planIdParam);
+    if (existing) {
+      setDays(existing.days || 5);
+      setBudget(existing.budget || 40000);
+      setTravelers(existing.travelers || 2);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowPlan(true);
+      setMessages((m) => [
+        ...m,
+        { role: 'user', text: `Reopen “${existing.title}”` },
+        { role: 'ai',   text: `Loaded your saved ${existing.days}-day plan for ${existing.travelers} traveler(s).` },
+      ]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planIdParam, user?.id]);
 
   const send = (txt) => {
     const q = (txt ?? input).trim();
@@ -40,13 +78,82 @@ function App() {
 
   const total = itinerary.reduce((s, i) => s + i.stay.price, 0) + 4500;
 
+  // ---- Save plan flow (Feature 1.3 + Feature 4 Lead Capture) ----
+  const onClickSavePlan = () => {
+    if (!showPlan) return;
+    if (user) {
+      // Logged in — skip lead capture, save directly
+      doSavePlan({ name: user.name, email: user.email, phone: user.phone || '' });
+    } else {
+      // Not logged in — collect lead first
+      setShowLeadModal(true);
+    }
+  };
+
+  const doSavePlan = (leadData) => {
+    setSavingPlan(true);
+    try {
+      // Persist lead (Feature 4) — only when a fresh lead form was filled
+      if (!user && leadData?.email) {
+        saveLead({
+          name: leadData.name,
+          email: leadData.email,
+          phone: leadData.phone,
+          source: 'ai-planner',
+          context: { days, budget, travelers, total },
+        });
+      }
+      // Persist plan (Feature 1.3)
+      const slimItin = itinerary.map((d) => ({
+        day: d.day, place: d.place, activity: d.activity,
+        stayId: d.stay.id, stayTitle: d.stay.title, stayPrice: d.stay.price,
+      }));
+      persistPlan({
+        title: `${days}-day Kashmir trip`,
+        days, budget, travelers, total,
+        itinerary: slimItin,
+        lead: leadData?.email ? leadData : null,
+      });
+      toast.success(user ? 'Itinerary saved to your dashboard' : 'Itinerary saved! We’ll be in touch.');
+      setShowLeadModal(false);
+      setLead({ name: '', email: '', phone: '' });
+    } catch (err) {
+      toast.error('Could not save plan');
+      console.error(err);
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const submitLead = (e) => {
+    e?.preventDefault();
+    if (!lead.name.trim() || !lead.email.trim() || !lead.phone.trim()) {
+      toast.error('Please fill name, email and phone');
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(lead.email)) {
+      toast.error('Please enter a valid email');
+      return;
+    }
+    doSavePlan(lead);
+  };
+
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
       <div className="pt-24 container">
-        <div className="flex items-center gap-2 text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold"><Wand2 className="size-3.5" /> Safar AI Trip Planner</div>
-        <h1 className="font-display text-4xl md:text-6xl font-bold mt-2 leading-[1.05]">Plan your Kashmir trip <span className="gradient-text-emerald">in 30 seconds</span>.</h1>
-        <p className="mt-3 text-muted-foreground max-w-2xl">Tell our AI your style and budget. We’ll match the right stays, transport, food and experiences — all bookable on Safar.</p>
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold"><Wand2 className="size-3.5" /> Safar AI Trip Planner</div>
+            <h1 className="font-display text-4xl md:text-6xl font-bold mt-2 leading-[1.05]">Plan your Kashmir trip <span className="gradient-text-emerald">in 30 seconds</span>.</h1>
+            <p className="mt-3 text-muted-foreground max-w-2xl">Tell our AI your style and budget. We’ll match the right stays, transport, food and experiences — all bookable on Safar.</p>
+          </div>
+          {plans.length > 0 && (
+            <Button asChild variant="outline" className="rounded-full font-semibold shrink-0">
+              <Link href="/dashboard/traveler"><BookOpen className="size-4 mr-2" /> My saved plans ({plans.length})</Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="container mt-10 grid lg:grid-cols-5 gap-6">
@@ -128,8 +235,11 @@ function App() {
                     ))}
                   </div>
                   <div className="mt-6 flex flex-wrap gap-3">
-                    <Button asChild className="rounded-full bg-gradient-emerald font-semibold"><Link href="/booking">Book entire trip <ArrowRight className="size-4 ml-2" /></Link></Button>
-                    <Button variant="outline" className="rounded-full font-semibold" onClick={()=>setShowPlan(false)}>Tweak with AI</Button>
+                    <Button onClick={onClickSavePlan} disabled={savingPlan} className="rounded-full bg-gradient-emerald font-semibold">
+                      <Save className="size-4 mr-2" /> {savingPlan ? 'Saving…' : 'Save plan'}
+                    </Button>
+                    <Button asChild variant="outline" className="rounded-full font-semibold"><Link href="/booking">Book entire trip <ArrowRight className="size-4 ml-2" /></Link></Button>
+                    <Button variant="ghost" className="rounded-full font-semibold" onClick={()=>setShowPlan(false)}>Tweak with AI</Button>
                   </div>
                 </div>
               </motion.div>
@@ -150,7 +260,66 @@ function App() {
         </div>
       </div>
       <Footer />
+
+      {/* LEAD CAPTURE MODAL — only shown for not-logged-in users when they tap Save */}
+      <AnimatePresence>
+        {showLeadModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-charcoal/60 backdrop-blur-sm grid place-items-center p-4"
+            onClick={() => !savingPlan && setShowLeadModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5 border-b flex items-center justify-between bg-gradient-emerald text-white">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-white/15 grid place-items-center"><Save className="size-5" /></div>
+                  <div>
+                    <div className="font-display font-bold">Save your itinerary</div>
+                    <div className="text-[11px] text-white/80">We’ll email it and follow up only if you want.</div>
+                  </div>
+                </div>
+                <button onClick={()=>setShowLeadModal(false)} aria-label="Close" className="rounded-full p-1.5 hover:bg-white/15"><X className="size-4" /></button>
+              </div>
+              <form onSubmit={submitLead} className="p-5 space-y-3">
+                <label className="block">
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground flex items-center gap-1"><User className="size-3" /> Name</span>
+                  <input value={lead.name} onChange={(e)=>setLead({...lead, name: e.target.value})} required
+                    className="mt-1 w-full px-4 py-2.5 rounded-xl bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600/30" placeholder="Your full name" />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground flex items-center gap-1"><Mail className="size-3" /> Email</span>
+                  <input type="email" value={lead.email} onChange={(e)=>setLead({...lead, email: e.target.value})} required
+                    className="mt-1 w-full px-4 py-2.5 rounded-xl bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600/30" placeholder="you@example.com" />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground flex items-center gap-1"><Phone className="size-3" /> Phone</span>
+                  <input value={lead.phone} onChange={(e)=>setLead({...lead, phone: e.target.value})} required
+                    className="mt-1 w-full px-4 py-2.5 rounded-xl bg-secondary text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600/30" placeholder="+91 9XXXXXXXXX" />
+                </label>
+                <div className="pt-2 flex gap-2">
+                  <Button type="button" variant="outline" className="rounded-full flex-1" onClick={()=>setShowLeadModal(false)} disabled={savingPlan}>Cancel</Button>
+                  <Button type="submit" disabled={savingPlan} className="rounded-full flex-1 bg-emerald2 hover:bg-emerald2-deep">
+                    {savingPlan ? 'Saving…' : 'Save plan'}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground text-center pt-1">By saving, you agree to be contacted about your Kashmir trip.</p>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
-export default App;
+
+export default function App() {
+  return (
+    <Suspense fallback={null}>
+      <PlannerInner />
+    </Suspense>
+  );
+}
