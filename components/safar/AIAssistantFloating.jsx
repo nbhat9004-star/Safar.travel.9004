@@ -30,8 +30,7 @@ export default function AIAssistantFloating() {
     <>
       <motion.button onClick={() => setOpen(true)} whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.95 }}
         aria-label="Open AI Concierge"
-        style={{ paddingRight: 'max(0.5rem, env(safe-area-inset-right))', paddingBottom: 'max(0rem, env(safe-area-inset-bottom))' }}
-        className="fixed z-40 bottom-5 right-5 md:bottom-6 md:right-6 group">
+        className="fixed z-40 bottom-5 right-4 md:right-6 group">
         <span className="absolute inset-0 rounded-full bg-emerald2/40 animate-ping" />
         <span className="relative inline-flex items-center gap-2 px-4 md:px-5 py-3 md:py-3.5 rounded-full bg-emerald2/95 backdrop-blur-md text-white font-semibold shadow-[0_18px_40px_-10px_rgba(15,61,46,0.6)] ring-1 ring-white/15 group-hover:bg-emerald2-deep transition-colors">
           <span className="size-7 grid place-items-center rounded-full bg-gold/95 text-charcoal shadow-inner">
