@@ -13,6 +13,8 @@ export default function PropertyCard({ item, index = 0, priority = false }) {
   const { has, toggle } = useWishlist(user?.id);
   const liked = has(item.id);
   const [imgIdx, setImgIdx] = useState(0);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
 
   const onHeartClick = (e) => {
     e.preventDefault();
@@ -31,6 +33,34 @@ export default function PropertyCard({ item, index = 0, priority = false }) {
   // by the browser when the user clicks a dot, which is acceptable for a hover-only carousel).
   const currentSrc = gallery[imgIdx] || gallery[0];
 
+  // Mobile swipe handlers
+  const minSwipeDistance = 50;
+  
+  const onTouchStart = (e) => {
+    setTouchEnd(0);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = (e) => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (isLeftSwipe && imgIdx < gallery.length - 1) {
+      e.preventDefault();
+      setImgIdx(imgIdx + 1);
+    }
+    if (isRightSwipe && imgIdx > 0) {
+      e.preventDefault();
+      setImgIdx(imgIdx - 1);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -40,7 +70,12 @@ export default function PropertyCard({ item, index = 0, priority = false }) {
       className="group"
     >
       <Link href={`/property/${item.id}`} className="block">
-        <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-secondary">
+        <div 
+          className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-secondary"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
           <Image
             src={currentSrc}
             alt={item.title}
