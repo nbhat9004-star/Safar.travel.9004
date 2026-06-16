@@ -70,7 +70,7 @@ function App() {
           priority
           fetchPriority="high"
           sizes="100vw"
-          quality={75}
+          quality={70}
           className="object-cover scale-[1.04]"
         />
         {/* Soft top-to-bottom dark gradient for premium readability */}
@@ -218,7 +218,7 @@ function App() {
           </div>
           <CategoryPills value={cat} onChange={setCat} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-            {filtered.slice(0, 8).map((l, i) => <PropertyCard key={l.id} item={l} index={i} />)}
+            {filtered.slice(0, 8).map((l, i) => <PropertyCard key={l.id} item={l} index={i} priority={i < 4} />)}
           </div>
         </div>
       </section>
@@ -232,9 +232,9 @@ function App() {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {destinations.map((d, i) => (
-              <motion.div key={d.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55, delay: i*0.06 }}
+              <motion.div key={d.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-100px' }} transition={{ duration: 0.55, delay: i*0.06 }}
                 className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer">
-                <Image src={d.img} alt={d.name} fill loading="lazy" quality={70}
+                <Image src={d.img} alt={d.name} fill loading="lazy" quality={60}
                   sizes="(min-width: 1024px) 25vw, 50vw"
                   className="object-cover transition-transform duration-700 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/30 to-transparent" />
@@ -311,9 +311,10 @@ function App() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {experiences.map((e, i) => (
-              <motion.div key={e.title} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55, delay: i*0.06 }}
-                className="group relative aspect-[3/4] rounded-3xl overflow-hidden">
-                <img src={e.img} alt={e.title} className="absolute inset-0 size-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <div key={e.title} className="group relative aspect-[3/4] rounded-3xl overflow-hidden">
+                <Image src={e.img} alt={e.title} fill loading="lazy" quality={55}
+                  sizes="(min-width: 1024px) 25vw, (min-width: 768px) 50vw, 100vw"
+                  className="object-cover transition-transform duration-700 group-hover:scale-110" />
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/40 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                   <div className="font-display text-xl font-bold">{e.title}</div>
@@ -323,7 +324,7 @@ function App() {
                     <div className="size-8 rounded-full bg-white text-charcoal grid place-items-center group-hover:bg-gold transition"><ArrowRight className="size-4" /></div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>

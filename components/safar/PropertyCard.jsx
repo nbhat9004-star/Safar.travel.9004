@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { useWishlist } from '@/lib/safar-storage';
 
-export default function PropertyCard({ item, index = 0 }) {
+export default function PropertyCard({ item, index = 0, priority = false }) {
   const { user } = useAuth();
   const { has, toggle } = useWishlist(user?.id);
   const liked = has(item.id);
@@ -35,7 +35,7 @@ export default function PropertyCard({ item, index = 0 }) {
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-60px' }}
+      viewport={{ once: true, margin: '-80px', amount: 0.2 }}
       transition={{ duration: 0.55, delay: Math.min(index, 6) * 0.05, ease: 'easeOut' }}
       className="group"
     >
@@ -46,8 +46,9 @@ export default function PropertyCard({ item, index = 0 }) {
             alt={item.title}
             fill
             sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-            loading="lazy"
-            quality={72}
+            loading={priority ? 'eager' : 'lazy'}
+            priority={priority}
+            quality={60}
             className="object-cover transition-transform duration-700 group-hover:scale-[1.06]"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-black/15 pointer-events-none" />
