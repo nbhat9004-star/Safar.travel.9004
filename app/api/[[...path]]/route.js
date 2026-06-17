@@ -191,8 +191,18 @@ async function route(request, { params }) {
     const me = await getCurrentUser(request);
     const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
     const users = await getCollection('users');
+    const listings = await getCollection('listings');
+    const bookings = await getCollection('bookings');
     const list = await users.find({}, { projection: { passwordHash: 0, _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
-    return ok({ users: list });
+    
+    // Enrich with counts
+    const enriched = await Promise.all(list.map(async (u) => {
+      const listingCount = await listings.countDocuments({ hostId: u.id });
+      const bookingCount = await bookings.countDocuments({ travelerId: u.id });
+      return { ...u, listingCount, bookingCount };
+    }));
+    
+    return ok({ users: enriched });
   }
   // PATCH /api/users/me - Update current user profile
   if (path === '/users/me' && method === 'PATCH') {
@@ -237,6 +247,76 @@ async function route(request, { params }) {
     const me = await getCurrentUser(request);
     const g = requireRole(me, ['traveler','host','admin']); if (!g.ok) return err(g.error, g.status);
     return ok({ user: publicUser(me) });
+  }
+
+  // ---------- ADMIN USER MANAGEMENT ----------
+  // POST /api/admin/users/:id/suspend
+  if (segments[0] === 'admin' && segments[1] === 'users' && segments[2] && segments[3] === 'suspend' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const userId = segments[2];
+    const users = await getCollection('users');
+    const user = await users.findOne({ id: userId });
+    if (!user) return err('User not found', 404);
+    if (user.role === 'admin') return err('Cannot suspend admin users', 403);
+    await users.updateOne({ id: userId }, { $set: { status: 'suspended', updatedAt: new Date() } });
+    const fresh = await users.findOne({ id: userId }, { projection: { passwordHash: 0, _id: 0 } });
+    return ok({ user: fresh });
+  }
+
+  // POST /api/admin/users/:id/reactivate
+  if (segments[0] === 'admin' && segments[1] === 'users' && segments[2] && segments[3] === 'reactivate' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const userId = segments[2];
+    const users = await getCollection('users');
+    const user = await users.findOne({ id: userId });
+    if (!user) return err('User not found', 404);
+    await users.updateOne({ id: userId }, { $set: { status: 'active', updatedAt: new Date() }, $unset: { blacklisted: '' } });
+    const fresh = await users.findOne({ id: userId }, { projection: { passwordHash: 0, _id: 0 } });
+    return ok({ user: fresh });
+  }
+
+  // POST /api/admin/users/:id/blacklist
+  if (segments[0] === 'admin' && segments[1] === 'users' && segments[2] && segments[3] === 'blacklist' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const userId = segments[2];
+    const users = await getCollection('users');
+    const user = await users.findOne({ id: userId });
+    if (!user) return err('User not found', 404);
+    if (user.role === 'admin') return err('Cannot blacklist admin users', 403);
+    await users.updateOne({ id: userId }, { $set: { status: 'blacklisted', blacklisted: true, updatedAt: new Date() } });
+    const fresh = await users.findOne({ id: userId }, { projection: { passwordHash: 0, _id: 0 } });
+    return ok({ user: fresh });
+  }
+
+  // DELETE /api/admin/users/:id
+  if (segments[0] === 'admin' && segments[1] === 'users' && segments[2] && method === 'DELETE') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const userId = segments[2];
+    const users = await getCollection('users');
+    const user = await users.findOne({ id: userId });
+    if (!user) return err('User not found', 404);
+    if (user.role === 'admin') return err('Cannot delete admin users', 403);
+    await users.deleteOne({ id: userId });
+    return ok({ deleted: true });
+  }
+
+  // PATCH /api/admin/users/:id/role
+  if (segments[0] === 'admin' && segments[1] === 'users' && segments[2] && segments[3] === 'role' && method === 'PATCH') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const userId = segments[2];
+    const { role } = await readBody(request);
+    if (!ROLES.includes(role)) return err('Invalid role');
+    const users = await getCollection('users');
+    const user = await users.findOne({ id: userId });
+    if (!user) return err('User not found', 404);
+    await users.updateOne({ id: userId }, { $set: { role, updatedAt: new Date() } });
+    const fresh = await users.findOne({ id: userId }, { projection: { passwordHash: 0, _id: 0 } });
+    return ok({ user: fresh });
   }
 
   // ---------- LISTINGS ----------
@@ -618,6 +698,37 @@ async function route(request, { params }) {
         })),
       });
     }
+
+    // POST /listings/:id/suspend  (admin)
+    if (action === 'suspend' && method === 'POST') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+      const r = await col.updateOne({ id }, { $set: { status: 'suspended', updatedAt: new Date() } });
+      if (!r.matchedCount) return err('Listing not found', 404);
+      const fresh = await col.findOne({ id }, { projection: { _id: 0 } });
+      return ok({ listing: fresh });
+    }
+
+    // POST /listings/:id/activate  (admin)
+    if (action === 'activate' && method === 'POST') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+      const r = await col.updateOne({ id }, { $set: { status: 'approved', updatedAt: new Date() } });
+      if (!r.matchedCount) return err('Listing not found', 404);
+      const fresh = await col.findOne({ id }, { projection: { _id: 0 } });
+      return ok({ listing: fresh });
+    }
+
+    // PATCH /listings/:id/featured  (admin)
+    if (action === 'featured' && method === 'PATCH') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+      const { featured } = await readBody(request);
+      const r = await col.updateOne({ id }, { $set: { featured: !!featured, updatedAt: new Date() } });
+      if (!r.matchedCount) return err('Listing not found', 404);
+      const fresh = await col.findOne({ id }, { projection: { _id: 0 } });
+      return ok({ listing: fresh });
+    }
   }
 
   // ---------- BOOKINGS ----------
@@ -859,6 +970,103 @@ async function route(request, { params }) {
       console.error('Failed to send invoice email:', error);
       return err('Failed to send invoice email', 500);
     }
+  }
+
+  // ---------- ADMIN BOOKING MANAGEMENT ----------
+  // POST /api/admin/bookings/:id/cancel (admin cancel booking)
+  if (segments[0] === 'admin' && segments[1] === 'bookings' && segments[2] && segments[3] === 'cancel' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const id = segments[2];
+    const bookings = await getCollection('bookings');
+    const booking = await bookings.findOne({ bookingId: id });
+    if (!booking) return err('Booking not found', 404);
+    await bookings.updateOne({ bookingId: id }, { $set: { status: 'cancelled', updatedAt: new Date() } });
+    
+    // Restore inventory
+    if (booking.inventoryTypeId) {
+      const listings = await getCollection('listings');
+      await listings.updateOne(
+        { id: booking.listingId, 'inventoryTypes.id': booking.inventoryTypeId },
+        { $inc: { 'inventoryTypes.$.available': 1 } }
+      );
+    }
+    
+    const fresh = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    return ok({ booking: fresh });
+  }
+
+  // POST /api/admin/bookings/:id/refund (admin refund booking)
+  if (segments[0] === 'admin' && segments[1] === 'bookings' && segments[2] && segments[3] === 'refund' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const id = segments[2];
+    const bookings = await getCollection('bookings');
+    const booking = await bookings.findOne({ bookingId: id });
+    if (!booking) return err('Booking not found', 404);
+    await bookings.updateOne({ bookingId: id }, { $set: { refunded: true, updatedAt: new Date() } });
+    const fresh = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    return ok({ booking: fresh });
+  }
+
+  // ---------- ADMIN REVENUE DASHBOARD ----------
+  // GET /api/admin/revenue
+  if (path === '/admin/revenue' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const bookings = await getCollection('bookings');
+    
+    const allBookings = await bookings.find({ status: 'approved' }).toArray();
+    const totalRevenue = allBookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+    const todayBookings = await bookings.find({ 
+      status: 'approved', 
+      createdAt: { $gte: today, $lt: todayEnd } 
+    }).toArray();
+    const todayRevenue = todayBookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+    
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthBookings = await bookings.find({ 
+      status: 'approved', 
+      createdAt: { $gte: monthStart } 
+    }).toArray();
+    const monthlyRevenue = monthBookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+    
+    const pendingBookings = await bookings.find({ status: 'pending' }).toArray();
+    const pendingPayments = pendingBookings.reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+    
+    const platformCommission = totalRevenue * 0.15; // 15% commission
+    
+    return ok({
+      totalRevenue,
+      todayRevenue,
+      monthlyRevenue,
+      pendingPayments,
+      platformCommission,
+    });
+  }
+
+  // GET /api/admin/transactions
+  if (path === '/admin/transactions' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const bookings = await getCollection('bookings');
+    const transactions = await bookings.find({ status: { $in: ['approved', 'pending'] } })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .toArray();
+    
+    const formatted = transactions.map((t) => ({
+      ...t,
+      commission: (t.totalPrice || 0) * 0.15,
+      hostPayout: (t.totalPrice || 0) * 0.85,
+    }));
+    
+    return ok({ transactions: formatted });
   }
 
   // ---------- CONTACT FORM ----------
