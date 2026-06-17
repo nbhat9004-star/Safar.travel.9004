@@ -93,18 +93,18 @@ function ExploreContent() {
               <Search className="size-4 text-muted-foreground" />
               <Input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search Srinagar, Gulmarg, houseboats..." className="border-0 shadow-none focus-visible:ring-0 px-0 h-9" />
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="rounded-full relative" onClick={()=>setShowFilters(true)}>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="rounded-full relative shrink-0" onClick={()=>setShowFilters(true)}>
                 <SlidersHorizontal className="size-4 mr-2" /> Filters
                 {selectedServices.length > 0 && <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald2 text-white text-[10px] font-bold">{selectedServices.length}</span>}
               </Button>
-              <select value={sort} onChange={(e)=>setSort(e.target.value)} className="rounded-full border bg-white px-4 text-sm h-10">
+              <select value={sort} onChange={(e)=>setSort(e.target.value)} className="rounded-full border bg-white px-4 text-sm h-10 min-w-0 max-w-[140px]">
                 <option value="recommended">Recommended</option>
                 <option value="price-asc">Price: Low to High</option>
                 <option value="price-desc">Price: High to Low</option>
                 <option value="rating">Top rated</option>
               </select>
-              <Button variant={mapView ? 'default' : 'outline'} onClick={()=>setMapView(!mapView)} className="rounded-full"><Map className="size-4 mr-2" /> {mapView ? 'List' : 'Map'}</Button>
+              <Button variant={mapView ? 'default' : 'outline'} onClick={()=>setMapView(!mapView)} className="rounded-full shrink-0"><Map className="size-4 mr-2" /> {mapView ? 'List' : 'Map'}</Button>
             </div>
           </motion.div>
           <div className="mt-5"><CategoryPills value={cat} onChange={setCat} /></div>
