@@ -6,6 +6,7 @@ import { Menu, User, UserPlus, Sparkles, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
+import AuthModal from '@/components/safar/AuthModal';
 
 const NAV = [
   { href: '/explore?cat=all',         label: 'Stays' },
@@ -19,6 +20,7 @@ const NAV = [
 export default function Navbar({ transparent = false }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [authMode, setAuthMode] = useState(null); // 'login' | 'signup' | null
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
@@ -82,12 +84,14 @@ export default function Navbar({ transparent = false }) {
                 <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Admin</Link>
               </div>
               <div className="p-4 border-t flex flex-col gap-2 safe-bottom">
-                <MobileAuthButtons onClose={()=>setOpen(false)} />
+                <MobileAuthButtons onClose={()=>setOpen(false)} onOpenAuth={(m)=>setAuthMode(m)} />
               </div>
             </SheetContent>
           </Sheet>
         </div>
       </div>
+      {/* Root-level AuthModal so Radix Sheet's pointer-events lock doesn't pass clicks through to nav Links underneath. */}
+      <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={()=>setAuthMode(null)} />
     </motion.header>
   );
 }

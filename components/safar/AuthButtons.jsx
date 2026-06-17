@@ -64,15 +64,24 @@ export function AuthButtons({ solid }) {
   );
 }
 
-export function MobileAuthButtons({ onClose }) {
+export function MobileAuthButtons({ onClose, onOpenAuth }) {
   const { user, logout } = useAuth();
-  const [mode, setMode] = useState(null);
   if (!user) {
+    // Close the Sheet FIRST, then ask Navbar to open the AuthModal at the
+    // root level. Rendering the modal inside the Sheet's Radix Dialog subtree
+    // caused Radix to apply aria-hidden + pointer-events:none on the modal
+    // portal, letting clicks pass through to nav Links underneath.
+    const trigger = (m) => (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+      onClose?.();
+      // Wait for Sheet close/unmount so Radix releases its pointer-events lock
+      setTimeout(() => onOpenAuth?.(m), 60);
+    };
     return (
       <>
-        <Button variant="outline" className="w-full h-11 rounded-full font-semibold" onClick={()=>setMode('login')}><User className="size-4 mr-2" /> Sign in</Button>
-        <Button className="w-full h-11 rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold" onClick={()=>setMode('signup')}><UserPlus className="size-4 mr-2" /> Sign up</Button>
-        <AuthModal open={!!mode} defaultMode={mode || 'login'} onClose={()=>{ setMode(null); onClose?.(); }} />
+        <Button variant="outline" className="w-full h-11 rounded-full font-semibold" onClick={trigger('login')}><User className="size-4 mr-2" /> Sign in</Button>
+        <Button className="w-full h-11 rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold" onClick={trigger('signup')}><UserPlus className="size-4 mr-2" /> Sign up</Button>
       </>
     );
   }
