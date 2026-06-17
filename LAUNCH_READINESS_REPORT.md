@@ -200,7 +200,7 @@
 ## 📝 DEPLOYMENT NOTES
 
 ### Current Environment
-- **URL**: https://e7a311fe-7d9e-410a-b95e-baa836e81d36.preview.emergentagent.com
+- **URL**: https://width-mismatch-debug.preview.emergentagent.com
 - **Database**: MongoDB running locally (in container)
 - **Server**: Next.js on port 3000
 - **Status**: ✅ STABLE and RUNNING
@@ -270,4 +270,4 @@ The Safar website is fully functional for user testing and gathering feedback. A
 ---
 
 **Website is LIVE and ready for testing at:**  
-https://e7a311fe-7d9e-410a-b95e-baa836e81d36.preview.emergentagent.com
+https://width-mismatch-debug.preview.emergentagent.com
