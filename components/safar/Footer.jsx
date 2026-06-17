@@ -5,8 +5,8 @@ export default function Footer() {
   return (
     <footer className="relative mt-24 bg-charcoal text-white/80 overflow-hidden">
       <div className="aurora opacity-40" />
-      <div className="container relative py-16 grid md:grid-cols-4 gap-10">
-        <div className="md:col-span-1">
+      <div className="container relative py-16 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10 md:gap-10">
+        <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-2">
             <div className="size-9 rounded-xl bg-gradient-emerald grid place-items-center"><Sparkles className="size-5 text-white" /></div>
             <div>

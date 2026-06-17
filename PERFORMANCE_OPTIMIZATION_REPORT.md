@@ -259,4 +259,4 @@ robots: {
 
 ---
 
-**Website Live**: https://width-mismatch-debug.preview.emergentagent.com
+**Website Live**: https://mobile-footer-grid.preview.emergentagent.com
