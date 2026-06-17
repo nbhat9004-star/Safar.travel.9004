@@ -65,7 +65,7 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
         // Full-viewport backdrop: fixed + dvh keeps it correct on mobile address-bar changes.
         // Rendered via portal to document.body so no transformed ancestor can rebase the
         // containing block of `position: fixed`.
-        style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh' }}
+        style={{ position: 'fixed', inset: 0, height: '100dvh' }}
         className="z-[1000] bg-charcoal/55 backdrop-blur-md flex items-center justify-center p-0 md:p-6 overflow-y-auto overscroll-contain" onClick={onClose}>
         <motion.div onClick={(e) => e.stopPropagation()} initial={{ y: 40, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 30, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 240, damping: 26 }}
