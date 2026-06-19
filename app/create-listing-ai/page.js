@@ -41,6 +41,12 @@ export default function AIListingWizard() {
       router.push('/');
       return;
     }
+    // Check if user is a host or admin
+    if (user.role !== 'host' && user.role !== 'admin') {
+      toast.info('Please become a host first to use the AI Listing Wizard');
+      router.push('/add-listing');
+      return;
+    }
     // Generate conversation ID
     setConversationId(`wizard-${user.id}-${Date.now()}`);
   }, [user, router]);

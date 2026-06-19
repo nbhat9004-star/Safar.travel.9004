@@ -14,8 +14,8 @@ const NAV = [
   { href: '/explore?cat=transport',   label: 'Bikes & Cars' },
   { href: '/explore?cat=tour',        label: 'Tour Guides' },
   { href: '/ai-planner',              label: 'AI Planner' },
-  { href: '/create-listing-ai',       label: 'AI Wizard' },
   { href: '/add-listing',             label: 'Become a Host' },
+  { href: '/create-listing-ai',       label: 'AI Host Wizard', hostOnly: true },
 ];
 
 export default function Navbar({ transparent = false }) {
