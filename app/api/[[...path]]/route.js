@@ -18,6 +18,7 @@ import {
   sendContactFormEmail,
   sendPasswordResetEmail,
 } from '@/lib/email';
+import { verifyFirebaseToken } from '@/lib/firebase-admin';
 
 const json = (data, status = 200) => NextResponse.json(data, { status });
 const ok = (data = {}, status = 200) => json({ ok: true, ...data }, status);
@@ -184,6 +185,49 @@ async function route(request, { params }) {
     const me = await getCurrentUser(request);
     if (!me) return err('Not authenticated', 401);
     return ok({ user: publicUser(me) });
+  }
+
+  // POST /api/auth/verify-phone - Firebase Phone Authentication
+  if (path === '/auth/verify-phone' && method === 'POST') {
+    const { idToken } = await readBody(request);
+    if (!idToken) return err('Firebase ID token is required');
+    
+    // Verify token with Firebase Admin SDK
+    const verification = await verifyFirebaseToken(idToken);
+    if (!verification.success) return err('Invalid Firebase token', 401);
+    
+    const { phone } = verification;
+    if (!phone) return err('Phone number not found in token', 400);
+    
+    const users = await getCollection('users');
+    let user = await users.findOne({ phone });
+    
+    // Auto-create user if first time login
+    if (!user) {
+      const phoneDigits = phone.replace(/\D/g, '');
+      user = {
+        id: uuid(),
+        name: `User ${phoneDigits.slice(-4)}`,
+        phone,
+        role: 'traveler',
+        avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${phoneDigits}&backgroundColor=0F3D2E`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await users.insertOne(user);
+      
+      // Send welcome email if user has email (async, don't block)
+      if (user.email) {
+        sendWelcomeEmail(user).catch((error) => {
+          console.error('Failed to send welcome email:', error);
+        });
+      }
+    }
+    
+    // Return JWT token (same as email/password flow)
+    const token = signToken({ uid: user.id, role: user.role });
+    const res = ok({ user: publicUser(user), token });
+    return setAuthCookie(res, token);
   }
 
   // ---------- ROLE-GUARDED USER ENDPOINTS ----------
