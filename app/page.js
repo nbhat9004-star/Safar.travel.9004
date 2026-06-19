@@ -13,32 +13,32 @@ import CategoryPills from '@/components/safar/CategoryPills';
 import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
 import { LISTINGS, CATEGORIES, IMG, STATS, TESTIMONIALS, AI_PROMPT_SUGGESTIONS } from '@/lib/data';
 
-// Kashmir seasonal images - premium curated collection
+// Kashmir seasonal images - ultra-premium iconic landmarks collection
 const SEASONAL_IMAGES = [
   {
-    src: 'https://images.unsplash.com/photo-1715933787517-6082995e0d07?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2Mzl8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwdHVsaXAlMjBnYXJkZW58ZW58MHx8fHwxNzgxODkzNzI2fDA&ixlib=rb-4.1.0&q=85&w=1920',
-    alt: 'Spring in Kashmir - Tulip Garden Srinagar',
+    src: 'https://images.pexels.com/photos/25786776/pexels-photo-25786776.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&dpr=2',
+    alt: 'Spring in Kashmir - Indira Gandhi Tulip Garden Srinagar',
     season: 'Spring',
     emoji: '🌸',
     color: 'text-pink-500'
   },
   {
-    src: 'https://images.unsplash.com/photo-1662887957904-201296e951cb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxkYWwlMjBsYWtlJTIwc2hpa2FyYXxlbnwwfHx8fDE3ODE4OTM3MjZ8MA&ixlib=rb-4.1.0&q=85&w=1920',
-    alt: 'Summer in Kashmir - Dal Lake Shikara',
+    src: 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&dpr=2',
+    alt: 'Summer in Kashmir - Dal Lake Shikara Boats',
     season: 'Summer',
     emoji: '☀️',
     color: 'text-amber-400'
   },
   {
-    src: 'https://images.unsplash.com/photo-1680223198255-79547edecc9e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwY2hpbmFyJTIwYXV0dW1ufGVufDB8fHx8MTc4MTg5MzcyNnww&ixlib=rb-4.1.0&q=85&w=1920',
-    alt: 'Autumn in Kashmir - Chinar Trees',
+    src: 'https://images.pexels.com/photos/14262339/pexels-photo-14262339.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&dpr=2',
+    alt: 'Autumn in Kashmir - Golden Chinar Tree',
     season: 'Autumn',
     emoji: '🍂',
     color: 'text-orange-500'
   },
   {
-    src: 'https://images.unsplash.com/photo-1568889753852-196c487a536e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwyfHxndWxtYXJnJTIwc25vdyUyMG1vdW50YWluc3xlbnwwfHx8fDE3ODE4OTM3MjZ8MA&ixlib=rb-4.1.0&q=85&w=1920',
-    alt: 'Winter in Kashmir - Gulmarg Snow Mountains',
+    src: 'https://images.pexels.com/photos/32620987/pexels-photo-32620987.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080&dpr=2',
+    alt: 'Winter in Kashmir - Gulmarg Gondola Cable Car',
     season: 'Winter',
     emoji: '❄️',
     color: 'text-blue-400'
@@ -136,9 +136,9 @@ function App() {
           ))}
         </motion.div>
 
-        {/* Premium dark gradient overlay for text readability */}
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.25),transparent_60%)]" />
+        {/* Premium dark gradient overlay for text readability (30-40% darkness) */}
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.50)_0%,rgba(15,20,25,0.35)_35%,rgba(15,20,25,0.60)_70%,rgba(15,20,25,0.92)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
         <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
           <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, ease: 'easeOut' }}
