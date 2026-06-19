@@ -140,35 +140,19 @@ function App() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.25),transparent_60%)]" />
 
-        {/* Season indicator - Premium design with emoji */}
-        <div className="absolute top-20 right-6 z-10">
-          <motion.div
-            key={currentImageIndex}
-            initial={{ opacity: 0, x: 20, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="px-5 py-3 rounded-full bg-white/90 backdrop-blur-md shadow-lg border border-white/40 flex items-center gap-2.5"
-          >
-            <span className={`text-2xl ${SEASONAL_IMAGES[currentImageIndex].color}`}>
-              {SEASONAL_IMAGES[currentImageIndex].emoji}
-            </span>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-charcoal/90 tracking-wider leading-none">
-                {SEASONAL_IMAGES[currentImageIndex].season}
-              </span>
-              <span className="text-[10px] text-charcoal/60 font-medium leading-none mt-0.5">
-                in Kashmir
-              </span>
-            </div>
-          </motion.div>
-        </div>
-
         <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
           <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, ease: 'easeOut' }}
             className="max-w-3xl text-white">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold">
-              <Sparkles className="size-3.5 text-gold" /> Curated by locals · Trusted by travelers
-            </div>
+            <motion.div
+              key={currentImageIndex}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6 }}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold"
+            >
+              <Sparkles className="size-3.5 text-gold" />
+              Curated by locals • Trusted by travelers • {SEASONAL_IMAGES[currentImageIndex].emoji} {SEASONAL_IMAGES[currentImageIndex].season} in Kashmir
+            </motion.div>
             <h1 className="font-display font-bold mt-6 text-[clamp(2.6rem,6.4vw,5.6rem)] leading-[1.02] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.
             </h1>

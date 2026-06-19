@@ -60,13 +60,17 @@ export default function Navbar({ transparent = false }) {
           <AuthButtons solid={solid} />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className={`xl:hidden rounded-full group p-3 ${solid ? '' : 'text-white hover:bg-white/10'}`}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={`xl:hidden rounded-full group p-3.5 ${solid ? 'bg-white/5 hover:bg-white/10 shadow-sm' : 'bg-white/5 hover:bg-white/15 backdrop-blur-sm shadow-lg'} transition-all`}
+              >
                 <motion.div
                   animate={{ rotate: open ? 180 : 0 }}
                   transition={{ duration: 0.3, ease: "easeInOut" }}
                   className="relative"
                 >
-                  <Compass className="size-6 group-hover:rotate-12 transition-transform duration-300" />
+                  <Compass className="size-7 group-hover:rotate-12 transition-transform duration-300" style={{ strokeWidth: 2.2 }} />
                 </motion.div>
               </Button>
             </SheetTrigger>
