@@ -2,8 +2,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/safar/Navbar';
@@ -12,6 +12,30 @@ import PropertyCard from '@/components/safar/PropertyCard';
 import CategoryPills from '@/components/safar/CategoryPills';
 import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
 import { LISTINGS, CATEGORIES, IMG, STATS, TESTIMONIALS, AI_PROMPT_SUGGESTIONS } from '@/lib/data';
+
+// Kashmir seasonal images - premium curated collection
+const SEASONAL_IMAGES = [
+  {
+    src: 'https://images.pexels.com/photos/25786776/pexels-photo-25786776.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
+    alt: 'Spring in Kashmir - Tulip Garden Srinagar',
+    season: 'Spring'
+  },
+  {
+    src: 'https://images.pexels.com/photos/11522584/pexels-photo-11522584.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
+    alt: 'Summer in Kashmir - Dal Lake Houseboat',
+    season: 'Summer'
+  },
+  {
+    src: 'https://images.pexels.com/photos/14262339/pexels-photo-14262339.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
+    alt: 'Autumn in Kashmir - Golden Chinar Trees',
+    season: 'Autumn'
+  },
+  {
+    src: 'https://images.pexels.com/photos/30750204/pexels-photo-30750204.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
+    alt: 'Winter in Kashmir - Gulmarg Snow Mountains',
+    season: 'Winter'
+  }
+];
 
 const destinations = [
   { name: 'Srinagar', tag: 'Floating heritage', img: IMG.dal2, count: 248 },
@@ -37,12 +61,24 @@ function ymdOffset(days) {
 function App() {
   const router = useRouter();
   const [cat, setCat] = useState('all');
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const { scrollY } = useScroll();
+  const heroY = useTransform(scrollY, [0, 500], [0, 150]); // Parallax effect
+  
   // Hero search state — fully functional, drives /explore navigation
   const [where, setWhere] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [guests, setGuests] = useState(2);
   const todayStr = ymdOffset(0);
+
+  // Seasonal slideshow auto-rotation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % SEASONAL_IMAGES.length);
+    }, 7000); // Change every 7 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const onSearch = (e) => {
     if (e) e.preventDefault();
@@ -61,21 +97,45 @@ function App() {
     <main className="min-h-screen bg-background">
       <Navbar transparent />
 
-      {/* HERO */}
+      {/* HERO with Seasonal Slideshow */}
       <section className="relative min-h-[100svh] w-full overflow-hidden">
-        <Image
-          src={IMG.dal2}
-          alt="Dal Lake, Kashmir"
-          fill
-          priority
-          fetchPriority="high"
-          sizes="100vw"
-          quality={70}
-          className="object-cover"
-        />
-        {/* Soft top-to-bottom dark gradient for premium readability */}
+        {/* Seasonal Background Slideshow */}
+        <motion.div style={{ y: heroY }} className="absolute inset-0">
+          {SEASONAL_IMAGES.map((image, index) => (
+            <div
+              key={index}
+              className={`absolute inset-0 transition-opacity duration-[2000ms] ease-in-out ${
+                index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <Image
+                src={image.src}
+                alt={image.alt}
+                fill
+                priority={index === 0}
+                sizes="100vw"
+                quality={75}
+                className="object-cover"
+              />
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Premium dark gradient overlay for text readability */}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.25),transparent_60%)]" />
+
+        {/* Season indicator */}
+        <div className="absolute top-24 right-8 z-10">
+          <motion.div
+            key={currentImageIndex}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="px-4 py-2 rounded-full glass-dark text-white/90 text-xs font-semibold tracking-wider"
+          >
+            {SEASONAL_IMAGES[currentImageIndex].season}
+          </motion.div>
+        </div>
 
         <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
           <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, ease: 'easeOut' }}
@@ -90,12 +150,23 @@ function App() {
               Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-7 h-14 font-semibold text-base">
+              <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 hover:scale-105 transition-all px-7 h-14 font-semibold text-base">
                 <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg hover:-translate-y-0.5 transition-all px-7 h-14 font-semibold text-base">
-                <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
-              </Button>
+              <motion.div
+                animate={{
+                  y: [0, -8, 0],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
+                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg hover:scale-105 transition-all px-7 h-14 font-semibold text-base">
+                  <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
+                </Button>
+              </motion.div>
             </div>
           </motion.div>
 

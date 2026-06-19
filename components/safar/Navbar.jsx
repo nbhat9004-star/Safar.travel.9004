@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Menu, User, UserPlus, Sparkles, MapPin } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
@@ -59,8 +59,14 @@ export default function Navbar({ transparent = false }) {
           <AuthButtons solid={solid} />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className={`xl:hidden rounded-full ${solid ? '' : 'text-white hover:bg-white/10'}`}>
-                <Menu className="size-5" />
+              <Button variant="ghost" size="icon" className={`xl:hidden rounded-full group ${solid ? '' : 'text-white hover:bg-white/10'}`}>
+                <motion.div
+                  animate={{ rotate: open ? 180 : 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="relative"
+                >
+                  <Compass className="size-5 group-hover:rotate-12 transition-transform duration-300" />
+                </motion.div>
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background">
