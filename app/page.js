@@ -16,24 +16,32 @@ import { LISTINGS, CATEGORIES, IMG, STATS, TESTIMONIALS, AI_PROMPT_SUGGESTIONS }
 // Kashmir seasonal images - premium curated collection
 const SEASONAL_IMAGES = [
   {
-    src: 'https://images.pexels.com/photos/25786776/pexels-photo-25786776.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
+    src: 'https://images.unsplash.com/photo-1715933787517-6082995e0d07?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2Mzl8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwdHVsaXAlMjBnYXJkZW58ZW58MHx8fHwxNzgxODkzNzI2fDA&ixlib=rb-4.1.0&q=85&w=1920',
     alt: 'Spring in Kashmir - Tulip Garden Srinagar',
-    season: 'Spring'
+    season: 'Spring',
+    emoji: '🌸',
+    color: 'text-pink-500'
   },
   {
-    src: 'https://images.pexels.com/photos/11522584/pexels-photo-11522584.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
-    alt: 'Summer in Kashmir - Dal Lake Houseboat',
-    season: 'Summer'
+    src: 'https://images.unsplash.com/photo-1662887957904-201296e951cb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxkYWwlMjBsYWtlJTIwc2hpa2FyYXxlbnwwfHx8fDE3ODE4OTM3MjZ8MA&ixlib=rb-4.1.0&q=85&w=1920',
+    alt: 'Summer in Kashmir - Dal Lake Shikara',
+    season: 'Summer',
+    emoji: '☀️',
+    color: 'text-amber-400'
   },
   {
-    src: 'https://images.pexels.com/photos/14262339/pexels-photo-14262339.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
-    alt: 'Autumn in Kashmir - Golden Chinar Trees',
-    season: 'Autumn'
+    src: 'https://images.unsplash.com/photo-1680223198255-79547edecc9e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwY2hpbmFyJTIwYXV0dW1ufGVufDB8fHx8MTc4MTg5MzcyNnww&ixlib=rb-4.1.0&q=85&w=1920',
+    alt: 'Autumn in Kashmir - Chinar Trees',
+    season: 'Autumn',
+    emoji: '🍂',
+    color: 'text-orange-500'
   },
   {
-    src: 'https://images.pexels.com/photos/30750204/pexels-photo-30750204.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1080',
+    src: 'https://images.unsplash.com/photo-1568889753852-196c487a536e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwyfHxndWxtYXJnJTIwc25vdyUyMG1vdW50YWluc3xlbnwwfHx8fDE3ODE4OTM3MjZ8MA&ixlib=rb-4.1.0&q=85&w=1920',
     alt: 'Winter in Kashmir - Gulmarg Snow Mountains',
-    season: 'Winter'
+    season: 'Winter',
+    emoji: '❄️',
+    color: 'text-blue-400'
   }
 ];
 
@@ -102,11 +110,18 @@ function App() {
         {/* Seasonal Background Slideshow */}
         <motion.div style={{ y: heroY }} className="absolute inset-0">
           {SEASONAL_IMAGES.map((image, index) => (
-            <div
+            <motion.div
               key={index}
-              className={`absolute inset-0 transition-opacity duration-[2000ms] ease-in-out ${
-                index === currentImageIndex ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`absolute inset-0`}
+              initial={{ opacity: 0 }}
+              animate={{ 
+                opacity: index === currentImageIndex ? 1 : 0,
+                scale: index === currentImageIndex ? 1 : 1.05
+              }}
+              transition={{ 
+                opacity: { duration: 2, ease: "easeInOut" },
+                scale: { duration: 7, ease: "linear" }
+              }}
             >
               <Image
                 src={image.src}
@@ -114,10 +129,10 @@ function App() {
                 fill
                 priority={index === 0}
                 sizes="100vw"
-                quality={75}
+                quality={90}
                 className="object-cover"
               />
-            </div>
+            </motion.div>
           ))}
         </motion.div>
 
@@ -125,15 +140,26 @@ function App() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.45)_0%,rgba(15,20,25,0.25)_35%,rgba(15,20,25,0.55)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.25),transparent_60%)]" />
 
-        {/* Season indicator */}
-        <div className="absolute top-24 right-8 z-10">
+        {/* Season indicator - Premium design with emoji */}
+        <div className="absolute top-20 right-6 z-10">
           <motion.div
             key={currentImageIndex}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="px-4 py-2 rounded-full glass-dark text-white/90 text-xs font-semibold tracking-wider"
+            initial={{ opacity: 0, x: 20, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="px-5 py-3 rounded-full bg-white/90 backdrop-blur-md shadow-lg border border-white/40 flex items-center gap-2.5"
           >
-            {SEASONAL_IMAGES[currentImageIndex].season}
+            <span className={`text-2xl ${SEASONAL_IMAGES[currentImageIndex].color}`}>
+              {SEASONAL_IMAGES[currentImageIndex].emoji}
+            </span>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-charcoal/90 tracking-wider leading-none">
+                {SEASONAL_IMAGES[currentImageIndex].season}
+              </span>
+              <span className="text-[10px] text-charcoal/60 font-medium leading-none mt-0.5">
+                in Kashmir
+              </span>
+            </div>
           </motion.div>
         </div>
 
@@ -150,9 +176,11 @@ function App() {
               Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 hover:scale-105 transition-all px-7 h-14 font-semibold text-base">
-                <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
-              </Button>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-7 h-14 font-semibold text-base">
+                  <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
+                </Button>
+              </motion.div>
               <motion.div
                 animate={{
                   y: [0, -8, 0],
@@ -162,14 +190,18 @@ function App() {
                   repeat: Infinity,
                   ease: "easeInOut"
                 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg hover:scale-105 transition-all px-7 h-14 font-semibold text-base">
+                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-7 h-14 font-semibold text-base">
                   <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
                 </Button>
               </motion.div>
-              <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-emerald2 hover:text-white shadow-lg hover:scale-105 transition-all px-7 h-14 font-semibold text-base">
-                <Link href="/create-listing-ai"><Sparkles className="mr-2 size-4 text-emerald2" /> Create Listing with AI</Link>
-              </Button>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-emerald2 hover:text-white shadow-lg transition-all px-7 h-14 font-semibold text-base">
+                  <Link href="/create-listing-ai"><Sparkles className="mr-2 size-4 text-emerald2" /> Create Listing with AI</Link>
+                </Button>
+              </motion.div>
             </div>
           </motion.div>
 
