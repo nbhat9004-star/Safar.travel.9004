@@ -230,6 +230,50 @@ async function route(request, { params }) {
     return setAuthCookie(res, token);
   }
 
+  // POST /api/auth/verify-google - Firebase Google Authentication
+  if (path === '/auth/verify-google' && method === 'POST') {
+    const { idToken } = await readBody(request);
+    if (!idToken) return err('Firebase ID token is required');
+    
+    // Verify token with Firebase Admin SDK
+    const verification = await verifyFirebaseToken(idToken);
+    if (!verification.success) return err('Invalid Firebase token', 401);
+    
+    const { uid } = verification;
+    const decodedToken = await (await import('firebase-admin')).auth().verifyIdToken(idToken);
+    const email = decodedToken.email;
+    const name = decodedToken.name || email.split('@')[0];
+    
+    if (!email) return err('Email not found in token', 400);
+    
+    const users = await getCollection('users');
+    let user = await users.findOne({ email: email.toLowerCase() });
+    
+    // Auto-create user if first time login
+    if (!user) {
+      user = {
+        id: uuid(),
+        name,
+        email: email.toLowerCase(),
+        role: 'traveler',
+        avatar: decodedToken.picture || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=0F3D2E`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await users.insertOne(user);
+      
+      // Send welcome email (async, don't block)
+      sendWelcomeEmail(user).catch((error) => {
+        console.error('Failed to send welcome email:', error);
+      });
+    }
+    
+    // Return JWT token (same as email/password flow)
+    const token = signToken({ uid: user.id, role: user.role });
+    const res = ok({ user: publicUser(user), token });
+    return setAuthCookie(res, token);
+  }
+
   // ---------- ROLE-GUARDED USER ENDPOINTS ----------
   if (path === '/users' && method === 'GET') {
     const me = await getCurrentUser(request);
