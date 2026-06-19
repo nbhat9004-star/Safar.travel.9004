@@ -167,6 +167,9 @@ function App() {
                   <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
                 </Button>
               </motion.div>
+              <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-emerald2 hover:text-white shadow-lg hover:scale-105 transition-all px-7 h-14 font-semibold text-base">
+                <Link href="/create-listing-ai"><Sparkles className="mr-2 size-4 text-emerald2" /> Create Listing with AI</Link>
+              </Button>
             </div>
           </motion.div>
 

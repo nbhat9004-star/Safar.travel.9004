@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
+import OpenAI from 'openai';
 import {
   hashPassword, verifyPassword, signToken,
   setAuthCookie, clearAuthCookie, getCurrentUser,
@@ -19,6 +20,9 @@ import {
   sendPasswordResetEmail,
 } from '@/lib/email';
 import { verifyFirebaseToken } from '@/lib/firebase-admin';
+
+// Initialize OpenAI for AI Wizard
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const json = (data, status = 200) => NextResponse.json(data, { status });
 const ok = (data = {}, status = 200) => json({ ok: true, ...data }, status);
@@ -1203,6 +1207,186 @@ async function route(request, { params }) {
     
     const { _id, ...rest } = submission;
     return ok({ contact: rest, message: 'Your message has been sent successfully' }, 201);
+  }
+
+  // POST /api/ai-wizard/chat - AI Listing Wizard Conversation
+  if (path === '/ai-wizard/chat' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+
+    const { message, conversationId, messages: conversationHistory } = await readBody(request);
+    if (!message) return err('Message is required');
+
+    try {
+      // Build conversation context for OpenAI
+      const systemPrompt = `You are Safar AI, a friendly and efficient listing assistant for Safar - a premium Kashmir tourism marketplace.
+
+Your job is to help hosts create professional listings through natural conversation. You support:
+- Accommodations: Hotels, Houseboats, Villas, Camps, Guest Houses
+- Transport: Taxis, Car Rentals, Bike Rentals, Airport Transfers
+- Tour Guides: Local guides with language and area expertise
+- Experiences: Adventure activities, cultural experiences, local tours
+- Rentals: Equipment, boats, vehicles
+
+IMPORTANT GUIDELINES:
+1. Detect user's preferred language (English, Urdu, Roman Kashmiri) and respond accordingly
+2. Be conversational, warm, and encouraging
+3. Ask ONE question at a time - don't overwhelm the host
+4. Infer missing information when reasonable (e.g., if they say "houseboat in Dal Lake", assume location is Srinagar)
+5. Collect these ESSENTIAL fields based on category:
+   - ALL: name/title, category, location, price, description
+   - Accommodations: rooms, capacity, amenities
+   - Transport: vehicle type, capacity, service area
+   - Guides: languages, experience, areas covered
+   - Experiences: duration, difficulty, inclusions
+6. After collecting essential info, generate a professional listing with:
+   - SEO-optimized title (50-80 chars)
+   - Engaging description (150-300 words)
+   - 3-5 highlight points
+   - Relevant tags
+7. Show preview and ask for confirmation
+8. When confirmed, return listing data in JSON format
+
+Be helpful, efficient, and make the process feel easy!`;
+
+      const chatMessages = [
+        { role: 'system', content: systemPrompt },
+        ...conversationHistory.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+        { role: 'user', content: message }
+      ];
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: chatMessages,
+        temperature: 0.7,
+        max_tokens: 600
+      });
+
+      const aiResponse = completion.choices[0].message.content;
+
+      // Analyze progress and detect if listing is complete
+      const isComplete = aiResponse.toLowerCase().includes('confirm') || 
+                        aiResponse.toLowerCase().includes('looks good') ||
+                        conversationHistory.length > 20;
+
+      // Calculate progress (rough estimation based on conversation length)
+      const progress = Math.min(Math.floor((conversationHistory.length / 10) * 100), 95);
+
+      // Determine stage
+      let stage = 'collecting';
+      if (conversationHistory.length < 2) stage = 'greeting';
+      if (conversationHistory.length > 8) stage = 'reviewing';
+
+      return ok({
+        response: aiResponse,
+        progress,
+        stage,
+        conversationId
+      });
+
+    } catch (error) {
+      console.error('AI Wizard chat error:', error);
+      return err('Failed to process message. Please try again.');
+    }
+  }
+
+  // POST /api/ai-wizard/finalize - Finalize and Save Listing
+  if (path === '/ai-wizard/finalize' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+
+    const { listing, conversationId } = await readBody(request);
+    if (!listing) return err('Listing data is required');
+
+    try {
+      // Extract listing data from AI conversation
+      // Use OpenAI to parse and structure the listing
+      const structurePrompt = `Extract structured listing data from this conversation summary and return ONLY valid JSON:
+
+Conversation Summary: ${JSON.stringify(listing)}
+
+Return this exact JSON structure (fill with extracted data):
+{
+  "title": "Professional SEO-optimized title (50-80 chars)",
+  "category": "stay|transport|experience|tour",
+  "location": "City, Kashmir",
+  "price": 5000,
+  "description": "Engaging 150-300 word description highlighting unique features and guest experience",
+  "highlights": ["Feature 1", "Feature 2", "Feature 3"],
+  "amenities": ["amenity1", "amenity2"] or [],
+  "capacity": 4 or null,
+  "rooms": 2 or null,
+  "duration": "2 hours" or null,
+  "tags": ["tag1", "tag2", "tag3"]
+}
+
+Be smart about inferring the category. Examples:
+- Houseboat, Hotel, Villa, Camp → "stay"
+- Taxi, Car, Bike → "transport"
+- Guide, Tour → "tour"
+- Activity, Experience → "experience"
+
+Return ONLY the JSON, no other text.`;
+
+      const structureCompletion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: structurePrompt }],
+        temperature: 0.3,
+        max_tokens: 800
+      });
+
+      let structuredData;
+      try {
+        const jsonStr = structureCompletion.choices[0].message.content.trim();
+        structuredData = JSON.parse(jsonStr);
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError);
+        return err('Failed to structure listing data');
+      }
+
+      // Create listing in database (reuse existing schema)
+      const listings = await getCollection('listings');
+      
+      const newListing = {
+        id: uuid(),
+        ...structuredData,
+        host: me.id,
+        hostName: me.name,
+        hostEmail: me.email,
+        status: 'pending', // Requires admin approval
+        views: 0,
+        bookings: 0,
+        rating: 0,
+        reviews: 0,
+        featured: false,
+        images: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdVia: 'ai-wizard',
+        conversationId
+      };
+
+      await listings.insertOne(newListing);
+
+      // Update user role to host if not already
+      if (me.role !== 'host' && me.role !== 'admin') {
+        const users = await getCollection('users');
+        await users.updateOne(
+          { id: me.id },
+          { $set: { role: 'host', updatedAt: new Date() } }
+        );
+      }
+
+      const { _id, ...listingData } = newListing;
+      return ok({ 
+        listing: listingData,
+        message: 'Listing created successfully and submitted for approval'
+      }, 201);
+
+    } catch (error) {
+      console.error('AI Wizard finalize error:', error);
+      return err('Failed to create listing. Please try again.');
+    }
   }
 
   // Health
