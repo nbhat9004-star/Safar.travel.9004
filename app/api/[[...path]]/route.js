@@ -21,8 +21,11 @@ import {
 } from '@/lib/email';
 import { verifyFirebaseToken } from '@/lib/firebase-admin';
 
-// Initialize OpenAI for AI Wizard
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Initialize OpenAI for AI Wizard (using Emergent LLM proxy)
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: 'https://llm.emergentmethods.ai/v1'
+});
 
 const json = (data, status = 200) => NextResponse.json(data, { status });
 const ok = (data = {}, status = 200) => json({ ok: true, ...data }, status);
