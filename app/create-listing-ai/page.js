@@ -19,7 +19,7 @@ const CATEGORY_SUGGESTIONS = [
 
 export default function AIListingWizard() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [messages, setMessages] = useState([
     { 
       role: 'assistant', 
@@ -36,6 +36,9 @@ export default function AIListingWizard() {
   const inputRef = useRef(null);
 
   useEffect(() => {
+    // Wait for auth state to load before checking authentication
+    if (loading) return;
+    
     if (!user) {
       toast.error('Please sign in to create a listing');
       router.push('/');
@@ -49,7 +52,7 @@ export default function AIListingWizard() {
     }
     // Generate conversation ID
     setConversationId(`wizard-${user.id}-${Date.now()}`);
-  }, [user, router]);
+  }, [user, loading, router]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -161,6 +164,23 @@ export default function AIListingWizard() {
       sendMessage();
     }
   };
+
+  // Show loading state while auth is being checked
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container pt-20 pb-10 max-w-4xl">
+          <div className="flex items-center justify-center h-[60vh]">
+            <div className="text-center">
+              <Loader2 className="size-8 animate-spin text-emerald2 mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (!user) return null;
 
