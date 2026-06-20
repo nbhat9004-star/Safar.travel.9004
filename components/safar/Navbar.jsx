@@ -15,7 +15,8 @@ const NAV = [
   { href: '/explore?cat=tour',        label: 'Tour Guides' },
   { href: '/ai-planner',              label: 'AI Planner' },
   { href: '/add-listing',             label: 'Become a Host' },
-  { href: '/create-listing-ai',       label: 'AI Host Wizard', hostOnly: true },
+  // AI Host Wizard hidden - feature reserved for future activation
+  // { href: '/create-listing-ai',       label: 'AI Host Wizard', hostOnly: true },
 ];
 
 export default function Navbar({ transparent = false }) {

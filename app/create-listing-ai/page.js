@@ -20,6 +20,16 @@ const CATEGORY_SUGGESTIONS = [
 export default function AIListingWizard() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  
+  // Feature disabled - redirect to standard host listing page
+  useEffect(() => {
+    router.push('/add-listing');
+  }, [router]);
+
+  // Return null while redirecting
+  return null;
+  
+  /* AI Host Wizard UI code preserved for future activation
   const [messages, setMessages] = useState([
     { 
       role: 'assistant', 
@@ -348,4 +358,6 @@ export default function AIListingWizard() {
       </div>
     </main>
   );
+}
+End of preserved AI Host Wizard code - feature disabled for launch */
 }
