@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
-import OpenAI from 'openai';
 import {
   hashPassword, verifyPassword, signToken,
   setAuthCookie, clearAuthCookie, getCurrentUser,
@@ -21,10 +20,7 @@ import {
 } from '@/lib/email';
 import { verifyFirebaseToken } from '@/lib/firebase-admin';
 
-// Initialize OpenAI for AI Wizard (Emergent LLM key works directly in Emergent environment)
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Note: OpenAI SDK not used - using fetch API directly for Emergent LLM compatibility
 
 const json = (data, status = 200) => NextResponse.json(data, { status });
 const ok = (data = {}, status = 200) => json({ ok: true, ...data }, status);
@@ -1257,13 +1253,28 @@ Be helpful, efficient, and make the process feel easy!`;
         { role: 'user', content: message }
       ];
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: chatMessages,
-        temperature: 0.7,
-        max_tokens: 600
+      // Use fetch API directly for Emergent LLM compatibility
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: chatMessages,
+          temperature: 0.7,
+          max_tokens: 600
+        })
       });
 
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('OpenAI API error:', error);
+        throw new Error(error.error?.message || 'AI request failed');
+      }
+
+      const completion = await response.json();
       const aiResponse = completion.choices[0].message.content;
 
       // Analyze progress and detect if listing is complete
