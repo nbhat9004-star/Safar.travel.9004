@@ -2409,3 +2409,239 @@ agent_communication:
       - GET /api/auth/me
       
       Please run comprehensive backend tests focusing on the new phone auth endpoint.
+
+---
+
+## 🆕 Email Verification Flow Implementation (main agent, 2026-07)
+
+backend:
+  - task: "Email verification + Welcome + Resend + Gating"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js, /app/lib/email.js, /app/app/auth/verify-email/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Implemented email verification for the custom email/password auth.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ EMAIL VERIFICATION FLOW - ALL TESTS PASSED (15/15)
+          
+          Test Date: 2026-06-23
+          Test File: /app/email_verification_test.py
+          Test Duration: ~10 seconds
+          Success Rate: 100%
+          
+          COMPREHENSIVE TEST COVERAGE (All 12 Scenarios + 3 Sub-scenarios):
+          
+          **REGISTRATION & VERIFICATION:**
+          ✅ Scenario 1: POST /api/auth/register → emailVerified=false, token returned
+          ✅ Scenario 2: DB verification → verificationToken (64 chars hex) + verificationExpiry (24h) present
+          ✅ Scenario 3: GET /api/auth/verify-email?token=<valid> → 200, emailVerified=true, token/expiry cleared
+          ✅ Scenario 4: Same token again → 400 "invalid or has already been used"
+          ✅ Scenario 5: Verify without token → 400
+          ✅ Scenario 6: Expired token → 400 "expired" (manually set expiry to past)
+          
+          **RESEND VERIFICATION:**
+          ✅ Scenario 7: Resend for unverified user → 200, NEW token generated, fresh 24h expiry
+          ✅ Scenario 8: Resend for verified user → 200 generic, no token added (correct)
+          ✅ Scenario 9: Resend for non-existent email → 200 generic (no account enumeration)
+          
+          **GATING (requireVerifiedEmail):**
+          ✅ Scenario 10a: Unverified host + POST /api/listings → 403 "Please verify your email address before continuing."
+          ✅ Scenario 10b: Unverified user + POST /api/bookings → 403 "Please verify your email address before continuing."
+          ✅ Scenario 10c: After verification → POST /api/listings succeeds (201 Created)
+          
+          **PASSWORD RESET REGRESSION:**
+          ✅ Scenario 11a: POST /api/auth/forgot-password → 200, resetToken + resetTokenExpiry set in DB
+          ✅ Scenario 11b: POST /api/auth/reset-password → 200, password updated, resetToken cleared
+          
+          **EXISTING REGRESSION:**
+          ✅ Scenario 12: Login & GET /api/auth/me → emailVerified field present in both responses
+          
+          IMPLEMENTATION VERIFIED:
+          ✅ POST /api/auth/register - Sets emailVerified=false, generates 64-char hex token, 24h expiry
+          ✅ GET /api/auth/verify-email - Validates token, checks expiry, updates DB, clears token
+          ✅ POST /api/auth/resend-verification - Generates new token for unverified users only
+          ✅ requireVerifiedEmail() helper - Correctly gates POST /api/listings and POST /api/bookings
+          ✅ Password reset flow - Still working (resetToken/resetTokenExpiry separate from verification)
+          ✅ Email templates - Verification email subject: "Welcome to Safar – Verify Your Email Address"
+          ✅ Welcome email - Sent after successful verification (async, fire-and-forget)
+          ✅ Generic responses - No account enumeration in resend-verification endpoint
+          
+          DATABASE SCHEMA VERIFIED:
+          ✅ users.emailVerified (boolean) - Correctly set to false on registration, true after verification
+          ✅ users.verificationToken (string, 64 chars) - Generated on registration, cleared after verification
+          ✅ users.verificationExpiry (Date, 24h) - Set on registration, cleared after verification
+          ✅ users.resetToken (string) - Separate from verificationToken, used for password reset
+          ✅ users.resetTokenExpiry (Date, 1h) - Separate from verificationExpiry
+          
+          GOOGLE/PHONE AUTH VERIFIED (Code Review):
+          ✅ POST /api/auth/verify-google - New users get emailVerified=true (line 355)
+          ✅ POST /api/auth/verify-phone - New users get emailVerified=true (line 308)
+          
+          EDGE CASES TESTED:
+          ✅ Token reuse prevention - Second use returns 400
+          ✅ Expired token handling - Returns 400 with clear message
+          ✅ Missing token - Returns 400
+          ✅ Already verified user - Graceful handling with alreadyVerified flag
+          ✅ Account enumeration prevention - Generic responses for resend-verification
+          
+          ENVIRONMENT SETUP:
+          ✅ Created /app/.env.local with MONGO_URL, DB_NAME, JWT_SECRET, NEXT_PUBLIC_BASE_URL
+          ✅ MongoDB connection working (mongodb://localhost:27017/safar)
+          ✅ Next.js server restarted to pick up environment variables
+          
+          NO CRITICAL ISSUES FOUND. ALL ENDPOINTS WORKING CORRECTLY.
+          
+          The Email Verification flow is production-ready and fully functional.
+          
+          CHANGES:
+          1. POST /api/auth/register
+             - Now sets emailVerified: false on new users
+             - Generates a 32-byte hex verificationToken with 24h verificationExpiry
+             - Sends VERIFICATION email (not welcome) via sendVerificationEmail()
+             - Subject: "Welcome to Safar – Verify Your Email Address"
+             - Returns { user, token, message } where user.emailVerified === false
+          
+          2. GET /api/auth/verify-email?token=...   (NEW)
+             - Looks up user by verificationToken; checks expiry
+             - Marks emailVerified: true, $unset verificationToken & verificationExpiry
+             - Sends Welcome email (subject: "Welcome to Safar")
+             - Returns { verified: true, message }
+             - Already-verified token (cleanup path) → { alreadyVerified: true }
+             - Invalid token → 400 "invalid or has already been used"
+             - Expired token → 400 "expired"
+          
+          3. POST /api/auth/resend-verification    (NEW)
+             - Body: { email }
+             - Issues a new token (invalidates the old one by overwrite)
+             - Sends a fresh verification email
+             - Returns generic message in all cases (no account enumeration)
+          
+          4. POST /api/auth/verify-google
+             - New auto-created users now have emailVerified: true (Google trusted)
+          
+          5. POST /api/auth/verify-phone
+             - New auto-created phone users now have emailVerified: true (phone-only, no email gate)
+          
+          6. GATING (uses new helper requireVerifiedEmail(me))
+             Returns 403 "Please verify your email address before continuing." when me.email exists and me.emailVerified !== true:
+             - POST /api/listings        (host create listing)
+             - POST /api/bookings        (any booking creation)
+             - POST /api/ai-wizard/finalize (host onboarding via AI flow)
+          
+          7. Email templates rebranded in /app/lib/email.js
+             - welcome: subject "Welcome to Safar", references support@safarcurated.com
+             - emailVerification: subject "Welcome to Safar – Verify Your Email Address"
+             - passwordReset: subject "Reset Your Safar Password"
+             - FROM default updated to "Safar <noreply@safarcurated.com>" (env override respected)
+          
+          8. New page /app/app/auth/verify-email/page.js
+             - Reads ?token, calls GET /api/auth/verify-email, shows success / already-verified / expired-or-invalid states
+          
+          DATABASE FIELDS ADDED to users collection:
+            emailVerified: boolean
+            verificationToken: string (hex, 64 chars)
+            verificationExpiry: Date
+          (No other schema changes; existing reset flow already uses resetToken/resetTokenExpiry.)
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Please run a focused backend test for the email-verification flow ONLY.
+      
+      Scenarios to cover:
+      1. POST /api/auth/register with a fresh email — expect 200, user.emailVerified === false, response includes token + cookie.
+         (Verification email send is async/best-effort — do NOT block on transport.)
+      2. Fetch the inserted user from MongoDB to capture verificationToken & verificationExpiry; assert both present.
+      3. GET /api/auth/verify-email?token=<correct token> — expect 200, { verified: true }. Confirm DB: emailVerified=true, verificationToken & verificationExpiry are unset.
+      4. GET /api/auth/verify-email?token=<correct token> a SECOND time — token has been cleared → expect 400 "invalid or has already been used".
+      5. GET /api/auth/verify-email without token — expect 400.
+      6. Expired token: manually update verificationExpiry to a past date for a new registration's token, then GET /api/auth/verify-email — expect 400 "expired".
+      7. POST /api/auth/resend-verification with the email of an UNVERIFIED user — expect 200 generic message; DB should show a NEW verificationToken (different from old) and a fresh 24h expiry.
+      8. POST /api/auth/resend-verification with a VERIFIED user's email — expect 200 generic message; DB should NOT change (no new token).
+      9. POST /api/auth/resend-verification with a non-existent email — expect 200 generic message.
+      10. GATING:
+          a. Register a fresh user (unverified). Use their JWT and PATCH (or DB-promote) their role to 'host', then POST /api/listings with valid payload — expect 403 "Please verify your email address before continuing."
+          b. Same unverified user — POST /api/bookings on an approved listing → expect 403.
+          c. Verify the user (GET /api/auth/verify-email?token=...) then repeat (a) and (b) — should succeed (or fail for non-verification reasons; treat any non-403/non-verification error as acceptable for this test).
+      11. PASSWORD RESET regression:
+          a. POST /api/auth/forgot-password { email } — expect 200, resetToken set in DB.
+          b. POST /api/auth/reset-password { token, password } — expect 200, password updated, token unset.
+          c. Subject of generated email object (if accessible) should be "Reset Your Safar Password".
+      12. Existing regression — login & /auth/me still return user with emailVerified field present (true/false as appropriate).
+      
+      IMPORTANT: do NOT attempt to assert SMTP/Resend transport delivery; the codebase uses async fire-and-forget sends. Only assert the DB side-effects and HTTP responses. Use existing MONGO_URL.
+      
+      Do NOT test Google or Phone auth flows (already covered) beyond confirming new users created via those flows have emailVerified=true (can verify by inspecting code, no need to mock Firebase).
+
+  - agent: "testing"
+    message: |
+      ✅ EMAIL VERIFICATION FLOW BACKEND TESTING COMPLETE - ALL TESTS PASSED (15/15)
+      
+      Test Date: 2026-06-23 18:30:32
+      Test File: /app/email_verification_test.py
+      Test Results: 15 passed, 0 failed (100% success rate)
+      
+      **COMPREHENSIVE TEST COVERAGE:**
+      
+      **✅ REGISTRATION & VERIFICATION (6/6 tests passed):**
+      - POST /api/auth/register → emailVerified=false, token returned
+      - DB verification → verificationToken (64 chars) + verificationExpiry (24h) present
+      - GET /api/auth/verify-email?token=<valid> → 200, emailVerified=true, token/expiry cleared
+      - Same token again → 400 "invalid or has already been used"
+      - Verify without token → 400
+      - Expired token → 400 "expired"
+      
+      **✅ RESEND VERIFICATION (3/3 tests passed):**
+      - Unverified user → 200, NEW token generated, fresh 24h expiry
+      - Verified user → 200 generic, no token added
+      - Non-existent email → 200 generic (no account enumeration)
+      
+      **✅ GATING (3/3 tests passed):**
+      - Unverified host + POST /api/listings → 403 "Please verify your email address before continuing."
+      - Unverified user + POST /api/bookings → 403 "Please verify your email address before continuing."
+      - After verification → POST /api/listings succeeds (201 Created)
+      
+      **✅ PASSWORD RESET REGRESSION (2/2 tests passed):**
+      - POST /api/auth/forgot-password → 200, resetToken set in DB
+      - POST /api/auth/reset-password → 200, password updated, token cleared
+      
+      **✅ EXISTING REGRESSION (1/1 test passed):**
+      - Login & GET /api/auth/me → emailVerified field present in both
+      
+      **IMPLEMENTATION VERIFIED:**
+      ✅ POST /api/auth/register - Sets emailVerified=false, generates 64-char hex token, 24h expiry
+      ✅ GET /api/auth/verify-email - Validates token, checks expiry, updates DB, clears token
+      ✅ POST /api/auth/resend-verification - Generates new token for unverified users only
+      ✅ requireVerifiedEmail() helper - Correctly gates POST /api/listings and POST /api/bookings
+      ✅ Password reset flow - Still working (resetToken/resetTokenExpiry separate)
+      ✅ Email templates - Correct subjects for verification, welcome, and password reset
+      ✅ Generic responses - No account enumeration in resend-verification
+      
+      **DATABASE SCHEMA VERIFIED:**
+      ✅ users.emailVerified (boolean) - false on registration, true after verification
+      ✅ users.verificationToken (string, 64 chars) - generated on registration, cleared after verification
+      ✅ users.verificationExpiry (Date, 24h) - set on registration, cleared after verification
+      ✅ users.resetToken (string) - separate from verificationToken
+      ✅ users.resetTokenExpiry (Date, 1h) - separate from verificationExpiry
+      
+      **GOOGLE/PHONE AUTH VERIFIED (Code Review):**
+      ✅ POST /api/auth/verify-google - New users get emailVerified=true (line 355 in route.js)
+      ✅ POST /api/auth/verify-phone - New users get emailVerified=true (line 308 in route.js)
+      
+      **ENVIRONMENT SETUP:**
+      ✅ Created /app/.env.local with MONGO_URL, DB_NAME, JWT_SECRET, NEXT_PUBLIC_BASE_URL
+      ✅ MongoDB connection working (mongodb://localhost:27017/safar)
+      ✅ Next.js server restarted successfully
+      
+      **NO CRITICAL ISSUES FOUND. ALL ENDPOINTS WORKING CORRECTLY.**
+      
+      The Email Verification flow is production-ready and fully functional. All 12 scenarios specified by the main agent have been tested and passed.
+

@@ -9,6 +9,7 @@ import { getCollection, ensureIndexes } from '@/lib/db';
 import { LISTINGS as DEMO_LISTINGS } from '@/lib/data';
 import {
   sendWelcomeEmail,
+  sendVerificationEmail,
   sendBookingConfirmation,
   sendBookingNotificationToHost,
   sendBookingCancellationEmail,
@@ -30,6 +31,29 @@ const readBody = async (request) => { try { return await request.json(); } catch
 
 const CATEGORIES = ['stay','transport','experience','tour'];
 const STATUSES = ['pending','approved','rejected'];
+
+// ---------- Email verification helpers ----------
+async function generateVerificationToken() {
+  const crypto = await import('crypto');
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+  return { token, expiry };
+}
+
+function buildVerificationLink(token) {
+  const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+  return `${base}/auth/verify-email?token=${token}`;
+}
+
+// Returns { ok:true } if user can perform email-gated actions.
+// Email/password users must have emailVerified=true. Phone-only (no email) users pass.
+function requireVerifiedEmail(me) {
+  if (!me) return { ok: false, status: 401, error: 'Authentication required' };
+  if (me.email && !me.emailVerified) {
+    return { ok: false, status: 403, error: 'Please verify your email address before continuing.' };
+  }
+  return { ok: true };
+}
 
 // ---------- Seeding: ensure demo listings exist (idempotent) ----------
 let _seeded = false;
@@ -99,21 +123,25 @@ async function route(request, { params }) {
     const users = await getCollection('users');
     const existing = await users.findOne({ email: email.toLowerCase() });
     if (existing) return err('An account with this email already exists', 409);
+    const { token: verificationToken, expiry: verificationExpiry } = await generateVerificationToken();
     const user = {
       id: uuid(), name: name.trim(), email: email.toLowerCase(), role: userRole,
       passwordHash: await hashPassword(password),
       avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=0F3D2E`,
+      emailVerified: false,
+      verificationToken,
+      verificationExpiry,
       createdAt: new Date(), updatedAt: new Date(),
     };
     await users.insertOne(user);
     const token = signToken({ uid: user.id, role: user.role });
-    
-    // Send welcome email (async, don't block response)
-    sendWelcomeEmail(user).catch((error) => {
-      console.error('Failed to send welcome email:', error);
+
+    // Send verification email (async, don't block response)
+    sendVerificationEmail(user, buildVerificationLink(verificationToken)).catch((error) => {
+      console.error('Failed to send verification email:', error);
     });
-    
-    const res = ok({ user: publicUser(user), token });
+
+    const res = ok({ user: publicUser(user), token, message: 'Account created. Please check your email to verify your address.' });
     return setAuthCookie(res, token);
   }
   if (path === '/auth/login' && method === 'POST') {
@@ -183,6 +211,70 @@ async function route(request, { params }) {
     return ok({ message: 'Password reset successful' });
   }
   
+  // GET /api/auth/verify-email?token=...
+  if (path === '/auth/verify-email' && method === 'GET') {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    if (!token) return err('Verification token is required', 400);
+
+    const users = await getCollection('users');
+    const user = await users.findOne({ verificationToken: token });
+
+    if (!user) {
+      // Maybe already verified? Don't reveal more.
+      return err('This verification link is invalid or has already been used.', 400);
+    }
+    if (user.emailVerified) {
+      // Token still present but user already verified — clean up and respond gracefully
+      await users.updateOne({ id: user.id }, { $unset: { verificationToken: '', verificationExpiry: '' } });
+      return ok({ alreadyVerified: true, message: 'Your email is already verified.' });
+    }
+    if (!user.verificationExpiry || new Date(user.verificationExpiry) < new Date()) {
+      return err('This verification link has expired. Please request a new one.', 400);
+    }
+
+    await users.updateOne(
+      { id: user.id },
+      {
+        $set: { emailVerified: true, updatedAt: new Date() },
+        $unset: { verificationToken: '', verificationExpiry: '' },
+      }
+    );
+
+    // Send welcome email after successful verification (async)
+    sendWelcomeEmail({ ...user, emailVerified: true }).catch((error) => {
+      console.error('Failed to send welcome email:', error);
+    });
+
+    return ok({ verified: true, message: 'Your email has been verified.' });
+  }
+
+  // POST /api/auth/resend-verification  { email }
+  if (path === '/auth/resend-verification' && method === 'POST') {
+    const { email } = await readBody(request);
+    if (!isEmail(email)) return err('Valid email required');
+
+    const users = await getCollection('users');
+    const user = await users.findOne({ email: email.toLowerCase() });
+
+    // Generic response to avoid account enumeration
+    const generic = { message: 'If an unverified account exists for this email, a new verification link has been sent.' };
+    if (!user) return ok(generic);
+    if (user.emailVerified) return ok(generic);
+
+    const { token: verificationToken, expiry: verificationExpiry } = await generateVerificationToken();
+    await users.updateOne(
+      { id: user.id },
+      { $set: { verificationToken, verificationExpiry, updatedAt: new Date() } }
+    );
+
+    sendVerificationEmail({ ...user, name: user.name }, buildVerificationLink(verificationToken)).catch((error) => {
+      console.error('Failed to resend verification email:', error);
+    });
+
+    return ok(generic);
+  }
+
   if (path === '/auth/me' && method === 'GET') {
     const me = await getCurrentUser(request);
     if (!me) return err('Not authenticated', 401);
@@ -213,6 +305,7 @@ async function route(request, { params }) {
         phone,
         role: 'traveler',
         avatar: `https://api.dicebear.com/9.x/initials/svg?seed=${phoneDigits}&backgroundColor=0F3D2E`,
+        emailVerified: true, // phone OTP login — no email gate
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -259,6 +352,7 @@ async function route(request, { params }) {
         email: email.toLowerCase(),
         role: 'traveler',
         avatar: decodedToken.picture || `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundColor=0F3D2E`,
+        emailVerified: true, // Google has already verified the email
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -541,6 +635,7 @@ async function route(request, { params }) {
   if (path === '/listings' && method === 'POST') {
     const me = await getCurrentUser(request);
     const g = requireRole(me, ['host','admin']); if (!g.ok) return err(g.error, g.status);
+    const v = requireVerifiedEmail(me); if (!v.ok) return err(v.error, v.status);
     const body = await readBody(request);
     const { title, description, category, subcategory, location, price, images, amenities, services, duration, inventoryTypes } = body;
     if (!title || title.trim().length < 3) return err('Title is required (min 3 chars)');
@@ -826,6 +921,7 @@ async function route(request, { params }) {
   if (path === '/bookings' && method === 'POST') {
     const me = await getCurrentUser(request);
     if (!me) return err('Authentication required', 401);
+    const v = requireVerifiedEmail(me); if (!v.ok) return err(v.error, v.status);
     const { listingId, checkInDate, checkOutDate, guests, inventoryTypeId } = await readBody(request);
     if (!listingId) return err('listingId is required');
     const ci = new Date(checkInDate), co = new Date(checkOutDate);
@@ -1307,6 +1403,7 @@ Be helpful, efficient, and make the process feel easy!`;
   if (path === '/ai-wizard/finalize' && method === 'POST') {
     const me = await getCurrentUser(request);
     if (!me) return err('Authentication required', 401);
+    const v = requireVerifiedEmail(me); if (!v.ok) return err(v.error, v.status);
 
     const { listing, conversationId } = await readBody(request);
     if (!listing) return err('Listing data is required');
