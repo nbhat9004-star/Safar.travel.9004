@@ -31,6 +31,7 @@ function PlannerInner() {
   const [budget, setBudget] = useState(40000);
   const [travelers, setTravelers] = useState(2);
   const [showPlan, setShowPlan] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Lead Capture modal state
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -56,16 +57,45 @@ function PlannerInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planIdParam, user?.id]);
 
-  const send = (txt) => {
+  const send = async (txt) => {
     const q = (txt ?? input).trim();
-    if (!q) return;
-    const next = [...messages, { role: 'user', text: q }];
+    if (!q || isLoading) return;
+    
+    const userMessage = { role: 'user', text: q };
+    const next = [...messages, userMessage];
     setMessages(next);
     setInput('');
-    setTimeout(() => {
-      setMessages([...next, { role: 'ai', text: `Got it! Building a ${days}-day plan for ${travelers} traveler(s) under ₹${budget.toLocaleString('en-IN')}. Scroll right → your itinerary is ready.` }]);
-      setShowPlan(true);
-    }, 700);
+    setIsLoading(true);
+
+    try {
+      // Call real Gemini AI API
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `${q}\n\nContext: Planning a ${days}-day trip for ${travelers} traveler(s) with a budget of ₹${budget.toLocaleString('en-IN')}.`,
+          conversationHistory: messages.slice(-6), // Last 6 messages for context
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
+      }
+
+      const data = await response.json();
+      setMessages([...next, { role: 'ai', text: data.reply }]);
+      
+      // Optionally show plan after certain keywords
+      if (q.toLowerCase().includes('itinerary') || q.toLowerCase().includes('plan') || q.toLowerCase().includes('suggest')) {
+        setShowPlan(true);
+      }
+    } catch (error) {
+      console.error('AI Chat error:', error);
+      toast.error('Failed to get AI response. Please try again.');
+      setMessages([...next, { role: 'ai', text: 'I apologize, but I'm having trouble processing your request right now. Please try again in a moment.' }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const itinerary = [
@@ -177,8 +207,21 @@ function PlannerInner() {
               ))}
             </div>
             <div className="p-4 flex items-center gap-2 border-t">
-              <input value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={(e)=>e.key==='Enter' && send()} placeholder="Describe your dream Kashmir trip..." className="flex-1 bg-secondary rounded-full px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600/30" />
-              <button onClick={()=>send()} className="size-11 grid place-items-center rounded-full bg-gradient-emerald text-white shadow-lg"><Send className="size-4" /></button>
+              <input 
+                value={input} 
+                onChange={(e)=>setInput(e.target.value)} 
+                onKeyDown={(e)=>e.key==='Enter' && !isLoading && send()} 
+                placeholder={isLoading ? "AI is thinking..." : "Describe your dream Kashmir trip..."} 
+                disabled={isLoading}
+                className="flex-1 bg-secondary rounded-full px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600/30 disabled:opacity-50" 
+              />
+              <button 
+                onClick={()=>send()} 
+                disabled={isLoading}
+                className="size-11 grid place-items-center rounded-full bg-gradient-emerald text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? <Sparkles className="size-4 animate-pulse" /> : <Send className="size-4" />}
+              </button>
             </div>
           </div>
 
