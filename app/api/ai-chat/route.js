@@ -3,37 +3,33 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const SYSTEM_PROMPT = `You are Safar AI Concierge, a Kashmir travel expert and planning assistant. Your role is to help travelers plan amazing trips to Kashmir with detailed, practical, and personalized recommendations.
+const SYSTEM_PROMPT = `You are Safar AI Concierge, a Kashmir travel expert. Help travelers plan amazing trips to Kashmir with detailed, personalized recommendations.
 
-**Your Capabilities:**
-- Create detailed day-by-day itineraries for Kashmir trips
-- Suggest accommodations, activities, and experiences
-- Provide budget estimates and cost breakdowns
-- Compare destinations within Kashmir (Srinagar, Gulmarg, Pahalgam, Sonmarg, etc.)
-- Recommend activities based on season, interests, and travel style
-- Offer local insights, cultural tips, and practical travel guidance
-- Plan family trips, honeymoons, adventure tours, and cultural experiences
-- Suggest the best times to visit and weather considerations
+**Capabilities:**
+- Create detailed day-by-day itineraries
+- Suggest accommodations, activities, experiences
+- Provide budget estimates in Indian Rupees (₹)
+- Compare destinations (Srinagar, Gulmarg, Pahalgam, Sonmarg)
+- Recommend activities based on season and interests
+- Offer local insights and cultural tips
+- Plan family trips, honeymoons, adventure tours
 
-**Response Guidelines:**
-- Be warm, friendly, and enthusiastic about Kashmir
-- Provide specific, actionable recommendations
-- Include estimated costs in Indian Rupees (₹)
-- Consider travel logistics like distances and travel time
-- Mention local experiences, food, and cultural highlights
-- Be honest about seasonal limitations or weather factors
-- Structure itineraries clearly by day with morning, afternoon, evening activities
-- Always prioritize traveler safety and authentic local experiences
-
-**Kashmir Highlights to Know:**
+**Kashmir Highlights:**
 - Srinagar: Dal Lake, Mughal Gardens, houseboats, Shikara rides
-- Gulmarg: Gondola cable car, skiing, snow activities, meadows
-- Pahalgam: Aru Valley, Betaab Valley, river rafting, trekking
+- Gulmarg: Gondola cable car, skiing, snow activities
+- Pahalgam: Aru Valley, Betaab Valley, trekking
 - Sonmarg: Thajiwas Glacier, meadows, pony rides
-- Local experiences: Wazwan feast, Kahwa tea, local crafts, walnut wood items
-- Best season: April-October for most areas, December-February for snow
+- Local: Wazwan feast, Kahwa tea, crafts
 
-Provide helpful, detailed, and friendly travel advice that makes Kashmir accessible and exciting for all travelers.`;
+**Guidelines:**
+- Be warm, friendly, and enthusiastic
+- Provide specific, actionable recommendations
+- Include costs in ₹
+- Consider travel logistics and distances
+- Structure itineraries by day (morning, afternoon, evening)
+- Mention best seasons: April-October (most areas), Dec-Feb (snow)
+
+Provide helpful, detailed travel advice that makes Kashmir accessible and exciting!`;
 
 export async function POST(request) {
   try {
@@ -46,47 +42,42 @@ export async function POST(request) {
       );
     }
 
-    // Initialize Gemini model
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-
-    // Build conversation with system prompt
-    const contextMessages = [
-      { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-      { role: 'model', parts: [{ text: 'Understood. I am Safar AI Concierge, ready to help plan amazing Kashmir trips with detailed, personalized recommendations!' }] },
-      ...conversationHistory.slice(-8).map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.text }],
-      })),
-    ];
-
-    // Start chat with history
-    const chat = model.startChat({
-      history: contextMessages,
-      generationConfig: {
-        maxOutputTokens: 1000,
-        temperature: 0.8,
-        topP: 0.95,
-      },
+    // Use gemini-2.5-flash (the latest free model)
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
     });
 
-    // Send message and get response
-    const result = await chat.sendMessage(message);
+    // Build conversation with system context
+    const fullMessage = `${SYSTEM_PROMPT}\n\nUser: ${message}`;
+    
+    // If there's conversation history, include it
+    let contextMessage = fullMessage;
+    if (conversationHistory.length > 0) {
+      const recentHistory = conversationHistory.slice(-6).map(msg => 
+        `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`
+      ).join('\n');
+      contextMessage = `${SYSTEM_PROMPT}\n\n${recentHistory}\n\nUser: ${message}`;
+    }
+
+    // Generate content
+    const result = await model.generateContent(contextMessage);
     const response = result.response;
     const text = response.text();
 
     return NextResponse.json({
       success: true,
       reply: text,
-      model: 'gemini-pro',
+      model: 'gemini-2.5-flash',
     });
 
   } catch (error) {
     console.error('[AI Chat] Error:', error);
+    console.error('[AI Chat] Error details:', error.message);
     
     // Handle specific Gemini errors
     if (error.message?.includes('API key')) {
       return NextResponse.json(
-        { error: 'AI service configuration error. Please try again later.' },
+        { error: 'AI service configuration error. Please check API key.' },
         { status: 500 }
       );
     }
@@ -98,8 +89,15 @@ export async function POST(request) {
       );
     }
 
+    if (error.message?.includes('404') || error.message?.includes('not found')) {
+      return NextResponse.json(
+        { error: 'AI model not available. Please contact support.' },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Failed to get AI response. Please try again.' },
+      { error: `Failed to get AI response: ${error.message}` },
       { status: 500 }
     );
   }
