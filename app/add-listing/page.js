@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { MapPin, ChevronLeft, ChevronRight, Check, Upload, Sparkles, ListChecks, Wifi, Coffee, Wind, ParkingCircle, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { MapPin, ChevronLeft, ChevronRight, Check, Upload, Sparkles, ListChecks, Wifi, Coffee, Wind, ParkingCircle, Image as ImageIcon, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -45,6 +45,7 @@ function AddListingInner() {
   const [photos, setPhotos] = useState([]);
   const [photoUrls, setPhotoUrls] = useState(['']);  // optional URL inputs
   const [submitting, setSubmitting] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
 
   // form state
   const [title, setTitle] = useState('');
@@ -109,6 +110,32 @@ function AddListingInner() {
     setInventoryTypes(newTypes);
   };
 
+  const handleResendVerification = async () => {
+    if (!user?.email) {
+      toast.error('No email address found');
+      return;
+    }
+    setResendingVerification(true);
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('Verification email sent! Please check your inbox and spam folder.');
+      } else {
+        toast.error(data.error || 'Unable to send verification email. Please try again.');
+      }
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      toast.error('Unable to send verification email. Please try again.');
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
   const handlePublish = async () => {
     setSubmitting(true);
     // Build images array: photoUrls + uploaded blob previews. Blob URLs won't persist across refresh; for MVP we accept them.
@@ -143,6 +170,58 @@ function AddListingInner() {
     toast.success('Listing submitted! It will appear after admin approval.');
     router.push('/dashboard/host');
   };
+
+  // Email Verification Guard
+  if (user && !user.emailVerified) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar />
+        <div className="pt-24 pb-20 container">
+          <div className="max-w-2xl mx-auto text-center py-20">
+            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }} className="size-20 rounded-full bg-amber-50 border-2 border-amber-200 text-amber-600 grid place-items-center mx-auto">
+              <AlertTriangle className="size-10" />
+            </motion.div>
+            <h2 className="font-display text-3xl font-bold mt-6">Verify your email to create listings</h2>
+            <p className="text-muted-foreground mt-3 max-w-md mx-auto">
+              Please verify your email address before creating listings. Check your inbox for the verification email.
+            </p>
+            <Button
+              onClick={handleResendVerification}
+              disabled={resendingVerification}
+              className="mt-6 rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold"
+            >
+              {resendingVerification ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                'Resend Verification Email'
+              )}
+            </Button>
+            <div className="mt-8 p-5 rounded-2xl border bg-secondary/40 text-left max-w-md mx-auto">
+              <div className="text-xs font-semibold text-emerald2 uppercase tracking-wider">Why verify?</div>
+              <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <Check className="size-4 text-emerald2 mt-0.5 shrink-0" />
+                  <span>Protect your account and listings</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="size-4 text-emerald2 mt-0.5 shrink-0" />
+                  <span>Receive booking notifications</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Check className="size-4 text-emerald2 mt-0.5 shrink-0" />
+                  <span>Build trust with travelers</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background">
