@@ -8,7 +8,7 @@ export default function Footer() {
       <div className="container relative py-16 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10 md:gap-10">
         <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-2">
-            <img src="/public/safar-logo.png" alt="Safar" className="h-9 w-auto" />
+            <div className="size-9 rounded-xl bg-gradient-emerald grid place-items-center"><Sparkles className="size-5 text-white" /></div>
             <div>
               <div className="font-display font-bold text-xl text-white">Safar</div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-white/60">Kashmir, Reimagined</div>

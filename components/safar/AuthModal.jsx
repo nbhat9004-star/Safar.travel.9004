@@ -205,9 +205,11 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
               <div className="p-8 md:p-10">
                 <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }}
                   className="flex items-center justify-center mb-6">
-                  <div className="flex flex-col items-center gap-3">
-                    <img src="/public/safar-logo.png" alt="Safar" className="h-16 w-auto" />
-                    <div className="text-center">
+                  <div className="flex items-center gap-3">
+                    <div className="size-14 rounded-2xl bg-gradient-emerald grid place-items-center shadow-xl">
+                      <MapPin className="size-7 text-gold" strokeWidth={2.5} />
+                    </div>
+                    <div>
                       <div className="font-display font-bold text-3xl text-charcoal tracking-tight">Safar</div>
                       <div className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Kashmir · Curated</div>
                     </div>
@@ -309,7 +311,7 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
             <button onClick={()=>setShowEmailForm(false)} aria-label="Back" className="absolute top-4 left-4 size-9 grid place-items-center rounded-full hover:bg-white/15"><ArrowLeft className="size-5" /></button>
             <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 size-9 grid place-items-center rounded-full hover:bg-white/15"><X className="size-5" /></button>
             <div className="flex items-center gap-2.5 justify-center">
-              <img src="/public/safar-logo.png" alt="Safar" className="h-10 w-auto" />
+              <div className="size-10 rounded-2xl bg-white/15 grid place-items-center ring-1 ring-white/20"><MapPin className="size-5 text-gold" /></div>
               <div>
                 <div className="font-display font-bold text-lg leading-tight">{mode === 'login' ? 'Welcome back' : 'Join Safar'}</div>
                 <div className="text-[11px] text-white/75">{mode === 'login' ? 'Sign in to continue' : 'Create your free account'}</div>

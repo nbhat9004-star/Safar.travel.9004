@@ -57,7 +57,9 @@ export default function Navbar({ transparent = false }) {
     >
       <div className="container flex h-16 lg:h-20 items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-          <img src="/public/safar-logo.png" alt="Safar" className="h-12 w-auto" />
+          <div className="size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-lg shadow-emerald2/25 ring-1 ring-white/20">
+            <MapPin className="size-5 text-gold" strokeWidth={2.4} />
+          </div>
           <div className="flex flex-col leading-tight">
             <span className={`font-display font-bold text-xl tracking-tight ${solid ? 'text-charcoal' : 'text-white'}`}>Safar</span>
             <span className={`text-[10px] uppercase tracking-[0.22em] -mt-0.5 ${solid ? 'text-muted-foreground' : 'text-white/70'}`}>Kashmir · Curated</span>
@@ -94,7 +96,7 @@ export default function Navbar({ transparent = false }) {
             <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background">
               <div className="p-6 border-b">
                 <div className="flex items-center gap-2.5">
-                  <img src="/public/safar-logo.png" alt="Safar" className="h-10 w-auto" />
+                  <div className="size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-md"><MapPin className="size-5 text-gold" /></div>
                   <div>
                     <div className="font-display font-bold text-lg">Safar</div>
                     <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Kashmir · Curated</div>
