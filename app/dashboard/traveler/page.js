@@ -71,9 +71,14 @@ function TravelerDashboardInner() {
             <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Welcome back, {user?.name?.split(' ')[0] || 'Traveler'}</div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Your travel hub</h1>
           </div>
-          <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold">
-            <Link href="/ai-planner"><Wand2 className="size-4 mr-2" /> Open AI Planner</Link>
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild variant="outline" className="rounded-full font-semibold">
+              <Link href="/dashboard/traveler/bookings"><Calendar className="size-4 mr-2" /> My Bookings</Link>
+            </Button>
+            <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold">
+              <Link href="/ai-planner"><Wand2 className="size-4 mr-2" /> Open AI Planner</Link>
+            </Button>
+          </div>
         </div>
 
         {/* KPIs */}
@@ -95,8 +100,8 @@ function TravelerDashboardInner() {
         {/* Booking History */}
         <section className="mt-10">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-2xl font-bold">Booking history</h2>
-            <Link href="/explore" className="text-sm text-emerald2 hover:underline">Browse more</Link>
+            <h2 className="font-display text-2xl font-bold">Recent bookings</h2>
+            <Link href="/dashboard/traveler/bookings" className="text-sm text-emerald2 hover:underline font-semibold">View all bookings →</Link>
           </div>
           {loadingBk && <div className="py-10 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
           {!loadingBk && bookings.length === 0 && (
@@ -109,7 +114,7 @@ function TravelerDashboardInner() {
           )}
           {!loadingBk && bookings.length > 0 && (
             <div className="grid md:grid-cols-2 gap-5">
-              {bookings.map((b, i) => (
+              {bookings.slice(0, 4).map((b, i) => (
                 <motion.div key={b.bookingId} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.04 }}
                   className="rounded-3xl border bg-white overflow-hidden flex flex-col md:flex-row">
                   {b.listingImage && <img src={b.listingImage} alt="" className="md:w-48 h-44 md:h-auto object-cover" />}
