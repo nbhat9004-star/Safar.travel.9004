@@ -92,7 +92,7 @@ function PlannerInner() {
     } catch (error) {
       console.error('AI Chat error:', error);
       toast.error('Failed to get AI response. Please try again.');
-      setMessages([...next, { role: 'ai', text: 'I apologize, but I'm having trouble processing your request right now. Please try again in a moment.' }]);
+      setMessages([...next, { role: 'ai', text: 'I apologize, but I am having trouble processing your request right now. Please try again in a moment.' }]);
     } finally {
       setIsLoading(false);
     }
