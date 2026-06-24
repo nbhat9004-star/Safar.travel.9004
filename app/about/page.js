@@ -5,7 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Mountain, Heart, ShieldCheck, Sparkles } from 'lucide-react';
 import { IMG, STATS } from '@/lib/data';
 
-export const metadata = { title: 'About — Safar', description: 'Authentic Kashmir tourism, built with locals.' };
+import { generateSafarMetadata } from '@/lib/metadata';
+
+export const metadata = generateSafarMetadata({
+  title: 'About Safar',
+  description: 'Authentic Kashmir tourism, built with locals for travelers. Discover our mission to showcase real Kashmir experiences.',
+  url: '/about',
+  image: '/og-about.jpg',
+});
 
 export default function AboutPage() {
   return (

@@ -4,7 +4,13 @@ import Footer from '@/components/safar/Footer';
 import { FileText, Mail, AlertTriangle, ShieldCheck, DollarSign, UserX } from 'lucide-react';
 import { IMG } from '@/lib/data';
 
-export const metadata = { title: 'Terms of Service — Safar', description: 'Terms and conditions for using Safar Kashmir.' };
+import { generateSafarMetadata } from '@/lib/metadata';
+
+export const metadata = generateSafarMetadata({
+  title: 'Terms of Service',
+  description: 'Terms and conditions for using Safar Kashmir travel marketplace.',
+  url: '/terms',
+});
 
 export default function TermsPage() {
   return (

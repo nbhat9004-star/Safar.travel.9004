@@ -4,7 +4,13 @@ import Footer from '@/components/safar/Footer';
 import { Shield, Mail, Lock, Eye, Cookie, FileText } from 'lucide-react';
 import { IMG } from '@/lib/data';
 
-export const metadata = { title: 'Privacy Policy — Safar', description: 'How Safar protects your data and privacy.' };
+import { generateSafarMetadata } from '@/lib/metadata';
+
+export const metadata = generateSafarMetadata({
+  title: 'Privacy Policy',
+  description: 'How Safar protects your data and privacy when booking Kashmir travel experiences.',
+  url: '/privacy',
+});
 
 export default function PrivacyPage() {
   return (

@@ -26,10 +26,29 @@ export const metadata = {
   title: 'Safar — Experience Kashmir Like a Local',
   description: 'Book authentic Kashmir stays, houseboats, cabins, transport and AI-planned itineraries. Premium tourism marketplace for Kashmir, India.',
   keywords: ['Kashmir tourism','Srinagar houseboats','Gulmarg cabins','Pahalgam cottages','AI trip planner','Safar'],
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://safarcurated.com'),
   openGraph: {
     title: 'Safar — Experience Kashmir Like a Local',
-    description: 'Authentic Kashmir stays, experiences and AI-powered travel planning.',
+    description: 'Discover curated stays, experiences, guides, and rentals across Kashmir',
+    url: '/',
+    siteName: 'Safar - Kashmir Curated',
+    images: [
+      {
+        url: '/og-default.jpg',
+        width: 1200,
+        height: 630,
+        alt: 'Safar Kashmir - Curated Travel Experiences',
+      },
+    ],
+    locale: 'en_US',
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Safar — Experience Kashmir Like a Local',
+    description: 'Discover curated stays, experiences, guides, and rentals across Kashmir',
+    creator: '@SafarKashmir',
+    images: ['/og-default.jpg'],
   },
 };
 
