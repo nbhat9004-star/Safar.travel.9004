@@ -7,29 +7,47 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
 import AuthModal from '@/components/safar/AuthModal';
-
-const NAV = [
-  { href: '/explore?cat=all',         label: 'Stays' },
-  { href: '/explore?cat=experience',  label: 'Experiences' },
-  { href: '/explore?cat=transport',   label: 'Bikes & Cars' },
-  { href: '/explore?cat=tour',        label: 'Tour Guides' },
-  { href: '/ai-planner',              label: 'AI Planner' },
-  { href: '/add-listing',             label: 'Become a Host' },
-  // AI Host Wizard hidden - feature reserved for future activation
-  // { href: '/create-listing-ai',       label: 'AI Host Wizard', hostOnly: true },
-];
+import { useAuth } from '@/lib/auth-context';
 
 export default function Navbar({ transparent = false }) {
+  const { user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null); // 'login' | 'signup' | null
+  
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+  
   const solid = !transparent || scrolled;
+
+  // Filter navigation based on user role
+  const getVisibleNavItems = () => {
+    const baseNav = [
+      { href: '/explore?cat=all',         label: 'Stays' },
+      { href: '/explore?cat=experience',  label: 'Experiences' },
+      { href: '/explore?cat=transport',   label: 'Bikes & Cars' },
+      { href: '/explore?cat=tour',        label: 'Tour Guides' },
+      { href: '/ai-planner',              label: 'AI Planner' },
+    ];
+
+    // Add role-specific items
+    if (user?.role === 'traveler' || user?.role === 'admin') {
+      baseNav.push({ href: '/dashboard/traveler/bookings', label: 'My Bookings' });
+    }
+
+    // Only show "Become a Host" if user is NOT logged in
+    if (!user) {
+      baseNav.push({ href: '/add-listing', label: 'Become a Host' });
+    }
+
+    return baseNav;
+  };
+
+  const visibleNav = getVisibleNavItems();
   return (
     <motion.header
       initial={{ y: -24, opacity: 0 }}
@@ -49,7 +67,7 @@ export default function Navbar({ transparent = false }) {
         </Link>
 
         <nav className="hidden xl:flex items-center gap-0.5">
-          {NAV.map((n) => (
+          {visibleNav.map((n) => (
             <Link key={n.href} href={n.href}
               className={`px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}>
               {n.label}
@@ -86,14 +104,20 @@ export default function Navbar({ transparent = false }) {
                 </div>
               </div>
               <div className="p-3 max-h-[calc(100vh-180px)] overflow-y-auto">
-                {NAV.map((n) => (
+                {visibleNav.map((n) => (
                   <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
                     {n.label}
                   </Link>
                 ))}
                 <div className="my-3 h-px bg-border" />
-                <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Host Dashboard</Link>
-                <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Admin</Link>
+                {/* Host Dashboard - Only for hosts and admins */}
+                {(user?.role === 'host' || user?.role === 'admin') && (
+                  <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Host Dashboard</Link>
+                )}
+                {/* Admin - Only for admins */}
+                {user?.role === 'admin' && (
+                  <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Admin</Link>
+                )}
               </div>
               <div className="p-4 border-t flex flex-col gap-2 safe-bottom">
                 <MobileAuthButtons onClose={()=>setOpen(false)} onOpenAuth={(m)=>setAuthMode(m)} />
