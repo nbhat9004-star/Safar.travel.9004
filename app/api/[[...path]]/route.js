@@ -1499,6 +1499,107 @@ Return ONLY the JSON, no other text.`;
     }
   }
 
+  // ---------- REVIEWS ----------
+  if (path === '/reviews' && method === 'POST') {
+    const { propertyId, rating, reviewText } = await readBody(request);
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (!propertyId || !rating || rating < 1 || rating > 5) return err('Valid propertyId and rating (1-5) required');
+
+    const reviews = await getCollection('reviews');
+    const existing = await reviews.findOne({ propertyId, userId: me.id });
+    if (existing) return err('You have already reviewed this property');
+
+    const review = {
+      id: uuid(),
+      propertyId,
+      userId: me.id,
+      userName: me.name,
+      rating: Number(rating),
+      reviewText: reviewText || '',
+      createdAt: new Date(),
+    };
+    await reviews.insertOne(review);
+    const { _id, ...data } = review;
+    return ok({ review: data }, 201);
+  }
+
+  if (path === '/reviews' && method === 'GET') {
+    const { propertyId } = Object.fromEntries(new URL(request.url).searchParams);
+    if (!propertyId) return err('propertyId required');
+    
+    const reviews = await getCollection('reviews');
+    const allReviews = await reviews.find({ propertyId }).sort({ createdAt: -1 }).toArray();
+    const reviewData = allReviews.map(({ _id, ...r }) => r);
+    const avgRating = allReviews.length > 0 
+      ? (allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length).toFixed(1)
+      : 0;
+    
+    return ok({ 
+      reviews: reviewData,
+      count: allReviews.length,
+      averageRating: Number(avgRating),
+    });
+  }
+
+  // ---------- WISHLIST ----------
+  if (path === '/wishlist' && method === 'POST') {
+    const { propertyId } = await readBody(request);
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (!propertyId) return err('propertyId required');
+
+    const wishlists = await getCollection('wishlists');
+    const existing = await wishlists.findOne({ userId: me.id, propertyId });
+    if (existing) return err('Already in wishlist');
+
+    const wishlist = {
+      id: uuid(),
+      userId: me.id,
+      propertyId,
+      createdAt: new Date(),
+    };
+    await wishlists.insertOne(wishlist);
+    
+    const count = await wishlists.countDocuments({ propertyId });
+    const { _id, ...data } = wishlist;
+    return ok({ wishlist: data, count }, 201);
+  }
+
+  if (path.startsWith('/wishlist/') && method === 'DELETE') {
+    const propertyId = path.split('/')[2];
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+
+    const wishlists = await getCollection('wishlists');
+    const result = await wishlists.deleteOne({ userId: me.id, propertyId });
+    if (result.deletedCount === 0) return err('Not in wishlist', 404);
+    
+    const count = await wishlists.countDocuments({ propertyId });
+    return ok({ message: 'Removed from wishlist', count });
+  }
+
+  if (path === '/wishlist' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+
+    const wishlists = await getCollection('wishlists');
+    const items = await wishlists.find({ userId: me.id }).sort({ createdAt: -1 }).toArray();
+    const wishlistData = items.map(({ _id, ...w }) => w);
+    return ok({ wishlist: wishlistData });
+  }
+
+  if (path === '/wishlist/check' && method === 'GET') {
+    const { propertyId } = Object.fromEntries(new URL(request.url).searchParams);
+    const me = await getCurrentUser(request);
+    if (!me || !propertyId) return ok({ saved: false, count: 0 });
+
+    const wishlists = await getCollection('wishlists');
+    const saved = await wishlists.findOne({ userId: me.id, propertyId });
+    const count = await wishlists.countDocuments({ propertyId });
+    return ok({ saved: !!saved, count });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

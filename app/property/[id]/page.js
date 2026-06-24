@@ -35,15 +35,143 @@ function rangeOverlaps(ciStr, coStr, ranges) {
 
 function App() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { listing, loading, error } = useListing(id);
   const { bookedRanges } = useAvailability(id);
   const [liked, setLiked] = useState(false);
+  const [saveCount, setSaveCount] = useState(0);
+  const [reviews, setReviews] = useState([]);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [avgRating, setAvgRating] = useState(0);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [reviewText, setReviewText] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
   const [guests, setGuests] = useState(2);
   const [checkIn, setCheckIn] = useState(ymdOffset(7));
   const [checkOut, setCheckOut] = useState(ymdOffset(11));
   const [selectedTypeId, setSelectedTypeId] = useState(null);
   const todayStr = ymdOffset(0);
   const conflict = useMemo(() => rangeOverlaps(checkIn, checkOut, bookedRanges), [checkIn, checkOut, bookedRanges]);
+
+  // Load reviews and wishlist status
+  useEffect(() => {
+    if (!id) return;
+    
+    // Load reviews
+    fetch(`/api/reviews?propertyId=${id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          setReviews(data.reviews || []);
+          setReviewCount(data.count || 0);
+          setAvgRating(data.averageRating || 0);
+        }
+      });
+    
+    // Load wishlist status
+    fetch(`/api/wishlist/check?propertyId=${id}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          setLiked(data.saved);
+          setSaveCount(data.count || 0);
+        }
+      });
+  }, [id]);
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const title = listing?.title || 'Check out this property on Safar';
+    const text = listing?.description || 'Discover Kashmir experiences';
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+      } catch (err) {
+        if (err.name !== 'AbortError') console.error('Share failed:', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard!');
+      } catch (err) {
+        toast.error('Failed to copy link');
+      }
+    }
+  };
+
+  const handleToggleSave = async () => {
+    if (!user) {
+      toast.error('Please sign in to save properties');
+      return;
+    }
+
+    try {
+      if (liked) {
+        const res = await fetch(`/api/wishlist/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+          setLiked(false);
+          setSaveCount(data.count || 0);
+          toast.success('Removed from wishlist');
+        }
+      } else {
+        const res = await fetch('/api/wishlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ propertyId: id }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setLiked(true);
+          setSaveCount(data.count || 0);
+          toast.success('Added to wishlist');
+        } else {
+          toast.error(data.error || 'Failed to save');
+        }
+      }
+    } catch (err) {
+      toast.error('Failed to update wishlist');
+    }
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!user) {
+      toast.error('Please sign in to submit a review');
+      return;
+    }
+    if (!rating || rating < 1 || rating > 5) {
+      toast.error('Please select a rating');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId: id, rating, reviewText }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success('Review submitted successfully!');
+        setReviews([data.review, ...reviews]);
+        setReviewCount(reviewCount + 1);
+        setAvgRating(((avgRating * reviewCount) + rating) / (reviewCount + 1));
+        setShowReviewForm(false);
+        setReviewText('');
+        setRating(5);
+      } else {
+        toast.error(data.error || 'Failed to submit review');
+      }
+    } catch (err) {
+      toast.error('Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -105,14 +233,14 @@ function App() {
           <div>
             <h1 className="font-display text-3xl md:text-5xl font-bold leading-tight">{item.title}</h1>
             <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><Star className="size-4 text-gold fill-gold" /> {item.rating || '—'} · {item.reviews || 0} reviews</span>
+              <span className="flex items-center gap-1"><Star className="size-4 text-gold fill-gold" /> {avgRating > 0 ? avgRating : '—'} {reviewCount > 0 && `(${reviewCount} Reviews)`}</span>
               <span className="flex items-center gap-1"><MapPin className="size-4" /> {item.location}</span>
               {item.superhost && <span className="flex items-center gap-1 text-emerald2"><BadgeCheck className="size-4" /> Superhost</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="rounded-full"><Share2 className="size-4 mr-2" /> Share</Button>
-            <Button variant="outline" size="sm" className="rounded-full" onClick={()=>setLiked(!liked)}><Heart className={`size-4 mr-2 ${liked ? 'fill-rose-500 text-rose-500' : ''}`} /> Save</Button>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={handleShare}><Share2 className="size-4 mr-2" /> Share</Button>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={handleToggleSave}><Heart className={`size-4 mr-2 ${liked ? 'fill-rose-500 text-rose-500' : ''}`} /> {saveCount > 0 && `${saveCount} `}Saved</Button>
           </div>
         </div>
 
@@ -294,6 +422,72 @@ function App() {
             </div>
           </div>
         </aside>
+      </div>
+
+      {/* Reviews Section */}
+      <div className="container mt-16 mb-16">
+        <h2 className="font-display text-2xl font-bold">⭐ {avgRating > 0 ? avgRating : '—'} {reviewCount > 0 && `(${reviewCount} Reviews)`}</h2>
+        
+        {user && !showReviewForm && (
+          <Button onClick={() => setShowReviewForm(true)} className="mt-4 rounded-full bg-emerald2 hover:bg-emerald2-deep">Write a Review</Button>
+        )}
+
+        {showReviewForm && (
+          <form onSubmit={handleSubmitReview} className="mt-6 p-6 rounded-2xl border bg-secondary/20">
+            <h3 className="font-semibold mb-3">Share Your Experience</h3>
+            <div className="flex gap-2 mb-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button key={star} type="button" onClick={() => setRating(star)} className="hover:scale-110 transition">
+                  <Star className={`size-8 ${star <= rating ? 'fill-gold text-gold' : 'text-gray-300'}`} />
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+              placeholder="Tell us about your experience..."
+              className="w-full p-4 rounded-xl border resize-none focus:ring-2 focus:ring-emerald2/20 focus:border-emerald2 outline-none"
+              rows="4"
+            />
+            <div className="flex gap-2 mt-3">
+              <Button type="submit" disabled={submittingReview} className="rounded-full bg-emerald2 hover:bg-emerald2-deep">
+                {submittingReview ? 'Submitting...' : 'Submit Review'}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setShowReviewForm(false)} className="rounded-full">Cancel</Button>
+            </div>
+          </form>
+        )}
+
+        {reviews.length > 0 && (
+          <div className="mt-8 space-y-6">
+            {reviews.slice(0, 5).map((review) => (
+              <div key={review.id} className="p-6 rounded-2xl border bg-white">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-gradient-emerald grid place-items-center text-white font-bold">{review.userName?.[0]?.toUpperCase()}</div>
+                    <div>
+                      <div className="font-semibold">{review.userName}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString()}</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className={`size-4 ${i < review.rating ? 'fill-gold text-gold' : 'text-gray-300'}`} />
+                    ))}
+                  </div>
+                </div>
+                {review.reviewText && <p className="text-muted-foreground leading-relaxed">{review.reviewText}</p>}
+              </div>
+            ))}
+            {reviewCount > 5 && (
+              <Button variant="outline" className="w-full rounded-full">View All {reviewCount} Reviews</Button>
+            )}
+          </div>
+        )}
+
+        {reviewCount === 0 && !showReviewForm && (
+          <p className="mt-6 text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>
+        )}
       </div>
 
       <Footer />
