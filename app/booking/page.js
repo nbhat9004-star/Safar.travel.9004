@@ -73,6 +73,8 @@ function BookingContent() {
   const [showAuth, setShowAuth] = useState(false);
   const [emailingSending, setEmailSending] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [showVerificationError, setShowVerificationError] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
   const todayStr = ymdOffset(0);
 
   // Derived values from actual state
@@ -117,6 +119,38 @@ function BookingContent() {
       setEmailSending(false);
     }
   };
+
+  // Resend verification email handler
+  const handleResendVerification = async () => {
+    if (!user?.email) {
+      toast.error('No email address found');
+      return;
+    }
+
+    setResendingVerification(true);
+    try {
+      const response = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Verification email sent successfully. Please check your inbox and spam folder.');
+        setShowVerificationError(false);
+      } else {
+        toast.error(data.error || 'Unable to send verification email. Please try again.');
+      }
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      toast.error('Unable to send verification email. Please try again.');
+    } finally {
+      setResendingVerification(false);
+    }
+  };
+
 
   // Download PDF handler
   const handleDownloadPDF = () => {
@@ -433,7 +467,7 @@ function BookingContent() {
               <div className="text-center py-6">
                 <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }} className="size-20 rounded-full bg-gradient-emerald text-white grid place-items-center mx-auto shadow-2xl"><PartyPopper className="size-10" /></motion.div>
                 <h2 className="font-display text-3xl font-bold mt-5">Booking confirmed!</h2>
-                <p className="text-muted-foreground mt-2 max-w-md mx-auto">Your reservation at {item.title} from {fmt(checkIn)} — {fmt(checkOut)} is confirmed. We've sent the details to your email.</p>
+                <p className="text-muted-foreground mt-2 max-w-md mx-auto">Your reservation at {item.title} from {fmt(checkIn)} — {fmt(checkOut)} is confirmed. We&apos;ve sent the details to your email.</p>
                 <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-3">
                   <Button variant="outline" className="rounded-full" onClick={handleEmailInvoice} disabled={emailingSending}>
                     {emailingSending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Mail className="size-4 mr-2" />} 
@@ -456,7 +490,40 @@ function BookingContent() {
             )}
 
             {step < 4 && (
-              <div className="mt-8 flex justify-between">
+              <div className="mt-8">
+                {/* Email Verification Error Alert */}
+                {showVerificationError && (
+                  <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="size-5 text-amber-600 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-amber-900">Please verify your email address before continuing.</p>
+                        <p className="text-xs text-amber-700 mt-1">Check your inbox for the verification email we sent when you registered.</p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={resendingVerification}
+                          onClick={handleResendVerification}
+                          className="mt-3 rounded-full border-amber-300 text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {resendingVerification ? (
+                            <>
+                              <Loader2 className="size-3 animate-spin mr-2" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <Mail className="size-3 mr-2" />
+                              Resend Verification Email
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex justify-between">
                 <Button variant="outline" className="rounded-full" onClick={()=>setStep(Math.max(0,step-1))} disabled={step === 0}><ChevronLeft className="size-4 mr-1" /> Back</Button>
                 <Button
                   disabled={submitting || (step === 0 && !canContinueDates)}
@@ -475,7 +542,15 @@ function BookingContent() {
                         inventoryTypeId: typeId || null
                       });
                       setSubmitting(false);
-                      if (!ok) { toast.error(data?.error || 'Booking failed'); return; }
+                      if (!ok) { 
+                        const errorMsg = data?.error || 'Booking failed';
+                        // Check if error is about email verification
+                        if (errorMsg.toLowerCase().includes('verify your email')) {
+                          setShowVerificationError(true);
+                        }
+                        toast.error(errorMsg); 
+                        return; 
+                      }
                       setBookingId(data.booking.bookingId);
                       toast.success('Booking request sent to host!');
                       setStep(4);
@@ -486,6 +561,7 @@ function BookingContent() {
                 >
                   {submitting ? <Loader2 className="size-4 animate-spin" /> : (<>{step===3?'Confirm & Send Request':'Continue'} <ChevronRight className="size-4 ml-1" /></>)}
                 </Button>
+                </div>
               </div>
             )}
             <AuthModal open={showAuth} defaultMode="login" onClose={()=>setShowAuth(false)} />
