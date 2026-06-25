@@ -49,6 +49,13 @@ function AdminInner() {
   const [error, setError] = useState(null);
   const [userModal, setUserModal] = useState(null);
   const [roleModal, setRoleModal] = useState(null);
+  
+  // Search and filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [listingStatusFilter, setListingStatusFilter] = useState('all');
+  const [listingCategoryFilter, setListingCategoryFilter] = useState('all');
+  const [userRoleFilter, setUserRoleFilter] = useState('all');
+  
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
   const load = async () => {
@@ -196,7 +203,82 @@ function AdminInner() {
     rejected: all.filter(l => l.status === 'rejected').length,
     travelers: users.filter(u => u.role === 'traveler').length,
     hosts:    users.filter(u => u.role === 'host').length,
+    todayBookings: allBookings.filter(b => {
+      const today = new Date().toDateString();
+      return new Date(b.createdAt).toDateString() === today;
+    }).length,
   };
+
+  // Recent Activity - last 20 activities
+  const recentActivity = [];
+  
+  // New user registrations
+  users.slice(-10).reverse().forEach(u => {
+    if (u.createdAt) {
+      recentActivity.push({
+        type: u.role === 'host' ? 'host_registered' : 'traveler_registered',
+        user: u.name,
+        userId: u.id,
+        timestamp: u.createdAt,
+        icon: Users,
+      });
+    }
+  });
+  
+  // New listings
+  all.slice(-10).reverse().forEach(l => {
+    if (l.createdAt) {
+      recentActivity.push({
+        type: 'listing_submitted',
+        listing: l.title,
+        listingId: l.id,
+        user: l.hostName,
+        status: l.status,
+        timestamp: l.createdAt,
+        icon: Home,
+      });
+    }
+  });
+  
+  // Recent bookings
+  allBookings.slice(-10).reverse().forEach(b => {
+    if (b.createdAt) {
+      recentActivity.push({
+        type: 'booking_created',
+        booking: b.listingTitle,
+        bookingId: b.bookingId,
+        user: b.travelerName,
+        timestamp: b.createdAt,
+        icon: Calendar,
+      });
+    }
+  });
+  
+  // Sort by timestamp and take top 15
+  recentActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const topActivity = recentActivity.slice(0, 15);
+
+  // Filter functions
+  const filteredListings = all.filter(l => {
+    const matchesSearch = !searchQuery || 
+      l.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      l.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      l.hostName?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = listingStatusFilter === 'all' || l.status === listingStatusFilter;
+    const matchesCategory = listingCategoryFilter === 'all' || l.category === listingCategoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
+  });
+
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = !searchQuery || 
+      u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+  const hosts = users.filter(u => u.role === 'host');
+  const travelers = users.filter(u => u.role === 'traveler');
 
   return (
     <main className="min-h-screen bg-background">
@@ -208,7 +290,20 @@ function AdminInner() {
             <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Safar Operations</h1>
           </div>
           <div className="flex items-center gap-2 w-full md:w-auto md:flex-row flex-col-reverse md:items-center">
-            <div className="flex items-center gap-2 bg-white border rounded-full px-4 py-2.5 w-full md:w-80"><Search className="size-4 text-muted-foreground" /><input placeholder="Search users, hosts, bookings..." className="flex-1 text-sm outline-none" /></div>
+            <div className="flex items-center gap-2 bg-white border rounded-full px-4 py-2.5 w-full md:w-80">
+              <Search className="size-4 text-muted-foreground" />
+              <input 
+                placeholder="Search users, hosts, listings..." 
+                className="flex-1 text-sm outline-none" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="text-muted-foreground hover:text-charcoal">
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
             <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold shrink-0">
               <Link href="/admin/import"><Upload className="size-4 mr-2" /> Import Listings</Link>
             </Button>
@@ -218,25 +313,28 @@ function AdminInner() {
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
           {[
-            { l:'Total users', v: users.length.toLocaleString(), d:`+${counts.travelers} trav`, i: Users },
-            { l:'Active listings', v: counts.approved.toLocaleString(), d:`${counts.pending} pending`, i: Home },
-            { l:'Bookings (mo)', v: revenue?.monthlyRevenue ? `₹${(revenue.monthlyRevenue/100000).toFixed(2)}L` : '...', d:'+12%', i: Calendar },
-            { l:'Revenue (mo)', v: revenue?.monthlyRevenue ? `₹${(revenue.monthlyRevenue/10000000).toFixed(2)} Cr` : '...', d:'+22%', i: Wallet },
+            { l:'Total users', v: users.length.toLocaleString(), d:`${counts.hosts} hosts · ${counts.travelers} travelers`, i: Users },
+            { l:'Active listings', v: counts.approved.toLocaleString(), d:`${counts.pending} pending approval`, i: Home },
+            { l:"Today's bookings", v: counts.todayBookings.toLocaleString(), d: `${allBookings.length} total bookings`, i: Calendar },
+            { l:'Revenue (mo)', v: revenue?.monthlyRevenue ? `₹${(revenue.monthlyRevenue/100000).toFixed(1)}L` : '...', d:'+22% vs last month', i: Wallet },
           ].map((k,i)=>{const Ico=k.i;return(
             <motion.div key={k.l} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }} className="rounded-3xl border bg-white p-5">
-              <div className="flex items-center justify-between"><Ico className="size-5 text-emerald2" /><div className="text-xs text-emerald-600 font-semibold flex items-center gap-1">{k.d} <ArrowUpRight className="size-3" /></div></div>
+              <div className="flex items-center justify-between"><Ico className="size-5 text-emerald2" /><div className="text-xs text-emerald-600 font-semibold flex items-center gap-1"><TrendingUp className="size-3" /></div></div>
               <div className="font-display text-2xl font-bold mt-3">{k.v}</div>
               <div className="text-xs text-muted-foreground">{k.l}</div>
+              <div className="text-[10px] text-muted-foreground mt-1">{k.d}</div>
             </motion.div>
           );})}
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="mt-8">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto">
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 h-auto">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="listings">Listings</TabsTrigger>
+            <TabsTrigger value="hosts">Hosts</TabsTrigger>
+            <TabsTrigger value="travelers">Travelers</TabsTrigger>
+            <TabsTrigger value="users">All Users</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
             <TabsTrigger value="revenue">Revenue</TabsTrigger>
           </TabsList>
@@ -261,6 +359,55 @@ function AdminInner() {
                 </div>
               </div>
             </div>
+
+            {/* Recent Activity Feed */}
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-display text-2xl font-bold flex items-center gap-2">
+                  <BarChart3 className="size-5 text-emerald2" /> Recent Activity
+                </h2>
+                <span className="text-sm text-muted-foreground">{topActivity.length} recent events</span>
+              </div>
+              <div className="rounded-3xl border bg-white p-6">
+                {topActivity.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-8">No recent activity</div>
+                ) : (
+                  <div className="space-y-3">
+                    {topActivity.map((activity, idx) => {
+                      const Icon = activity.icon;
+                      const getActivityText = () => {
+                        switch(activity.type) {
+                          case 'host_registered':
+                            return <><span className="font-semibold">{activity.user}</span> registered as a <span className="text-emerald2 font-semibold">Host</span></>;
+                          case 'traveler_registered':
+                            return <><span className="font-semibold">{activity.user}</span> registered as a <span className="text-blue-600 font-semibold">Traveler</span></>;
+                          case 'listing_submitted':
+                            return <><span className="font-semibold">{activity.user}</span> submitted listing <span className="font-semibold">"{activity.listing}"</span> · <StatusPill s={activity.status} /></>;
+                          case 'booking_created':
+                            return <><span className="font-semibold">{activity.user}</span> booked <span className="font-semibold">"{activity.booking}"</span></>;
+                          default:
+                            return null;
+                        }
+                      };
+                      
+                      return (
+                        <div key={idx} className="flex items-start gap-3 p-3 rounded-xl hover:bg-secondary/40 transition">
+                          <div className="size-8 rounded-full bg-secondary grid place-items-center shrink-0">
+                            <Icon className="size-4 text-emerald2" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm">{getActivityText()}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(activity.timestamp).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
 
             {/* Pending Approvals */}
             <section>
@@ -297,21 +444,159 @@ function AdminInner() {
             </section>
           </TabsContent>
 
-          {/* Users Tab */}
-          <TabsContent value="users" className="space-y-6 mt-6">
+          {/* Hosts Tab */}
+          <TabsContent value="hosts" className="space-y-6 mt-6">
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-2xl font-bold">User Management</h2>
-              <span className="text-sm text-muted-foreground">{users.length} total users</span>
+              <div>
+                <h2 className="font-display text-2xl font-bold">Host Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage all hosts and their listings</p>
+              </div>
+              <span className="text-sm text-muted-foreground">{hosts.length} total hosts</span>
             </div>
             {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
-            {!loading && users.length > 0 && (
+            {!loading && hosts.length === 0 && (
+              <div className="p-10 border rounded-3xl bg-white text-center">
+                <Users className="size-7 mx-auto text-muted-foreground" />
+                <div className="font-display text-lg font-bold mt-3">No hosts yet</div>
+                <p className="text-sm text-muted-foreground mt-1">Hosts will appear here once they register.</p>
+              </div>
+            )}
+            {!loading && hosts.length > 0 && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[900px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-3">Host</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2">Listings</div>
+                      <div className="col-span-2">Bookings</div>
+                      <div className="col-span-3 text-right">Actions</div>
+                    </div>
+                    {hosts.filter(h => {
+                      if (!searchQuery) return true;
+                      return h.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             h.email?.toLowerCase().includes(searchQuery.toLowerCase());
+                    }).map((h)=>(
+                      <div key={h.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                        <div className="col-span-3 flex items-center gap-3">
+                          <div className="size-10 rounded-full bg-gradient-emerald grid place-items-center text-white font-semibold">{(h.name||'?').charAt(0)}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm truncate">{h.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">{h.email}</div>
+                          </div>
+                        </div>
+                        <div className="col-span-2"><StatusPill s={h.status || 'active'} /></div>
+                        <div className="col-span-2">
+                          <div className="text-sm font-semibold">{h.listingCount || 0} listings</div>
+                          <div className="text-xs text-muted-foreground">
+                            {all.filter(l => l.hostId === h.id && l.status === 'approved').length} approved
+                          </div>
+                        </div>
+                        <div className="col-span-2 text-sm">{h.bookingCount || 0} bookings</div>
+                        <div className="col-span-3 flex justify-end gap-1">
+                          {h.status !== 'suspended' && <Button onClick={()=>suspendUser(h.id)} size="sm" variant="ghost" className="rounded-full h-8" title="Suspend"><Ban className="size-3.5" /></Button>}
+                          {h.status === 'suspended' && <Button onClick={()=>reactivateUser(h.id)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2" title="Reactivate"><RotateCcw className="size-3.5" /></Button>}
+                          <Button onClick={()=>blacklistUser(h.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Blacklist"><Shield className="size-3.5" /></Button>
+                          <Button onClick={()=>setUserModal(h)} size="sm" className="rounded-full h-8 bg-emerald2 hover:bg-emerald2-deep">View</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Travelers Tab */}
+          <TabsContent value="travelers" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Traveler Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage all travelers and their bookings</p>
+              </div>
+              <span className="text-sm text-muted-foreground">{travelers.length} total travelers</span>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && travelers.length === 0 && (
+              <div className="p-10 border rounded-3xl bg-white text-center">
+                <Users className="size-7 mx-auto text-muted-foreground" />
+                <div className="font-display text-lg font-bold mt-3">No travelers yet</div>
+                <p className="text-sm text-muted-foreground mt-1">Travelers will appear here once they register.</p>
+              </div>
+            )}
+            {!loading && travelers.length > 0 && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[800px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-4">Traveler</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2">Bookings</div>
+                      <div className="col-span-1">Reviews</div>
+                      <div className="col-span-3 text-right">Actions</div>
+                    </div>
+                    {travelers.filter(t => {
+                      if (!searchQuery) return true;
+                      return t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             t.email?.toLowerCase().includes(searchQuery.toLowerCase());
+                    }).map((t)=>(
+                      <div key={t.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                        <div className="col-span-4 flex items-center gap-3">
+                          <div className="size-10 rounded-full bg-blue-500 grid place-items-center text-white font-semibold">{(t.name||'?').charAt(0)}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-sm truncate">{t.name}</div>
+                            <div className="text-xs text-muted-foreground truncate">{t.email}</div>
+                          </div>
+                        </div>
+                        <div className="col-span-2"><StatusPill s={t.status || 'active'} /></div>
+                        <div className="col-span-2">
+                          <div className="text-sm font-semibold">{t.bookingCount || 0} bookings</div>
+                          <div className="text-xs text-muted-foreground">
+                            {allBookings.filter(b => b.travelerId === t.id).length} total
+                          </div>
+                        </div>
+                        <div className="col-span-1 text-sm">{t.reviewCount || 0}</div>
+                        <div className="col-span-3 flex justify-end gap-1">
+                          {t.status !== 'suspended' && <Button onClick={()=>suspendUser(t.id)} size="sm" variant="ghost" className="rounded-full h-8" title="Disable"><Ban className="size-3.5" /></Button>}
+                          {t.status === 'suspended' && <Button onClick={()=>reactivateUser(t.id)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2" title="Reactivate"><RotateCcw className="size-3.5" /></Button>}
+                          <Button onClick={()=>blacklistUser(t.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Blacklist"><Shield className="size-3.5" /></Button>
+                          <Button onClick={()=>setUserModal(t)} size="sm" className="rounded-full h-8 bg-emerald2 hover:bg-emerald2-deep">View</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Users Tab */}
+          <TabsContent value="users" className="space-y-6 mt-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl font-bold">All Users</h2>
+                <span className="text-sm text-muted-foreground">{filteredUsers.length} of {users.length} users</span>
+              </div>
+              <select 
+                value={userRoleFilter} 
+                onChange={(e) => setUserRoleFilter(e.target.value)}
+                className="px-3 py-2 rounded-full border text-sm outline-none focus:ring-2 focus:ring-emerald2/20"
+              >
+                <option value="all">All Roles</option>
+                <option value="traveler">Travelers</option>
+                <option value="host">Hosts</option>
+                <option value="admin">Admins</option>
+              </select>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && filteredUsers.length > 0 && (
               <div className="rounded-3xl border bg-white overflow-hidden">
                 <div className="overflow-x-auto">
                   <div className="min-w-[800px]">
                     <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
                       <div className="col-span-3">User</div><div className="col-span-2">Role</div><div className="col-span-2">Status</div><div className="col-span-2">Listings/Bookings</div><div className="col-span-3 text-right">Actions</div>
                     </div>
-                    {users.map((u)=>(
+                    {filteredUsers.map((u)=>(
                       <div key={u.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
                         <div className="col-span-3 flex items-center gap-3">
                           <div className="size-10 rounded-full bg-gradient-emerald grid place-items-center text-white font-semibold">{(u.name||'?').charAt(0)}</div>
@@ -342,9 +627,39 @@ function AdminInner() {
 
           {/* Listings Tab */}
           <TabsContent value="listings" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-2xl font-bold">Listing Management</h2>
-              <span className="text-sm text-muted-foreground">{all.length} total listings</span>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Listing Management</h2>
+                <span className="text-sm text-muted-foreground">{filteredListings.length} of {all.length} listings</span>
+              </div>
+              <div className="flex gap-2 w-full md:w-auto">
+                <select 
+                  value={listingStatusFilter} 
+                  onChange={(e) => setListingStatusFilter(e.target.value)}
+                  className="px-3 py-2 rounded-full border text-sm outline-none focus:ring-2 focus:ring-emerald2/20"
+                >
+                  <option value="all">All Status</option>
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="suspended">Suspended</option>
+                </select>
+                <select 
+                  value={listingCategoryFilter} 
+                  onChange={(e) => setListingCategoryFilter(e.target.value)}
+                  className="px-3 py-2 rounded-full border text-sm outline-none focus:ring-2 focus:ring-emerald2/20"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="houseboat">Houseboat</option>
+                  <option value="cabin">Cabin</option>
+                  <option value="cottage">Cottage</option>
+                  <option value="home">Home</option>
+                  <option value="camp">Camp</option>
+                  <option value="tour">Tour</option>
+                  <option value="transport">Transport</option>
+                  <option value="experience">Experience</option>
+                </select>
+              </div>
             </div>
             {!loading && (
               <div className="rounded-3xl border bg-white overflow-hidden">
@@ -353,22 +668,26 @@ function AdminInner() {
                     <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
                       <div className="col-span-4">Listing</div><div className="col-span-2">Host</div><div className="col-span-2">Status</div><div className="col-span-1">Featured</div><div className="col-span-3 text-right">Actions</div>
                     </div>
-                    {all.slice(0, 20).map((p)=>(
-                      <div key={p.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
-                        <div className="col-span-4 flex items-center gap-3"><img src={(p.images && p.images[0]) || ''} className="size-12 rounded-xl object-cover bg-secondary" alt="" /><div><div className="font-semibold text-sm line-clamp-1">{p.title}</div><div className="text-xs text-muted-foreground">{p.location} · ₹{p.price.toLocaleString('en-IN')}</div></div></div>
-                        <div className="col-span-2 text-sm">{p.hostName || p.hostId}</div>
-                        <div className="col-span-2"><StatusPill s={p.status} /></div>
-                        <div className="col-span-1">{p.featured ? <Star className="size-4 text-gold fill-gold" /> : <Star className="size-4 text-muted-foreground" />}</div>
-                        <div className="col-span-3 flex justify-end gap-1">
-                          {p.status !== 'approved' && <Button onClick={()=>approve(p.id)} size="sm" variant="outline" className="rounded-full h-8" title="Approve"><Check className="size-3.5" /></Button>}
-                          {p.status !== 'suspended' && <Button onClick={()=>suspendListing(p.id)} size="sm" variant="ghost" className="rounded-full h-8" title="Suspend"><Ban className="size-3.5" /></Button>}
-                          {p.status === 'suspended' && <Button onClick={()=>activateListing(p.id)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2" title="Activate"><RotateCcw className="size-3.5" /></Button>}
-                          <Button onClick={()=>toggleFeatured(p.id, !p.featured)} size="sm" variant="ghost" className="rounded-full h-8 text-gold" title={p.featured ? "Unfeature" : "Feature"}><Star className="size-3.5" /></Button>
-                          <Button onClick={()=>deleteListing(p.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Delete"><Trash2 className="size-3.5" /></Button>
-                          <Link href={`/property/${p.id}`} className="px-3 py-1 rounded-full bg-secondary text-xs font-semibold hover:bg-secondary/80">View</Link>
+                    {filteredListings.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-muted-foreground">No listings match your filters</div>
+                    ) : (
+                      filteredListings.slice(0, 50).map((p)=>(
+                        <div key={p.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                          <div className="col-span-4 flex items-center gap-3"><img src={(p.images && p.images[0]) || ''} className="size-12 rounded-xl object-cover bg-secondary" alt="" /><div><div className="font-semibold text-sm line-clamp-1">{p.title}</div><div className="text-xs text-muted-foreground">{p.location} · ₹{p.price.toLocaleString('en-IN')}</div></div></div>
+                          <div className="col-span-2 text-sm">{p.hostName || p.hostId}</div>
+                          <div className="col-span-2"><StatusPill s={p.status} /></div>
+                          <div className="col-span-1">{p.featured ? <Star className="size-4 text-gold fill-gold" /> : <Star className="size-4 text-muted-foreground" />}</div>
+                          <div className="col-span-3 flex justify-end gap-1">
+                            {p.status !== 'approved' && <Button onClick={()=>approve(p.id)} size="sm" variant="outline" className="rounded-full h-8" title="Approve"><Check className="size-3.5" /></Button>}
+                            {p.status !== 'suspended' && <Button onClick={()=>suspendListing(p.id)} size="sm" variant="ghost" className="rounded-full h-8" title="Suspend"><Ban className="size-3.5" /></Button>}
+                            {p.status === 'suspended' && <Button onClick={()=>activateListing(p.id)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2" title="Activate"><RotateCcw className="size-3.5" /></Button>}
+                            <Button onClick={()=>toggleFeatured(p.id, !p.featured)} size="sm" variant="ghost" className="rounded-full h-8 text-gold" title={p.featured ? "Unfeature" : "Feature"}><Star className="size-3.5" /></Button>
+                            <Button onClick={()=>deleteListing(p.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Delete"><Trash2 className="size-3.5" /></Button>
+                            <Link href={`/property/${p.id}`} className="px-3 py-1 rounded-full bg-secondary text-xs font-semibold hover:bg-secondary/80">View</Link>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
