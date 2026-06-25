@@ -55,18 +55,29 @@ function AdminInner() {
   const [listingStatusFilter, setListingStatusFilter] = useState('all');
   const [listingCategoryFilter, setListingCategoryFilter] = useState('all');
   const [userRoleFilter, setUserRoleFilter] = useState('all');
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('all');
+  
+  // New module states
+  const [reviews, setReviews] = useState([]);
+  const [promoCodes, setPromoCodes] = useState([]);
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [promoModal, setPromoModal] = useState(null);
+  const [ticketModal, setTicketModal] = useState(null);
   
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
   const load = async () => {
     setLoading(true); setError(null);
-    const [p, a, u, bk, rev, trans] = await Promise.all([
+    const [p, a, u, bk, rev, trans, revs, promos, tickets] = await Promise.all([
       listingsApi.list({ status: 'pending', limit: 50 }),
       listingsApi.list({ status: 'all', limit: 200 }),
       apiJson('/api/users'),
       bookingsApi.list('all'),
       apiJson('/api/admin/revenue'),
       apiJson('/api/admin/transactions'),
+      apiJson('/api/reviews?limit=100'),
+      apiJson('/api/admin/promos'),
+      apiJson('/api/admin/tickets'),
     ]);
     if (p.ok && p.data?.ok) setPending(p.data.listings); else setError(p.data?.error || 'Failed to load pending');
     if (a.ok && a.data?.ok) setAll(a.data.listings);
@@ -74,6 +85,9 @@ function AdminInner() {
     if (bk.ok && bk.data?.ok) setAllBookings(bk.data.bookings || []);
     if (rev.ok && rev.data?.ok) setRevenue(rev.data);
     if (trans.ok && trans.data?.ok) setTransactions(trans.data.transactions || []);
+    if (revs.ok && revs.data?.ok) setReviews(revs.data.reviews || []);
+    if (promos.ok && promos.data?.ok) setPromoCodes(promos.data.promoCodes || []);
+    if (tickets.ok && tickets.data?.ok) setSupportTickets(tickets.data.tickets || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -193,6 +207,90 @@ function AdminInner() {
     const data = await res.json();
     if (!data.ok) return toast.error(data.error || 'Refund failed');
     toast.success('Refund issued');
+    load();
+  };
+
+  // Booking Management Actions
+  const updateBookingStatus = async (id, status) => {
+    const res = await fetch(`/api/admin/bookings/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Status update failed');
+    toast.success(`Booking ${status}`);
+    load();
+  };
+
+  // Review Management Actions
+  const deleteReview = async (id) => {
+    if (!confirm('Delete this review? This action cannot be undone.')) return;
+    const res = await fetch(`/api/reviews/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Delete failed');
+    toast.success('Review deleted');
+    load();
+  };
+
+  // Promo Code Actions
+  const createPromo = async (promo) => {
+    const res = await fetch('/api/admin/promos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(promo),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Create failed');
+    toast.success('Promo code created');
+    setPromoModal(null);
+    load();
+  };
+
+  const updatePromo = async (id, updates) => {
+    const res = await fetch(`/api/admin/promos/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Update failed');
+    toast.success('Promo code updated');
+    setPromoModal(null);
+    load();
+  };
+
+  const deletePromo = async (id) => {
+    if (!confirm('Delete this promo code?')) return;
+    const res = await fetch(`/api/admin/promos/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Delete failed');
+    toast.success('Promo code deleted');
+    load();
+  };
+
+  // Support Ticket Actions
+  const updateTicket = async (id, updates) => {
+    const res = await fetch(`/api/admin/tickets/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Update failed');
+    toast.success('Ticket updated');
+    load();
+  };
+
+  const replyToTicket = async (id, message) => {
+    const res = await fetch(`/api/admin/tickets/${id}/reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Reply failed');
+    toast.success('Reply sent');
     load();
   };
 
@@ -329,13 +427,16 @@ function AdminInner() {
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="mt-8">
-          <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 h-auto">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-10 h-auto gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="listings">Listings</TabsTrigger>
+            <TabsTrigger value="bookings">Bookings</TabsTrigger>
+            <TabsTrigger value="reviews">Reviews</TabsTrigger>
+            <TabsTrigger value="promotions">Promos</TabsTrigger>
             <TabsTrigger value="hosts">Hosts</TabsTrigger>
             <TabsTrigger value="travelers">Travelers</TabsTrigger>
             <TabsTrigger value="users">All Users</TabsTrigger>
-            <TabsTrigger value="bookings">Bookings</TabsTrigger>
+            <TabsTrigger value="support">Support</TabsTrigger>
             <TabsTrigger value="revenue">Revenue</TabsTrigger>
           </TabsList>
 
@@ -696,9 +797,24 @@ function AdminInner() {
 
           {/* Bookings Tab */}
           <TabsContent value="bookings" className="space-y-6 mt-6">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-2xl font-bold">Booking Management</h2>
-              <span className="text-sm text-muted-foreground">{allBookings.length} total · {allBookings.filter(b=>b.status==='pending').length} pending</span>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Booking Management</h2>
+                <span className="text-sm text-muted-foreground">
+                  {allBookings.filter(b => bookingStatusFilter === 'all' || b.status === bookingStatusFilter).length} of {allBookings.length} bookings
+                </span>
+              </div>
+              <select 
+                value={bookingStatusFilter} 
+                onChange={(e) => setBookingStatusFilter(e.target.value)}
+                className="px-3 py-2 rounded-full border text-sm outline-none focus:ring-2 focus:ring-emerald2/20"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
             {!loading && allBookings.length === 0 && (
               <div className="p-6 rounded-3xl border bg-white text-center text-sm text-muted-foreground">No bookings yet.</div>
@@ -706,20 +822,187 @@ function AdminInner() {
             {!loading && allBookings.length > 0 && (
               <div className="rounded-3xl border bg-white overflow-hidden">
                 <div className="overflow-x-auto">
-                  <div className="min-w-[1000px]">
+                  <div className="min-w-[1100px]">
                     <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
                       <div className="col-span-3">Listing</div><div className="col-span-2">Guest → Host</div><div className="col-span-2">Dates</div><div className="col-span-1">Status</div><div className="col-span-2 text-right">Total</div><div className="col-span-2 text-right">Actions</div>
                     </div>
-                    {allBookings.slice(0, 20).map((b) => (
+                    {allBookings.filter(b => bookingStatusFilter === 'all' || b.status === bookingStatusFilter).slice(0, 50).map((b) => (
                       <div key={b.bookingId} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
                         <div className="col-span-3 flex items-center gap-3">{b.listingImage && <img src={b.listingImage} className="size-10 rounded-lg object-cover" alt="" />}<div><div className="font-semibold text-sm line-clamp-1">{b.listingTitle}</div></div></div>
                         <div className="col-span-2 text-xs">{b.travelerName}<br/><span className="text-muted-foreground">→ {b.hostName}</span></div>
                         <div className="col-span-2 text-xs">{new Date(b.checkInDate).toLocaleDateString()} →<br/>{new Date(b.checkOutDate).toLocaleDateString()}</div>
-                        <div className="col-span-1"><StatusPill s={b.status} /></div>
+                        <div className="col-span-1">
+                          <select 
+                            value={b.status} 
+                            onChange={(e) => updateBookingStatus(b.bookingId, e.target.value)}
+                            className="text-xs px-2 py-1 rounded-full border outline-none"
+                            disabled={b.status === 'cancelled'}
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
                         <div className="col-span-2 text-right text-sm font-semibold">₹{(b.totalPrice||0).toLocaleString('en-IN')}{b.refunded && <span className="text-xs text-emerald2 block">Refunded</span>}</div>
                         <div className="col-span-2 flex justify-end gap-1">
+                          {b.status !== 'cancelled' && b.status !== 'completed' && <Button onClick={()=>updateBookingStatus(b.bookingId, 'completed')} size="sm" variant="outline" className="rounded-full h-8 text-emerald2" title="Mark Completed"><Check className="size-3.5" /></Button>}
                           {b.status !== 'cancelled' && <Button onClick={()=>cancelBooking(b.bookingId)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Cancel"><X className="size-3.5" /></Button>}
-                          {!b.refunded && <Button onClick={()=>refundBooking(b.bookingId)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2" title="Refund"><Wallet className="size-3.5" /></Button>}
+                          {!b.refunded && b.status === 'cancelled' && <Button onClick={()=>refundBooking(b.bookingId)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2" title="Refund"><Wallet className="size-3.5" /></Button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Reviews Tab */}
+          <TabsContent value="reviews" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Reviews Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage customer reviews and ratings</p>
+              </div>
+              <span className="text-sm text-muted-foreground">{reviews.length} total reviews</span>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && reviews.length === 0 && (
+              <div className="p-10 rounded-3xl border bg-white text-center">
+                <Star className="size-7 mx-auto text-muted-foreground" />
+                <div className="font-display text-lg font-bold mt-3">No reviews yet</div>
+                <p className="text-sm text-muted-foreground mt-1">Reviews will appear here once customers submit them.</p>
+              </div>
+            )}
+            {!loading && reviews.length > 0 && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[900px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-3">Property</div><div className="col-span-2">Reviewer</div><div className="col-span-1">Rating</div><div className="col-span-4">Review</div><div className="col-span-2 text-right">Actions</div>
+                    </div>
+                    {reviews.slice(0, 50).map((r)=>(
+                      <div key={r.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                        <div className="col-span-3">
+                          <Link href={`/property/${r.propertyId}`} className="font-semibold text-sm hover:text-emerald2 line-clamp-1">{r.propertyTitle || r.propertyId}</Link>
+                        </div>
+                        <div className="col-span-2 text-sm">{r.userName || 'Anonymous'}</div>
+                        <div className="col-span-1">
+                          <div className="flex gap-0.5">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className={`size-3 ${i < (r.rating || 0) ? 'fill-gold text-gold' : 'text-gray-300'}`} />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="col-span-4 text-xs text-muted-foreground line-clamp-2">{r.reviewText || 'No comment'}</div>
+                        <div className="col-span-2 flex justify-end gap-1">
+                          <Button onClick={()=>deleteReview(r.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Delete"><Trash2 className="size-3.5" /></Button>
+                          <Link href={`/property/${r.propertyId}`} className="px-3 py-1 rounded-full bg-secondary text-xs font-semibold hover:bg-secondary/80">View Property</Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Promotions Tab */}
+          <TabsContent value="promotions" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Promotions & Promo Codes</h2>
+                <p className="text-sm text-muted-foreground mt-1">Create and manage promotional campaigns</p>
+              </div>
+              <Button onClick={()=>setPromoModal({mode:'create'})} className="rounded-full bg-emerald2 hover:bg-emerald2-deep">Create Promo Code</Button>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && promoCodes.length === 0 && (
+              <div className="p-10 rounded-3xl border bg-white text-center">
+                <ShieldAlert className="size-7 mx-auto text-muted-foreground" />
+                <div className="font-display text-lg font-bold mt-3">No promo codes yet</div>
+                <p className="text-sm text-muted-foreground mt-1">Create your first promotional campaign.</p>
+                <Button onClick={()=>setPromoModal({mode:'create'})} className="rounded-full bg-emerald2 hover:bg-emerald2-deep mt-4">Create Promo Code</Button>
+              </div>
+            )}
+            {!loading && promoCodes.length > 0 && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1000px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-2">Code</div><div className="col-span-3">Description</div><div className="col-span-2">Discount</div><div className="col-span-2">Valid Until</div><div className="col-span-1">Status</div><div className="col-span-2 text-right">Actions</div>
+                    </div>
+                    {promoCodes.map((p)=>(
+                      <div key={p.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                        <div className="col-span-2 font-mono font-bold text-sm">{p.code}</div>
+                        <div className="col-span-3 text-xs line-clamp-1">{p.description}</div>
+                        <div className="col-span-2 text-sm font-semibold text-emerald2">
+                          {p.discountType === 'percentage' ? `${p.discountValue}%` : `₹${p.discountValue}`}
+                        </div>
+                        <div className="col-span-2 text-xs">{p.expiryDate ? new Date(p.expiryDate).toLocaleDateString() : 'No expiry'}</div>
+                        <div className="col-span-1"><StatusPill s={p.active ? 'active' : 'suspended'} /></div>
+                        <div className="col-span-2 flex justify-end gap-1">
+                          <Button onClick={()=>updatePromo(p.id, {active: !p.active})} size="sm" variant="outline" className="rounded-full h-8" title={p.active ? "Disable" : "Enable"}>{p.active ? <Ban className="size-3.5" /> : <Check className="size-3.5" />}</Button>
+                          <Button onClick={()=>setPromoModal({mode:'edit', promo:p})} size="sm" variant="ghost" className="rounded-full h-8" title="Edit"><Eye className="size-3.5" /></Button>
+                          <Button onClick={()=>deletePromo(p.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Delete"><Trash2 className="size-3.5" /></Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Support Tab */}
+          <TabsContent value="support" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Customer Support Center</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage customer support tickets and conversations</p>
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {supportTickets.filter(t=>t.status==='open').length} open · {supportTickets.length} total
+              </span>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && supportTickets.length === 0 && (
+              <div className="p-10 rounded-3xl border bg-white text-center">
+                <Users className="size-7 mx-auto text-muted-foreground" />
+                <div className="font-display text-lg font-bold mt-3">No support tickets</div>
+                <p className="text-sm text-muted-foreground mt-1">Customer support tickets will appear here.</p>
+              </div>
+            )}
+            {!loading && supportTickets.length > 0 && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1100px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-1">Ticket #</div><div className="col-span-2">Customer</div><div className="col-span-2">Category</div><div className="col-span-1">Priority</div><div className="col-span-2">Status</div><div className="col-span-2">Created</div><div className="col-span-2 text-right">Actions</div>
+                    </div>
+                    {supportTickets.slice(0, 50).map((t)=>(
+                      <div key={t.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                        <div className="col-span-1 font-mono text-xs">#{t.ticketNumber || t.id.slice(0,6)}</div>
+                        <div className="col-span-2 text-sm">{t.customerName}</div>
+                        <div className="col-span-2 text-xs capitalize">{t.category}</div>
+                        <div className="col-span-1"><StatusPill s={t.priority || 'medium'} /></div>
+                        <div className="col-span-2">
+                          <select 
+                            value={t.status} 
+                            onChange={(e) => updateTicket(t.id, {status: e.target.value})}
+                            className="text-xs px-2 py-1 rounded-full border outline-none w-full"
+                          >
+                            <option value="open">Open</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="waiting">Waiting</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="closed">Closed</option>
+                          </select>
+                        </div>
+                        <div className="col-span-2 text-xs">{new Date(t.createdAt).toLocaleDateString()}</div>
+                        <div className="col-span-2 flex justify-end gap-1">
+                          <Button onClick={()=>setTicketModal(t)} size="sm" className="rounded-full h-8 bg-emerald2 hover:bg-emerald2-deep">View</Button>
                         </div>
                       </div>
                     ))}
@@ -828,6 +1111,140 @@ function AdminInner() {
             </div>
             <DialogFooter>
               <Button onClick={()=>setRoleModal(null)} variant="outline">Cancel</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Promo Code Modal */}
+      {promoModal && (
+        <Dialog open={!!promoModal} onOpenChange={()=>setPromoModal(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{promoModal.mode === 'create' ? 'Create Promo Code' : 'Edit Promo Code'}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const promo = {
+                code: formData.get('code'),
+                description: formData.get('description'),
+                discountType: formData.get('discountType'),
+                discountValue: Number(formData.get('discountValue')),
+                startDate: formData.get('startDate'),
+                expiryDate: formData.get('expiryDate'),
+                usageLimit: Number(formData.get('usageLimit')) || null,
+                minAmount: Number(formData.get('minAmount')) || 0,
+                active: formData.get('active') === 'on',
+              };
+              promoModal.mode === 'create' ? createPromo(promo) : updatePromo(promoModal.promo.id, promo);
+            }}>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold">Promo Code</label>
+                  <input name="code" defaultValue={promoModal.promo?.code} required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="SUMMER2025" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Discount Type</label>
+                  <select name="discountType" defaultValue={promoModal.promo?.discountType || 'percentage'} className="w-full mt-1 px-3 py-2 border rounded-lg">
+                    <option value="percentage">Percentage</option>
+                    <option value="fixed">Fixed Amount</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm font-semibold">Description</label>
+                  <input name="description" defaultValue={promoModal.promo?.description} required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Summer discount for all bookings" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Discount Value</label>
+                  <input name="discountValue" type="number" defaultValue={promoModal.promo?.discountValue} required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="10" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Min Booking Amount</label>
+                  <input name="minAmount" type="number" defaultValue={promoModal.promo?.minAmount} className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="0" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Start Date</label>
+                  <input name="startDate" type="date" defaultValue={promoModal.promo?.startDate?.split('T')[0]} className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Expiry Date</label>
+                  <input name="expiryDate" type="date" defaultValue={promoModal.promo?.expiryDate?.split('T')[0]} className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Usage Limit</label>
+                  <input name="usageLimit" type="number" defaultValue={promoModal.promo?.usageLimit} className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Unlimited" />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 mt-6">
+                    <input name="active" type="checkbox" defaultChecked={promoModal.promo?.active !== false} />
+                    <span className="text-sm font-semibold">Active</span>
+                  </label>
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
+                <Button type="button" onClick={()=>setPromoModal(null)} variant="outline">Cancel</Button>
+                <Button type="submit" className="bg-emerald2 hover:bg-emerald2-deep">{promoModal.mode === 'create' ? 'Create' : 'Update'}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Ticket Detail Modal */}
+      {ticketModal && (
+        <Dialog open={!!ticketModal} onOpenChange={()=>setTicketModal(null)}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Ticket #{ticketModal.ticketNumber || ticketModal.id.slice(0,8)}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-muted-foreground">Customer:</span> <span className="font-semibold">{ticketModal.customerName}</span></div>
+                <div><span className="text-muted-foreground">Email:</span> <span className="font-semibold">{ticketModal.customerEmail}</span></div>
+                <div><span className="text-muted-foreground">Category:</span> <StatusPill s={ticketModal.category} /></div>
+                <div><span className="text-muted-foreground">Priority:</span> <StatusPill s={ticketModal.priority || 'medium'} /></div>
+                <div><span className="text-muted-foreground">Status:</span> <StatusPill s={ticketModal.status} /></div>
+                <div><span className="text-muted-foreground">Created:</span> <span className="font-semibold">{new Date(ticketModal.createdAt).toLocaleString()}</span></div>
+              </div>
+              <div className="border-t pt-4">
+                <div className="text-sm font-semibold mb-2">Conversation</div>
+                <div className="space-y-3 max-h-96 overflow-y-auto p-4 bg-secondary/20 rounded-lg">
+                  <div className="p-3 bg-white rounded-lg">
+                    <div className="text-xs text-muted-foreground mb-1">{ticketModal.customerName} • {new Date(ticketModal.createdAt).toLocaleString()}</div>
+                    <div className="text-sm">{ticketModal.message}</div>
+                  </div>
+                  {ticketModal.conversation?.map((msg, i) => (
+                    <div key={i} className={`p-3 rounded-lg ${msg.from === 'admin' ? 'bg-emerald-50 ml-8' : 'bg-white mr-8'}`}>
+                      <div className="text-xs text-muted-foreground mb-1">{msg.from === 'admin' ? 'Admin' : ticketModal.customerName} • {new Date(msg.timestamp).toLocaleString()}</div>
+                      <div className="text-sm">{msg.message}</div>
+                    </div>
+                  ))}
+                </div>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const msg = e.target.message.value;
+                  if (msg.trim()) {
+                    replyToTicket(ticketModal.id, msg);
+                    setTicketModal(null);
+                  }
+                }} className="mt-3">
+                  <textarea name="message" placeholder="Type your reply..." className="w-full p-3 border rounded-lg resize-none" rows="3" />
+                  <div className="flex gap-2 mt-2">
+                    <Button type="submit" className="bg-emerald2 hover:bg-emerald2-deep">Send Reply</Button>
+                    <select onChange={(e) => updateTicket(ticketModal.id, {status: e.target.value})} value={ticketModal.status} className="px-3 py-2 border rounded-lg text-sm">
+                      <option value="open">Open</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="waiting">Waiting for Customer</option>
+                      <option value="resolved">Resolved</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                </form>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={()=>setTicketModal(null)} variant="outline">Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

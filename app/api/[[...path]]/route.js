@@ -1600,6 +1600,128 @@ Return ONLY the JSON, no other text.`;
     return ok({ saved: !!saved, count });
   }
 
+  // Booking Status Update
+  if (path.match(/^\/admin\/bookings\/([^/]+)\/status$/) && method === 'PATCH') {
+    const bookingId = path.match(/^\/admin\/bookings\/([^/]+)\/status$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return err('Unauthorized', 401);
+    
+    const { status } = await request.json();
+    const bookings = await getCollection('bookings');
+    await bookings.updateOne({ bookingId }, { $set: { status, updatedAt: new Date() } });
+    return ok({ ok: true });
+  }
+
+  // Promo Codes CRUD
+  if (path === '/admin/promos' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return ok({ ok: true, promoCodes: [] });
+    
+    const promos = await getCollection('promoCodes');
+    const promoCodes = await promos.find({}).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, promoCodes });
+  }
+
+  if (path === '/admin/promos' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return err('Unauthorized', 401);
+    
+    const data = await request.json();
+    const promos = await getCollection('promoCodes');
+    const promo = {
+      ...data,
+      id: randomUUID(),
+      createdAt: new Date(),
+      createdBy: me.id,
+      usedCount: 0,
+    };
+    await promos.insertOne(promo);
+    return ok({ ok: true, promo });
+  }
+
+  if (path.match(/^\/admin\/promos\/([^/]+)$/) && method === 'PATCH') {
+    const promoId = path.match(/^\/admin\/promos\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return err('Unauthorized', 401);
+    
+    const updates = await request.json();
+    const promos = await getCollection('promoCodes');
+    await promos.updateOne({ id: promoId }, { $set: { ...updates, updatedAt: new Date() } });
+    return ok({ ok: true });
+  }
+
+  if (path.match(/^\/admin\/promos\/([^/]+)$/) && method === 'DELETE') {
+    const promoId = path.match(/^\/admin\/promos\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return err('Unauthorized', 401);
+    
+    const promos = await getCollection('promoCodes');
+    await promos.deleteOne({ id: promoId });
+    return ok({ ok: true });
+  }
+
+  // Support Tickets CRUD
+  if (path === '/admin/tickets' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return ok({ ok: true, tickets: [] });
+    
+    const tickets = await getCollection('supportTickets');
+    const allTickets = await tickets.find({}).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, tickets: allTickets });
+  }
+
+  if (path === '/admin/tickets' && method === 'POST') {
+    const data = await request.json();
+    const tickets = await getCollection('supportTickets');
+    const ticket = {
+      ...data,
+      id: randomUUID(),
+      ticketNumber: `TKT${Date.now().toString().slice(-8)}`,
+      status: 'open',
+      priority: data.priority || 'medium',
+      conversation: [],
+      createdAt: new Date(),
+    };
+    await tickets.insertOne(ticket);
+    return ok({ ok: true, ticket });
+  }
+
+  if (path.match(/^\/admin\/tickets\/([^/]+)$/) && method === 'PATCH') {
+    const ticketId = path.match(/^\/admin\/tickets\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return err('Unauthorized', 401);
+    
+    const updates = await request.json();
+    const tickets = await getCollection('supportTickets');
+    await tickets.updateOne({ id: ticketId }, { $set: { ...updates, updatedAt: new Date() } });
+    return ok({ ok: true });
+  }
+
+  if (path.match(/^\/admin\/tickets\/([^/]+)\/reply$/) && method === 'POST') {
+    const ticketId = path.match(/^\/admin\/tickets\/([^/]+)\/reply$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'admin') return err('Unauthorized', 401);
+    
+    const { message } = await request.json();
+    const tickets = await getCollection('supportTickets');
+    await tickets.updateOne(
+      { id: ticketId },
+      {
+        $push: {
+          conversation: {
+            from: 'admin',
+            message,
+            timestamp: new Date(),
+            adminId: me.id,
+            adminName: me.name,
+          },
+        },
+        $set: { updatedAt: new Date() },
+      }
+    );
+    return ok({ ok: true });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });
