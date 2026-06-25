@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getCollection, getCurrentUser } from '@/lib/mongodb';
+import { getCollection } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(request, { params }) {
   try {

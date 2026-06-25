@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getCollection, getCurrentUser } from '@/lib/mongodb';
+import { getCollection } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.EMERGENT_LLM_KEY);
 
