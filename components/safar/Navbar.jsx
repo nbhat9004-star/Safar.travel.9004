@@ -31,6 +31,7 @@ export default function Navbar({ transparent = false }) {
       { href: '/explore?cat=experience',  label: 'Experiences' },
       { href: '/explore?cat=transport',   label: 'Bikes & Cars' },
       { href: '/explore?cat=tour',        label: 'Tour Guides' },
+      { href: '/explore?nearme=true',     label: 'Near Me' },
       { href: '/ai-planner',              label: 'AI Planner' },
     ];
 

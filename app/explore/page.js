@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, SlidersHorizontal, Map, X, Star, ListChecks, AlertTriangle, CalendarRange, Users, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, Map, X, Star, ListChecks, AlertTriangle, CalendarRange, Users, Loader2, MapPin, Navigation } from 'lucide-react';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import PropertyCard from '@/components/safar/PropertyCard';
@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { IMG } from '@/lib/data';
 import { useListings } from '@/lib/listings-api';
+import { calculateListingDistance, formatDistance } from '@/lib/location-utils';
+import { toast } from 'sonner';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -35,6 +37,12 @@ function ExploreContent() {
   const [showFilters, setShowFilters] = useState(false);
   const [mapView, setMapView] = useState(false);
   const [selectedServices, setSelectedServices] = useState([]);
+  
+  // Near Me state
+  const [nearMeMode, setNearMeMode] = useState(searchParams.get('nearme') === 'true');
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationError, setLocationError] = useState(null);
+  const [requestingLocation, setRequestingLocation] = useState(false);
 
   // Keep URL in sync (so refresh / share preserves search)
   useEffect(() => {
@@ -43,13 +51,62 @@ function ExploreContent() {
     if (checkIn) qp.set('checkIn', checkIn);
     if (checkOut) qp.set('checkOut', checkOut);
     if (guests > 0) qp.set('guests', String(guests));
+    if (nearMeMode) qp.set('nearme', 'true');
     const next = qp.toString();
     const current = searchParams.toString();
     if (next !== current) {
       router.replace(`/explore${next ? '?' + next : ''}`, { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, checkIn, checkOut, guests]);
+  }, [q, checkIn, checkOut, guests, nearMeMode]);
+
+  // Handle Near Me mode activation
+  useEffect(() => {
+    if (nearMeMode && !userLocation && !locationError && !requestingLocation) {
+      requestUserLocation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearMeMode]);
+
+  const requestUserLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      toast.error('Geolocation not supported');
+      return;
+    }
+
+    setRequestingLocation(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lon: position.coords.longitude,
+        });
+        setRequestingLocation(false);
+        toast.success('Location detected!');
+      },
+      (error) => {
+        let message = 'Unable to get your location';
+        if (error.code === 1) {
+          message = 'Location permission denied';
+        } else if (error.code === 2) {
+          message = 'Location unavailable';
+        } else if (error.code === 3) {
+          message = 'Location request timeout';
+        }
+        setLocationError(message);
+        setRequestingLocation(false);
+        toast.error(message);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000, // 5 minutes cache
+      }
+    );
+  };
 
   // Map UI category -> API filter (subcategory for stays; category for transport/tour/experience)
   const apiParams = useMemo(() => {
@@ -71,12 +128,26 @@ function ExploreContent() {
   const { listings, total, loading, error, refresh } = useListings(apiParams, [JSON.stringify(apiParams)]);
 
   const list = useMemo(() => {
-    const arr = [...listings];
-    if (sort === 'price-asc') arr.sort((a,b)=>a.price-b.price);
-    if (sort === 'price-desc') arr.sort((a,b)=>b.price-a.price);
-    if (sort === 'rating') arr.sort((a,b)=>b.rating-a.rating);
+    let arr = [...listings];
+    
+    // Add distance to each listing if in Near Me mode
+    if (nearMeMode && userLocation) {
+      arr = arr.map(listing => ({
+        ...listing,
+        distance: calculateListingDistance(userLocation.lat, userLocation.lon, listing)
+      }));
+      
+      // Sort by distance in Near Me mode
+      arr.sort((a, b) => a.distance - b.distance);
+    } else {
+      // Regular sorting
+      if (sort === 'price-asc') arr.sort((a,b)=>a.price-b.price);
+      if (sort === 'price-desc') arr.sort((a,b)=>b.price-a.price);
+      if (sort === 'rating') arr.sort((a,b)=>b.rating-a.rating);
+    }
+    
     return arr;
-  }, [listings, sort]);
+  }, [listings, sort, nearMeMode, userLocation]);
 
   const hasDateFilter = checkIn && checkOut && checkOut > checkIn;
   const hasGuestFilter = guests > 0;
@@ -108,6 +179,59 @@ function ExploreContent() {
             </div>
           </motion.div>
           <div className="mt-5"><CategoryPills value={cat} onChange={setCat} /></div>
+
+          {/* Near Me banner */}
+          {nearMeMode && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-4">
+              {requestingLocation && (
+                <div className="px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 flex items-center gap-3">
+                  <Loader2 className="size-5 text-blue-600 animate-spin shrink-0" />
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-blue-900">Requesting your location...</div>
+                    <div className="text-xs text-blue-700 mt-0.5">Please allow location access in your browser</div>
+                  </div>
+                </div>
+              )}
+              
+              {locationError && (
+                <div className="px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-amber-900">Location access denied</div>
+                      <div className="text-xs text-amber-700 mt-0.5">{locationError}</div>
+                    </div>
+                    <Button size="sm" variant="outline" className="rounded-full shrink-0" onClick={requestUserLocation}>
+                      Retry
+                    </Button>
+                  </div>
+                  <div className="mt-3 text-xs text-amber-700">
+                    Please enable location access in your browser settings to see nearby listings.
+                  </div>
+                </div>
+              )}
+              
+              {userLocation && !locationError && !requestingLocation && (
+                <div className="px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+                  <div className="size-9 rounded-full bg-emerald2 grid place-items-center shrink-0">
+                    <Navigation className="size-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-emerald-900">Showing properties near you</div>
+                    <div className="text-xs text-emerald-700 mt-0.5">Sorted by distance • Closest first</div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="rounded-full shrink-0 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100" 
+                    onClick={() => setNearMeMode(false)}
+                  >
+                    <X className="size-4 mr-1" /> Clear
+                  </Button>
+                </div>
+              )}
+            </motion.div>
+          )}
 
           {/* Active search filters: dates + guests */}
           {(hasDateFilter || hasGuestFilter) && (

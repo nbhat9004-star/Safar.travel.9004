@@ -2,11 +2,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Heart, Star, MapPin } from 'lucide-react';
+import { Heart, Star, MapPin, Navigation } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { useWishlist } from '@/lib/safar-storage';
+import { formatDistance } from '@/lib/location-utils';
 
 export default function PropertyCard({ item, index = 0, priority = false }) {
   const { user } = useAuth();
@@ -91,6 +92,15 @@ export default function PropertyCard({ item, index = 0, priority = false }) {
           {item.badge && (
             <div className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-white/90 text-charcoal shadow-md backdrop-blur">{item.badge}</div>
           )}
+          
+          {/* Distance badge for Near Me mode */}
+          {item.distance !== undefined && (
+            <div className="absolute top-3 left-3 px-3 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-emerald2 text-white shadow-md backdrop-blur flex items-center gap-1.5">
+              <Navigation className="size-3" />
+              {formatDistance(item.distance)}
+            </div>
+          )}
+          
           <button onClick={onHeartClick} aria-label="Wishlist"
             className="absolute top-3 right-3 size-9 grid place-items-center rounded-full bg-white/85 hover:bg-white transition shadow-md backdrop-blur">
             <Heart className={`size-4 transition ${liked ? 'fill-rose-500 text-rose-500' : 'text-charcoal'}`} />
