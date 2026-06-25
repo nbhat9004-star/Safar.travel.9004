@@ -64,11 +64,19 @@ function AdminInner() {
   const [promoModal, setPromoModal] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   
+  // Phase 3 module states
+  const [admins, setAdmins] = useState([]);
+  const [settings, setSettings] = useState(null);
+  const [announcements, setAnnouncements] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [adminModal, setAdminModal] = useState(null);
+  const [announcementModal, setAnnouncementModal] = useState(null);
+  
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
   const load = async () => {
     setLoading(true); setError(null);
-    const [p, a, u, bk, rev, trans, revs, promos, tickets] = await Promise.all([
+    const [p, a, u, bk, rev, trans, revs, promos, tickets, adminsData, settingsData, announcementsData, logs] = await Promise.all([
       listingsApi.list({ status: 'pending', limit: 50 }),
       listingsApi.list({ status: 'all', limit: 200 }),
       apiJson('/api/users'),
@@ -78,6 +86,10 @@ function AdminInner() {
       apiJson('/api/reviews?limit=100'),
       apiJson('/api/admin/promos'),
       apiJson('/api/admin/tickets'),
+      apiJson('/api/admin/admins'),
+      apiJson('/api/admin/settings'),
+      apiJson('/api/admin/announcements'),
+      apiJson('/api/admin/activity-logs?limit=100'),
     ]);
     if (p.ok && p.data?.ok) setPending(p.data.listings); else setError(p.data?.error || 'Failed to load pending');
     if (a.ok && a.data?.ok) setAll(a.data.listings);
@@ -88,6 +100,10 @@ function AdminInner() {
     if (revs.ok && revs.data?.ok) setReviews(revs.data.reviews || []);
     if (promos.ok && promos.data?.ok) setPromoCodes(promos.data.promoCodes || []);
     if (tickets.ok && tickets.data?.ok) setSupportTickets(tickets.data.tickets || []);
+    if (adminsData.ok && adminsData.data?.ok) setAdmins(adminsData.data.admins || []);
+    if (settingsData.ok && settingsData.data?.ok) setSettings(settingsData.data.settings || {});
+    if (announcementsData.ok && announcementsData.data?.ok) setAnnouncements(announcementsData.data.announcements || []);
+    if (logs.ok && logs.data?.ok) setActivityLogs(logs.data.logs || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -294,6 +310,93 @@ function AdminInner() {
     load();
   };
 
+  // Admin Management Actions
+  const createAdmin = async (adminData) => {
+    const res = await fetch('/api/admin/admins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adminData),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Create failed');
+    toast.success('Admin created successfully');
+    setAdminModal(null);
+    load();
+  };
+
+  const updateAdminRole = async (adminId, role) => {
+    const res = await fetch(`/api/admin/admins/${adminId}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Update failed');
+    toast.success('Role updated');
+    load();
+  };
+
+  const disableAdmin = async (adminId) => {
+    const res = await fetch(`/api/admin/admins/${adminId}/disable`, { method: 'PATCH' });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Action failed');
+    toast.success('Admin disabled');
+    load();
+  };
+
+  const enableAdmin = async (adminId) => {
+    const res = await fetch(`/api/admin/admins/${adminId}/enable`, { method: 'PATCH' });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Action failed');
+    toast.success('Admin enabled');
+    load();
+  };
+
+  const deleteAdmin = async (adminId) => {
+    if (!confirm('Delete this admin account? This action cannot be undone.')) return;
+    const res = await fetch(`/api/admin/admins/${adminId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Delete failed');
+    toast.success('Admin deleted');
+    load();
+  };
+
+  // Settings Actions
+  const updateSettings = async (settingsData) => {
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settingsData),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Update failed');
+    toast.success('Settings updated');
+    load();
+  };
+
+  // Announcement Actions
+  const createAnnouncement = async (announcementData) => {
+    const res = await fetch('/api/admin/announcements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(announcementData),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Create failed');
+    toast.success('Announcement created');
+    setAnnouncementModal(null);
+    load();
+  };
+
+  const deleteAnnouncement = async (id) => {
+    if (!confirm('Delete this announcement?')) return;
+    const res = await fetch(`/api/admin/announcements/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Delete failed');
+    toast.success('Announcement deleted');
+    load();
+  };
+
   const counts = {
     total:    all.length,
     approved: all.filter(l => l.status === 'approved').length,
@@ -427,7 +530,7 @@ function AdminInner() {
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="mt-8">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-10 h-auto gap-1">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-14 h-auto gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="listings">Listings</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
@@ -437,7 +540,11 @@ function AdminInner() {
             <TabsTrigger value="travelers">Travelers</TabsTrigger>
             <TabsTrigger value="users">All Users</TabsTrigger>
             <TabsTrigger value="support">Support</TabsTrigger>
-            <TabsTrigger value="revenue">Revenue</TabsTrigger>
+            <TabsTrigger value="admins">Admins</TabsTrigger>
+            <TabsTrigger value="revenue">Analytics</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="announcements">Announce</TabsTrigger>
+            <TabsTrigger value="activity">Activity Log</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -1012,6 +1119,209 @@ function AdminInner() {
             )}
           </TabsContent>
 
+          {/* Admins Tab - MODULE 9 */}
+          <TabsContent value="admins" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Admin Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">Manage platform administrators</p>
+              </div>
+              <Button onClick={()=>setAdminModal({mode:'create'})} className="rounded-full bg-emerald2 hover:bg-emerald2-deep">Create Admin</Button>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[900px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-3">Admin</div><div className="col-span-2">Role</div><div className="col-span-2">Status</div><div className="col-span-2">Last Login</div><div className="col-span-3 text-right">Actions</div>
+                    </div>
+                    {admins.map((admin)=>(
+                      <div key={admin.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                        <div className="col-span-3 flex items-center gap-3">
+                          <div className="size-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 grid place-items-center text-white font-semibold">{(admin.name||'?').charAt(0)}</div>
+                          <div><div className="font-semibold text-sm">{admin.name}</div><div className="text-xs text-muted-foreground">{admin.email}</div></div>
+                        </div>
+                        <div className="col-span-2"><StatusPill s={admin.role || 'admin'} /></div>
+                        <div className="col-span-2"><StatusPill s={admin.status || 'active'} /></div>
+                        <div className="col-span-2 text-xs">{admin.lastLogin ? new Date(admin.lastLogin).toLocaleString() : 'Never'}</div>
+                        <div className="col-span-3 flex justify-end gap-1">
+                          {admin.role !== 'super_admin' && (
+                            <>
+                              <select onChange={(e)=>updateAdminRole(admin.id, e.target.value)} value={admin.role || 'admin'} className="text-xs px-2 py-1 border rounded-full">
+                                <option value="admin">Admin</option>
+                                <option value="super_admin">Super Admin</option>
+                                <option value="support_agent">Support Agent</option>
+                              </select>
+                              {admin.status !== 'disabled' && <Button onClick={()=>disableAdmin(admin.id)} size="sm" variant="ghost" className="rounded-full h-8"><Ban className="size-3.5" /></Button>}
+                              {admin.status === 'disabled' && <Button onClick={()=>enableAdmin(admin.id)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2"><Check className="size-3.5" /></Button>}
+                              <Button onClick={()=>deleteAdmin(admin.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600"><Trash2 className="size-3.5" /></Button>
+                            </>
+                          )}
+                          {admin.role === 'super_admin' && <span className="text-xs text-emerald2 font-semibold px-3">Protected</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Settings Tab - MODULE 10 */}
+          <TabsContent value="settings" className="space-y-6 mt-6">
+            <div>
+              <h2 className="font-display text-2xl font-bold">System Settings</h2>
+              <p className="text-sm text-muted-foreground mt-1">Configure platform settings</p>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && (
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const settingsData = {
+                  websiteName: formData.get('websiteName'),
+                  contactEmail: formData.get('contactEmail'),
+                  contactPhone: formData.get('contactPhone'),
+                  facebook: formData.get('facebook'),
+                  instagram: formData.get('instagram'),
+                  twitter: formData.get('twitter'),
+                  commissionRate: Number(formData.get('commissionRate')),
+                  platformStatus: formData.get('platformStatus'),
+                };
+                updateSettings(settingsData);
+              }} className="rounded-3xl border bg-white p-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="col-span-2">
+                    <h3 className="font-semibold text-lg mb-4">General Settings</h3>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Website Name</label>
+                    <input name="websiteName" defaultValue={settings?.websiteName || 'Safar Curated'} className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Contact Email</label>
+                    <input name="contactEmail" type="email" defaultValue={settings?.contactEmail || 'hello@safarcurated.com'} className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Contact Phone</label>
+                    <input name="contactPhone" defaultValue={settings?.contactPhone || '+91-XXXXXXXXXX'} className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Platform Status</label>
+                    <select name="platformStatus" defaultValue={settings?.platformStatus || 'online'} className="w-full mt-1 px-3 py-2 border rounded-lg">
+                      <option value="online">Online</option>
+                      <option value="maintenance">Maintenance</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2 border-t pt-4">
+                    <h3 className="font-semibold text-lg mb-4">Social Media</h3>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Facebook URL</label>
+                    <input name="facebook" defaultValue={settings?.facebook || ''} placeholder="https://facebook.com/safar" className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Instagram URL</label>
+                    <input name="instagram" defaultValue={settings?.instagram || ''} placeholder="https://instagram.com/safar" className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Twitter URL</label>
+                    <input name="twitter" defaultValue={settings?.twitter || ''} placeholder="https://twitter.com/safar" className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Commission Rate (%)</label>
+                    <input name="commissionRate" type="number" step="0.1" defaultValue={settings?.commissionRate || 15} className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-6">
+                  <Button type="submit" className="rounded-full bg-emerald2 hover:bg-emerald2-deep">Save Settings</Button>
+                  <Button type="button" variant="outline" className="rounded-full">Cancel</Button>
+                </div>
+              </form>
+            )}
+          </TabsContent>
+
+          {/* Announcements Tab - MODULE 11 */}
+          <TabsContent value="announcements" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">Announcements</h2>
+                <p className="text-sm text-muted-foreground mt-1">Broadcast messages to users</p>
+              </div>
+              <Button onClick={()=>setAnnouncementModal({mode:'create'})} className="rounded-full bg-emerald2 hover:bg-emerald2-deep">Create Announcement</Button>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && announcements.length === 0 && (
+              <div className="p-10 rounded-3xl border bg-white text-center">
+                <Users className="size-7 mx-auto text-muted-foreground" />
+                <div className="font-display text-lg font-bold mt-3">No announcements</div>
+                <p className="text-sm text-muted-foreground mt-1">Create your first announcement.</p>
+                <Button onClick={()=>setAnnouncementModal({mode:'create'})} className="rounded-full bg-emerald2 hover:bg-emerald2-deep mt-4">Create Announcement</Button>
+              </div>
+            )}
+            {!loading && announcements.length > 0 && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[900px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-2">Title</div><div className="col-span-4">Message</div><div className="col-span-2">Target</div><div className="col-span-1">Priority</div><div className="col-span-1">Status</div><div className="col-span-2 text-right">Actions</div>
+                    </div>
+                    {announcements.map((ann)=>(
+                      <div key={ann.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition">
+                        <div className="col-span-2 font-semibold text-sm line-clamp-1">{ann.title}</div>
+                        <div className="col-span-4 text-xs text-muted-foreground line-clamp-2">{ann.message}</div>
+                        <div className="col-span-2 text-xs capitalize">{ann.target}</div>
+                        <div className="col-span-1"><StatusPill s={ann.priority || 'normal'} /></div>
+                        <div className="col-span-1"><StatusPill s={ann.active ? 'active' : 'inactive'} /></div>
+                        <div className="col-span-2 flex justify-end gap-1">
+                          <Button onClick={()=>deleteAnnouncement(ann.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600"><Trash2 className="size-3.5" /></Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Activity Log Tab - MODULE 13 */}
+          <TabsContent value="activity" className="space-y-6 mt-6">
+            <div>
+              <h2 className="font-display text-2xl font-bold">Admin Activity Log</h2>
+              <p className="text-sm text-muted-foreground mt-1">Audit trail of all admin actions</p>
+            </div>
+            {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
+            {!loading && activityLogs.length === 0 && (
+              <div className="p-10 rounded-3xl border bg-white text-center">
+                <BarChart3 className="size-7 mx-auto text-muted-foreground" />
+                <div className="font-display text-lg font-bold mt-3">No activity logs</div>
+                <p className="text-sm text-muted-foreground mt-1">Admin actions will be logged here.</p>
+              </div>
+            )}
+            {!loading && activityLogs.length > 0 && (
+              <div className="rounded-3xl border bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1100px]">
+                    <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                      <div className="col-span-2">Timestamp</div><div className="col-span-2">Admin</div><div className="col-span-1">Role</div><div className="col-span-2">Action</div><div className="col-span-4">Details</div><div className="col-span-1">IP</div>
+                    </div>
+                    {activityLogs.slice(0, 100).map((log)=>(
+                      <div key={log.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition text-xs">
+                        <div className="col-span-2">{new Date(log.timestamp).toLocaleString()}</div>
+                        <div className="col-span-2 font-semibold">{log.adminName}</div>
+                        <div className="col-span-1"><StatusPill s={log.adminRole} /></div>
+                        <div className="col-span-2 capitalize">{log.action?.replace(/_/g, ' ')}</div>
+                        <div className="col-span-4 text-muted-foreground line-clamp-1">{log.details}</div>
+                        <div className="col-span-1 font-mono">{log.ipAddress || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
           {/* Revenue Tab */}
           <TabsContent value="revenue" className="space-y-6 mt-6">
             <h2 className="font-display text-2xl font-bold">Revenue Dashboard</h2>
@@ -1246,6 +1556,116 @@ function AdminInner() {
             <DialogFooter>
               <Button onClick={()=>setTicketModal(null)} variant="outline">Close</Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Admin Creation Modal */}
+      {adminModal && (
+        <Dialog open={!!adminModal} onOpenChange={()=>setAdminModal(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create Admin Account</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const adminData = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                role: formData.get('role'),
+                password: formData.get('password'),
+              };
+              createAdmin(adminData);
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold">Name</label>
+                  <input name="name" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Admin Name" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Email</label>
+                  <input name="email" type="email" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="admin@safarcurated.com" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Password</label>
+                  <input name="password" type="password" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Minimum 8 characters" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Role</label>
+                  <select name="role" className="w-full mt-1 px-3 py-2 border rounded-lg">
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                    <option value="support_agent">Support Agent</option>
+                  </select>
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
+                <Button type="button" onClick={()=>setAdminModal(null)} variant="outline">Cancel</Button>
+                <Button type="submit" className="bg-emerald2 hover:bg-emerald2-deep">Create Admin</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Announcement Modal */}
+      {announcementModal && (
+        <Dialog open={!!announcementModal} onOpenChange={()=>setAnnouncementModal(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create Announcement</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const announcementData = {
+                title: formData.get('title'),
+                message: formData.get('message'),
+                target: formData.get('target'),
+                priority: formData.get('priority'),
+                active: formData.get('active') === 'on',
+              };
+              createAnnouncement(announcementData);
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold">Title</label>
+                  <input name="title" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Announcement Title" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Message</label>
+                  <textarea name="message" required className="w-full mt-1 px-3 py-2 border rounded-lg resize-none" rows="4" placeholder="Your announcement message..." />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold">Target Audience</label>
+                    <select name="target" className="w-full mt-1 px-3 py-2 border rounded-lg">
+                      <option value="all_users">All Users</option>
+                      <option value="all_travelers">All Travelers</option>
+                      <option value="all_hosts">All Hosts</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Priority</label>
+                    <select name="priority" className="w-full mt-1 px-3 py-2 border rounded-lg">
+                      <option value="normal">Normal</option>
+                      <option value="important">Important</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input name="active" type="checkbox" defaultChecked />
+                    <span className="text-sm font-semibold">Active</span>
+                  </label>
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
+                <Button type="button" onClick={()=>setAnnouncementModal(null)} variant="outline">Cancel</Button>
+                <Button type="submit" className="bg-emerald2 hover:bg-emerald2-deep">Create Announcement</Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       )}

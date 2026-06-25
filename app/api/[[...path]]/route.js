@@ -29,6 +29,25 @@ const err = (message, status = 400) => json({ ok: false, error: message }, statu
 const isEmail = (e) => typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const readBody = async (request) => { try { return await request.json(); } catch { return {}; } };
 
+// Activity Logging Helper
+async function logActivity(admin, action, details, ipAddress = null) {
+  try {
+    const logs = await getCollection('adminActivityLogs');
+    await logs.insertOne({
+      id: uuid(),
+      adminId: admin.id,
+      adminName: admin.name,
+      adminRole: admin.role,
+      action,
+      details,
+      ipAddress,
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    console.error('Failed to log activity:', error);
+  }
+}
+
 const CATEGORIES = ['stay','transport','experience','tour'];
 const STATUSES = ['pending','approved','rejected'];
 
@@ -1720,6 +1739,197 @@ Return ONLY the JSON, no other text.`;
       }
     );
     return ok({ ok: true });
+  }
+
+  // Auto-create Super Admin & Get Admins
+  if (path === '/admin/admins' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me || (me.role !== 'admin' && me.role !== 'super_admin')) return ok({ ok: true, admins: [] });
+    
+    const users = await getCollection('users');
+    
+    // Auto-create Super Admin if not exists
+    const superAdmin = await users.findOne({ email: 'founder@safarcurated.com' });
+    if (!superAdmin) {
+      await users.insertOne({
+        id: randomUUID(),
+        name: 'Founder',
+        email: 'founder@safarcurated.com',
+        password: await hashPassword('SuperAdmin@2025'),
+        role: 'super_admin',
+        status: 'active',
+        createdAt: new Date(),
+      });
+    } else if (superAdmin.role !== 'super_admin') {
+      await users.updateOne({ email: 'founder@safarcurated.com' }, { $set: { role: 'super_admin' } });
+    }
+    
+    const admins = await users.find({ role: { $in: ['admin', 'super_admin', 'support_agent'] } }).toArray();
+    return ok({ ok: true, admins });
+  }
+
+  // Create Admin
+  if (path === '/admin/admins' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'super_admin') return err('Only Super Admins can create admins', 403);
+    
+    const { name, email, password, role } = await request.json();
+    const users = await getCollection('users');
+    
+    const exists = await users.findOne({ email });
+    if (exists) return err('Email already exists', 400);
+    
+    const newAdmin = {
+      id: randomUUID(),
+      name,
+      email,
+      password: await hashPassword(password),
+      role: role || 'admin',
+      status: 'active',
+      createdAt: new Date(),
+    };
+    await users.insertOne(newAdmin);
+    
+    // Log activity
+    await logActivity(me, 'admin_created', `Created admin: ${name} (${email})`);
+    
+    return ok({ ok: true, admin: newAdmin });
+  }
+
+  // Update Admin Role
+  if (path.match(/^\/admin\/admins\/([^/]+)\/role$/) && method === 'PATCH') {
+    const adminId = path.match(/^\/admin\/admins\/([^/]+)\/role$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'super_admin') return err('Unauthorized', 403);
+    if (me.id === adminId) return err('Cannot change your own role', 400);
+    
+    const { role } = await request.json();
+    const users = await getCollection('users');
+    await users.updateOne({ id: adminId }, { $set: { role, updatedAt: new Date() } });
+    
+    await logActivity(me, 'admin_role_updated', `Updated admin role to: ${role}`);
+    
+    return ok({ ok: true });
+  }
+
+  // Disable/Enable Admin
+  if (path.match(/^\/admin\/admins\/([^/]+)\/(disable|enable)$/) && method === 'PATCH') {
+    const match = path.match(/^\/admin\/admins\/([^/]+)\/(disable|enable)$/);
+    const adminId = match[1];
+    const action = match[2];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'super_admin') return err('Unauthorized', 403);
+    if (me.id === adminId) return err('Cannot disable yourself', 400);
+    
+    const users = await getCollection('users');
+    const targetAdmin = await users.findOne({ id: adminId });
+    if (targetAdmin?.role === 'super_admin') {
+      const superAdminCount = await users.countDocuments({ role: 'super_admin', status: { $ne: 'disabled' } });
+      if (superAdminCount <= 1 && action === 'disable') {
+        return err('Cannot disable the last Super Admin', 400);
+      }
+    }
+    
+    await users.updateOne({ id: adminId }, { $set: { status: action === 'disable' ? 'disabled' : 'active' } });
+    await logActivity(me, `admin_${action}d`, `${action === 'disable' ? 'Disabled' : 'Enabled'} admin`);
+    
+    return ok({ ok: true });
+  }
+
+  // Delete Admin
+  if (path.match(/^\/admin\/admins\/([^/]+)$/) && method === 'DELETE') {
+    const adminId = path.match(/^\/admin\/admins\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'super_admin') return err('Unauthorized', 403);
+    if (me.id === adminId) return err('Cannot delete yourself', 400);
+    
+    const users = await getCollection('users');
+    const targetAdmin = await users.findOne({ id: adminId });
+    if (targetAdmin?.role === 'super_admin') {
+      const superAdminCount = await users.countDocuments({ role: 'super_admin' });
+      if (superAdminCount <= 1) return err('Cannot delete the last Super Admin', 400);
+    }
+    
+    await users.deleteOne({ id: adminId });
+    await logActivity(me, 'admin_deleted', `Deleted admin: ${targetAdmin?.email}`);
+    
+    return ok({ ok: true });
+  }
+
+  // Settings
+  if (path === '/admin/settings' && (method === 'GET' || method === 'POST')) {
+    const me = await getCurrentUser(request);
+    if (!me || (me.role !== 'admin' && me.role !== 'super_admin')) return ok({ ok: true, settings: {} });
+    
+    const settings = await getCollection('systemSettings');
+    
+    if (method === 'GET') {
+      const systemSettings = await settings.findOne({ type: 'system' });
+      return ok({ ok: true, settings: systemSettings || {} });
+    }
+    
+    if (method === 'POST') {
+      const data = await request.json();
+      await settings.updateOne(
+        { type: 'system' },
+        { $set: { ...data, updatedAt: new Date(), updatedBy: me.id } },
+        { upsert: true }
+      );
+      await logActivity(me, 'settings_updated', 'Updated system settings');
+      return ok({ ok: true });
+    }
+  }
+
+  // Announcements
+  if (path === '/admin/announcements' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me || (me.role !== 'admin' && me.role !== 'super_admin')) return ok({ ok: true, announcements: [] });
+    
+    const announcements = await getCollection('announcements');
+    const allAnnouncements = await announcements.find({}).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, announcements: allAnnouncements });
+  }
+
+  if (path === '/admin/announcements' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me || (me.role !== 'admin' && me.role !== 'super_admin')) return err('Unauthorized', 403);
+    
+    const data = await request.json();
+    const announcements = await getCollection('announcements');
+    const announcement = {
+      ...data,
+      id: randomUUID(),
+      createdAt: new Date(),
+      createdBy: me.id,
+      createdByName: me.name,
+    };
+    await announcements.insertOne(announcement);
+    await logActivity(me, 'announcement_created', `Created announcement: ${data.title}`);
+    
+    return ok({ ok: true, announcement });
+  }
+
+  if (path.match(/^\/admin\/announcements\/([^/]+)$/) && method === 'DELETE') {
+    const announcementId = path.match(/^\/admin\/announcements\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me || (me.role !== 'admin' && me.role !== 'super_admin')) return err('Unauthorized', 403);
+    
+    const announcements = await getCollection('announcements');
+    await announcements.deleteOne({ id: announcementId });
+    await logActivity(me, 'announcement_deleted', 'Deleted announcement');
+    
+    return ok({ ok: true });
+  }
+
+  // Activity Logs
+  if (path === '/admin/activity-logs' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me || (me.role !== 'admin' && me.role !== 'super_admin')) return ok({ ok: true, logs: [] });
+    
+    const { limit } = Object.fromEntries(new URL(request.url).searchParams);
+    const logs = await getCollection('adminActivityLogs');
+    const allLogs = await logs.find({}).sort({ timestamp: -1 }).limit(Number(limit) || 100).toArray();
+    return ok({ ok: true, logs: allLogs });
   }
 
   // Health
