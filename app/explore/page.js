@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, SlidersHorizontal, Map, X, Star, ListChecks, AlertTriangle, CalendarRange, Users, Loader2, MapPin, Navigation } from 'lucide-react';
@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { IMG } from '@/lib/data';
 import { useListings } from '@/lib/listings-api';
-import { calculateListingDistance, formatDistance } from '@/lib/location-utils';
+import { calculateListingDistance, formatDistance, getLocationCoordinates } from '@/lib/location-utils';
 import { toast } from 'sonner';
 
 function todayStr() {
@@ -43,6 +43,11 @@ function ExploreContent() {
   const [userLocation, setUserLocation] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [requestingLocation, setRequestingLocation] = useState(false);
+  
+  // Map state
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markersRef = useRef([]);
 
   // Keep URL in sync (so refresh / share preserves search)
   useEffect(() => {
@@ -152,6 +157,108 @@ function ExploreContent() {
   const hasDateFilter = checkIn && checkOut && checkOut > checkIn;
   const hasGuestFilter = guests > 0;
   const today = todayStr();
+
+  // Initialize Leaflet map when map view is toggled
+  useEffect(() => {
+    if (!mapView) return;
+
+    // Load Leaflet CSS and JS dynamically
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    if (!window.L && !document.getElementById('leaflet-js')) {
+      const script = document.createElement('script');
+      script.id = 'leaflet-js';
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => initializeMap();
+      document.head.appendChild(script);
+    } else if (window.L) {
+      initializeMap();
+    }
+
+    function initializeMap() {
+      if (!mapRef.current || mapInstanceRef.current) return;
+
+      // Center map on Kashmir
+      const map = window.L.map(mapRef.current, {
+        center: [34.0837, 74.7973],
+        zoom: 10,
+        scrollWheelZoom: true,
+      });
+
+      // Add OpenStreetMap tiles
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 18,
+      }).addTo(map);
+
+      mapInstanceRef.current = map;
+
+      // Add markers for listings
+      updateMapMarkers();
+    }
+
+    function updateMapMarkers() {
+      if (!mapInstanceRef.current || !window.L) return;
+
+      // Clear existing markers
+      markersRef.current.forEach(marker => marker.remove());
+      markersRef.current = [];
+
+      // Add new markers
+      list.forEach((listing) => {
+        const coords = getLocationCoordinates(listing?.location);
+        if (!coords) return;
+
+        const marker = window.L.marker([coords.lat, coords.lon], {
+          icon: window.L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="background: white; border-radius: 20px; padding: 6px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); font-size: 12px; font-weight: 600; cursor: pointer;">₹${(listing.displayPrice || listing.price).toLocaleString('en-IN')}</div>`,
+            iconSize: [60, 30],
+            iconAnchor: [30, 30],
+          }),
+        }).addTo(mapInstanceRef.current);
+
+        marker.on('click', () => {
+          // Scroll to the property card in the list
+          const cardElement = document.getElementById(`property-${listing.id}`);
+          if (cardElement) {
+            cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            cardElement.style.outline = '3px solid #10b981';
+            setTimeout(() => {
+              cardElement.style.outline = 'none';
+            }, 2000);
+          }
+        });
+
+        markersRef.current.push(marker);
+      });
+
+      // Fit bounds to show all markers
+      if (markersRef.current.length > 0) {
+        const group = window.L.featureGroup(markersRef.current);
+        mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
+      }
+    }
+
+    // Update markers when list changes
+    if (mapInstanceRef.current && window.L) {
+      updateMapMarkers();
+    }
+
+    return () => {
+      // Cleanup map instance when switching views
+      if (mapInstanceRef.current && !mapView) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [mapView, list]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -286,20 +393,17 @@ function ExploreContent() {
             mapView ? (
               <div className="grid lg:grid-cols-2 gap-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-h-[78vh] overflow-y-auto pr-1">
-                  {list.map((l, i) => <PropertyCard key={l.id} item={l} index={i} />)}
-                </div>
-                <div className="sticky top-28 h-[78vh] rounded-3xl overflow-hidden border bg-secondary relative">
-                  <img src={IMG.dal2} alt="map" className="size-full object-cover opacity-90" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal/40 to-transparent" />
-                  {list.slice(0,8).map((l, i) => (
-                    <div key={l.id} style={{ left: `${10 + (i*9)%75}%`, top: `${15 + (i*13)%65}%` }} className="absolute -translate-x-1/2 -translate-y-1/2">
-                      <div className="px-3 py-1.5 rounded-full bg-white shadow-lg text-xs font-semibold text-charcoal hover:bg-charcoal hover:text-white transition cursor-pointer">
-                        {l.displayPrice && l.displayPrice < l.price && <span className="opacity-70">From </span>}
-                        ₹{(l.displayPrice || l.price).toLocaleString('en-IN')}
-                      </div>
+                  {list.map((l, i) => (
+                    <div key={l.id} id={`property-${l.id}`} className="transition-all duration-300">
+                      <PropertyCard item={l} index={i} />
                     </div>
                   ))}
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full glass text-xs">Map view · demo</div>
+                </div>
+                <div className="sticky top-28 h-[78vh] rounded-3xl overflow-hidden border bg-secondary relative">
+                  <div ref={mapRef} className="size-full" style={{ zIndex: 1 }} />
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full glass text-xs pointer-events-none" style={{ zIndex: 1000 }}>
+                    Interactive map • Click pins to view
+                  </div>
                 </div>
               </div>
             ) : (
