@@ -3,7 +3,14 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { getCollection } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.EMERGENT_LLM_KEY);
+// Lazy-load Gemini client to avoid initialization errors
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.EMERGENT_LLM_KEY;
+  if (!apiKey) {
+    throw new Error('AI service is not configured. Please contact support.');
+  }
+  return new GoogleGenerativeAI(apiKey);
+}
 
 export async function POST(request) {
   try {
@@ -71,6 +78,17 @@ Return ONLY valid JSON in this exact format with no markdown or extra text:
 }`;
 
     // Call Gemini API
+    let genAI;
+    try {
+      genAI = getGeminiClient();
+    } catch (error) {
+      console.error('Gemini client initialization error:', error);
+      return NextResponse.json({ 
+        ok: false, 
+        error: 'AI service is temporarily unavailable. Please try again later or contact support.' 
+      }, { status: 503 });
+    }
+
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();

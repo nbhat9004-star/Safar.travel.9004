@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
+import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight, Loader2, AlertTriangle, Trash2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -48,6 +48,8 @@ function HostDashboardInner() {
   const [generatingContent, setGeneratingContent] = useState(false);
   const [regeneratingType, setRegeneratingType] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiServiceAvailable, setAiServiceAvailable] = useState(true);
   
   const earnings = [12,18,9,22,28,31,26,38,33,42,46,52];
 
@@ -107,24 +109,35 @@ function HostDashboardInner() {
 
   // AI Growth Center Functions
   const loadAIContent = async (listingId) => {
+    setAiError(null);
     try {
       const res = await fetch(`/api/host/ai-content/${listingId}`);
       const data = await res.json();
+      
+      if (res.status === 503) {
+        setAiServiceAvailable(false);
+        setAiError('AI features are temporarily unavailable. The rest of your dashboard works normally.');
+        return;
+      }
+      
       if (data.ok && data.content) {
         setAiContent(data.content);
         setHasChanges(data.hasChanges || false);
+        setAiServiceAvailable(true);
       } else {
         setAiContent(null);
         setHasChanges(false);
       }
     } catch (error) {
       console.error('Failed to load AI content:', error);
+      setAiError('Unable to load AI content. Please try again later.');
     }
   };
 
   const generateAllContent = async () => {
     if (!selectedListing) return;
     setGeneratingContent(true);
+    setAiError(null);
     try {
       const res = await fetch('/api/host/ai-content/generate', {
         method: 'POST',
@@ -132,16 +145,27 @@ function HostDashboardInner() {
         body: JSON.stringify({ listingId: selectedListing.id }),
       });
       const data = await res.json();
+      
+      if (res.status === 503) {
+        setAiServiceAvailable(false);
+        toast.error(data.error || 'AI service is temporarily unavailable');
+        setAiError(data.error);
+        return;
+      }
+      
       if (data.ok) {
         setAiContent(data.content);
         setHasChanges(false);
+        setAiServiceAvailable(true);
         toast.success('AI content generated successfully!');
       } else {
         toast.error(data.error || 'Failed to generate content');
+        setAiError(data.error);
       }
     } catch (error) {
       console.error('Generate content error:', error);
       toast.error('Failed to generate content');
+      setAiError('Network error. Please check your connection.');
     } finally {
       setGeneratingContent(false);
     }
@@ -402,6 +426,23 @@ function HostDashboardInner() {
                       <div className="font-semibold">{selectedListing.title}</div>
                       <div className="text-sm text-muted-foreground">{selectedListing.location} • ₹{selectedListing.price?.toLocaleString('en-IN')}/night</div>
                       <div className="text-xs text-muted-foreground mt-1">{selectedListing.amenities?.length || 0} amenities</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Service Unavailable Warning */}
+              {!aiServiceAvailable && aiError && (
+                <div className="mb-6 p-5 rounded-xl border-2 border-amber-200 bg-amber-50 flex items-start gap-3">
+                  <AlertTriangle className="size-6 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="font-semibold text-amber-900 text-lg">AI Features Temporarily Unavailable</div>
+                    <div className="text-sm text-amber-700 mt-1">{aiError}</div>
+                    <div className="text-sm text-amber-700 mt-2">
+                      ✅ Your dashboard, listings, and bookings are working normally.
+                    </div>
+                    <div className="text-xs text-amber-600 mt-3">
+                      If this issue persists, please contact support.
                     </div>
                   </div>
                 </div>
