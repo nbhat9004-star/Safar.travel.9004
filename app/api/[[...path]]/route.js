@@ -155,10 +155,39 @@ async function route(request, { params }) {
     await users.insertOne(user);
     const token = signToken({ uid: user.id, role: user.role });
 
-    // Send verification email (async, don't block response)
-    sendVerificationEmail(user, buildVerificationLink(verificationToken)).catch((error) => {
-      console.error('Failed to send verification email:', error);
-    });
+    // Enhanced logging for email verification flow
+    console.log('=== EMAIL VERIFICATION FLOW START ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('User registered:', { email: user.email, name: user.name, role: user.role, id: user.id });
+    console.log('Verification token generated:', verificationToken ? 'YES' : 'NO');
+    console.log('Token expiry:', verificationExpiry);
+    
+    const verificationLink = buildVerificationLink(verificationToken);
+    console.log('Verification link:', verificationLink);
+    console.log('RESEND_API_KEY configured:', process.env.RESEND_API_KEY ? 'YES (length: ' + process.env.RESEND_API_KEY.length + ')' : 'NO - EMAIL WILL NOT SEND');
+    console.log('FROM_EMAIL configured:', process.env.FROM_EMAIL || 'NOT SET - using default');
+    console.log('Calling sendVerificationEmail...');
+    
+    // Send verification email (async with enhanced logging)
+    sendVerificationEmail(user, verificationLink)
+      .then((result) => {
+        console.log('=== EMAIL SEND RESULT ===');
+        console.log('Success:', result.success);
+        if (result.success) {
+          console.log('Email sent successfully! ID:', result.data?.id);
+          console.log('Recipient:', user.email);
+        } else {
+          console.error('❌ EMAIL SEND FAILED:', result.error);
+          console.error('Reason:', typeof result.error === 'object' ? JSON.stringify(result.error) : result.error);
+        }
+        console.log('=== EMAIL VERIFICATION FLOW END ===');
+      })
+      .catch((error) => {
+        console.error('=== EMAIL SEND EXCEPTION ===');
+        console.error('❌ Fatal error sending verification email:', error);
+        console.error('Error stack:', error.stack);
+        console.error('=== EMAIL VERIFICATION FLOW END ===');
+      });
 
     const res = ok({ user: publicUser(user), token, message: 'Account created. Please check your email to verify your address.' });
     return setAuthCookie(res, token);
