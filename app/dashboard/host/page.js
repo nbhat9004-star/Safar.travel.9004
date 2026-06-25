@@ -41,6 +41,14 @@ function HostDashboardInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [resendingVerification, setResendingVerification] = useState(false);
+  
+  // AI Growth Center state
+  const [selectedListing, setSelectedListing] = useState(null);
+  const [aiContent, setAiContent] = useState(null);
+  const [generatingContent, setGeneratingContent] = useState(false);
+  const [regeneratingType, setRegeneratingType] = useState(null);
+  const [hasChanges, setHasChanges] = useState(false);
+  
   const earnings = [12,18,9,22,28,31,26,38,33,42,46,52];
 
   const load = async () => {
@@ -96,6 +104,84 @@ function HostDashboardInner() {
       setResendingVerification(false);
     }
   };
+
+  // AI Growth Center Functions
+  const loadAIContent = async (listingId) => {
+    try {
+      const res = await fetch(`/api/host/ai-content/${listingId}`);
+      const data = await res.json();
+      if (data.ok && data.content) {
+        setAiContent(data.content);
+        setHasChanges(data.hasChanges || false);
+      } else {
+        setAiContent(null);
+        setHasChanges(false);
+      }
+    } catch (error) {
+      console.error('Failed to load AI content:', error);
+    }
+  };
+
+  const generateAllContent = async () => {
+    if (!selectedListing) return;
+    setGeneratingContent(true);
+    try {
+      const res = await fetch('/api/host/ai-content/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId: selectedListing.id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setAiContent(data.content);
+        setHasChanges(false);
+        toast.success('AI content generated successfully!');
+      } else {
+        toast.error(data.error || 'Failed to generate content');
+      }
+    } catch (error) {
+      console.error('Generate content error:', error);
+      toast.error('Failed to generate content');
+    } finally {
+      setGeneratingContent(false);
+    }
+  };
+
+  const regenerateContent = async (contentType) => {
+    if (!selectedListing) return;
+    setRegeneratingType(contentType);
+    try {
+      const res = await fetch('/api/host/ai-content/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listingId: selectedListing.id, contentType }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setAiContent(data.content);
+        toast.success(`${contentType} regenerated!`);
+      } else {
+        toast.error(data.error || 'Failed to regenerate');
+      }
+    } catch (error) {
+      console.error('Regenerate error:', error);
+      toast.error('Failed to regenerate content');
+    } finally {
+      setRegeneratingType(null);
+    }
+  };
+
+  const copyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copied to clipboard!`);
+  };
+
+  // Load AI content when listing is selected
+  useEffect(() => {
+    if (selectedListing) {
+      loadAIContent(selectedListing.id);
+    }
+  }, [selectedListing]);
 
   const counts = {
     total: myListings.length,
@@ -169,8 +255,9 @@ function HostDashboardInner() {
         </div>
 
         <Tabs defaultValue="dashboard" className="mt-8">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-2xl grid-cols-3">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="ai-growth">📈 AI Growth Center</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           
@@ -272,6 +359,145 @@ function HostDashboardInner() {
             </div>
           )}
         </section>
+          </TabsContent>
+          
+          {/* AI Growth Center Tab */}
+          <TabsContent value="ai-growth" className="space-y-6">
+            <div className="rounded-3xl border bg-white p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="font-display text-2xl font-bold">📈 AI Growth Center</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Generate marketing content for your listings using AI</p>
+                </div>
+              </div>
+
+              {/* Listing Selector */}
+              <div className="mb-6">
+                <label className="text-sm font-semibold mb-2 block">Select Listing</label>
+                <select 
+                  value={selectedListing?.id || ''} 
+                  onChange={(e) => {
+                    const listing = myListings.find(l => l.id === e.target.value);
+                    setSelectedListing(listing);
+                  }}
+                  className="w-full max-w-md px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-emerald2/20"
+                >
+                  <option value="">Choose a listing...</option>
+                  {myListings.map((listing) => (
+                    <option key={listing.id} value={listing.id}>
+                      {listing.title} - {listing.location}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Selected Listing Preview */}
+              {selectedListing && (
+                <div className="mb-6 p-4 rounded-xl border bg-secondary/20">
+                  <div className="flex gap-4">
+                    {selectedListing.images?.[0] && (
+                      <img src={selectedListing.images[0]} alt="" className="size-20 rounded-lg object-cover" />
+                    )}
+                    <div className="flex-1">
+                      <div className="font-semibold">{selectedListing.title}</div>
+                      <div className="text-sm text-muted-foreground">{selectedListing.location} • ₹{selectedListing.price?.toLocaleString('en-IN')}/night</div>
+                      <div className="text-xs text-muted-foreground mt-1">{selectedListing.amenities?.length || 0} amenities</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Change Notification */}
+              {hasChanges && aiContent && (
+                <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50 flex items-start gap-3">
+                  <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="font-semibold text-amber-900">This listing has changed</div>
+                    <div className="text-sm text-amber-700 mt-0.5">Regenerate AI content to reflect the latest changes.</div>
+                  </div>
+                  <Button onClick={generateAllContent} disabled={generatingContent} className="rounded-full bg-amber-600 hover:bg-amber-700 shrink-0">
+                    Regenerate All
+                  </Button>
+                </div>
+              )}
+
+              {/* Generate Button */}
+              {selectedListing && !aiContent && (
+                <div className="text-center py-12">
+                  <div className="mb-4 text-muted-foreground">No AI content generated yet for this listing</div>
+                  <Button onClick={generateAllContent} disabled={generatingContent} className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold px-8">
+                    {generatingContent ? (
+                      <><Loader2 className="size-4 mr-2 animate-spin" /> Generating...</>
+                    ) : (
+                      <>Generate AI Content</>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Content Cards */}
+              {aiContent && (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="text-sm text-muted-foreground">
+                      Last generated: {aiContent.generatedAt ? new Date(aiContent.generatedAt).toLocaleString() : '—'}
+                    </div>
+                    <Button onClick={generateAllContent} disabled={generatingContent} variant="outline" className="rounded-full">
+                      {generatingContent ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
+                      Regenerate All
+                    </Button>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {[
+                      { key: 'instagramCaption', label: 'Instagram Caption', icon: '📸' },
+                      { key: 'facebookCaption', label: 'Facebook Caption', icon: '📘' },
+                      { key: 'reelScript', label: 'Instagram Reel Script', icon: '🎬' },
+                      { key: 'shortsScript', label: 'YouTube Shorts Script', icon: '▶️' },
+                      { key: 'promoCaption', label: 'Promotional Caption', icon: '🎯' },
+                      { key: 'seoTitle', label: 'SEO Title', icon: '🔍' },
+                      { key: 'metaDescription', label: 'Meta Description', icon: '📝' },
+                      { key: 'hashtags', label: 'Hashtags (20-30)', icon: '#️⃣' },
+                      { key: 'shortDescription', label: 'Short Description', icon: '📄' },
+                      { key: 'longDescription', label: 'Long Description', icon: '📋' },
+                    ].map((item) => (
+                      <div key={item.key} className="rounded-xl border bg-white p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="font-semibold text-sm flex items-center gap-2">
+                            <span>{item.icon}</span>
+                            {item.label}
+                          </div>
+                          <div className="flex gap-1">
+                            <button onClick={() => copyToClipboard(aiContent.content?.[item.key] || '', item.label)} className="p-1.5 hover:bg-secondary rounded-lg transition" title="Copy">
+                              <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            </button>
+                            <button onClick={() => regenerateContent(item.key)} disabled={regeneratingType === item.key} className="p-1.5 hover:bg-secondary rounded-lg transition" title="Regenerate">
+                              {regeneratingType === item.key ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : (
+                                <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <textarea 
+                          value={aiContent.content?.[item.key] || ''} 
+                          onChange={(e) => {
+                            setAiContent({
+                              ...aiContent,
+                              content: { ...aiContent.content, [item.key]: e.target.value }
+                            });
+                          }}
+                          className="w-full p-3 border rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-emerald2/20"
+                          rows={item.key === 'longDescription' ? 8 : item.key === 'hashtags' ? 6 : 4}
+                          placeholder={`AI-generated ${item.label.toLowerCase()} will appear here...`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </TabsContent>
           
           <TabsContent value="settings" className="space-y-6">
