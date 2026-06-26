@@ -81,50 +81,18 @@ export default function Navbar({ transparent = false }) {
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.98 }}
-                className="xl:hidden relative rounded-full p-5 bg-gradient-to-br from-[#0F3D2E] via-[#0F3D2E] to-[#1a5c45] shadow-[0_8px_24px_rgba(15,61,46,0.4),0_4px_12px_rgba(212,175,55,0.15),inset_0_1px_2px_rgba(255,255,255,0.1)] backdrop-blur-sm border border-white/10 overflow-hidden group transition-all duration-300 hover:shadow-[0_12px_32px_rgba(15,61,46,0.5),0_8px_16px_rgba(212,175,55,0.25),inset_0_1px_3px_rgba(255,255,255,0.15)]"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="xl:hidden relative rounded-full p-4 bg-white/15 backdrop-blur-md border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.1)] hover:bg-white/25 hover:shadow-[0_6px_20px_rgba(0,0,0,0.15)] transition-all duration-250"
               >
-                {/* Glowing pulse animation background */}
                 <motion.div
-                  animate={{
-                    opacity: [0, 0.3, 0],
-                    scale: [0.8, 1.2, 0.8],
-                  }}
-                  transition={{
-                    duration: 4.5,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                  className="absolute inset-0 rounded-full bg-gradient-radial from-gold/40 to-transparent"
-                />
-                
-                {/* Compass icon with continuous gentle rotation */}
-                <motion.div
-                  animate={{
-                    rotate: open ? 180 : [-3, 3, -3],
-                  }}
-                  transition={
-                    open 
-                      ? { duration: 0.4, ease: "easeInOut" }
-                      : {
-                          rotate: {
-                            duration: 3,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                          },
-                        }
-                  }
-                  className="relative z-10"
+                  animate={{ rotate: open ? 180 : 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="relative"
                 >
-                  <Compass 
-                    className="size-9 text-gold drop-shadow-[0_2px_8px_rgba(212,175,55,0.6)] group-hover:drop-shadow-[0_2px_12px_rgba(212,175,55,0.8)] transition-all duration-300" 
-                    style={{ strokeWidth: 2.4 }} 
-                  />
+                  <Compass className="size-7 text-gold" style={{ strokeWidth: 2.2 }} />
                 </motion.div>
-                
-                {/* Subtle white highlight at top */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-1/2 bg-gradient-to-b from-white/15 to-transparent rounded-full blur-sm" />
               </motion.button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background">
