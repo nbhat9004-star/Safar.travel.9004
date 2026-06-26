@@ -317,18 +317,26 @@ function App() {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {destinations.map((d, i) => (
-              <motion.div key={d.name} initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-100px' }} transition={{ duration: 0.55, delay: i*0.06 }}
-                className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer">
-                <Image src={d.img} alt={d.name} fill loading="lazy" quality={60}
-                  sizes="(min-width: 1024px) 25vw, 50vw"
-                  className="object-cover transition-transform duration-700 group-hover:scale-110" />
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/30 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-white/70">{d.tag}</div>
-                  <div className="font-display text-2xl font-bold mt-1">{d.name}</div>
-                  <div className="mt-1 text-xs text-white/75">{d.count} stays · from ₹2,900</div>
-                </div>
-              </motion.div>
+              <Link key={d.name} href={`/explore?location=${d.name}`}>
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }} 
+                  whileInView={{ opacity: 1, y: 0 }} 
+                  viewport={{ once: true, margin: '-100px' }} 
+                  transition={{ duration: 0.55, delay: i*0.06 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer"
+                >
+                  <Image src={d.img} alt={d.name} fill loading="lazy" quality={60}
+                    sizes="(min-width: 1024px) 25vw, 50vw"
+                    className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/30 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/70">{d.tag}</div>
+                    <div className="font-display text-2xl font-bold mt-1">{d.name}</div>
+                    <div className="mt-1 text-xs text-white/75">{d.count} stays · from ₹2,900</div>
+                  </div>
+                </motion.div>
+              </Link>
             ))}
           </div>
         </div>
@@ -396,20 +404,25 @@ function App() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {experiences.map((e, i) => (
-              <div key={e.title} className="group relative aspect-[3/4] rounded-3xl overflow-hidden">
-                <Image src={e.img} alt={e.title} fill loading="lazy" quality={55}
-                  sizes="(min-width: 1024px) 25vw, (min-width: 768px) 50vw, 100vw"
-                  className="object-cover transition-transform duration-700 group-hover:scale-110" />
-                <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/40 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-                  <div className="font-display text-xl font-bold">{e.title}</div>
-                  <div className="text-xs text-white/80 mt-1 line-clamp-2">{e.desc}</div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="text-sm font-semibold">from ₹{e.price.toLocaleString('en-IN')}</div>
-                    <div className="size-8 rounded-full bg-white text-charcoal grid place-items-center group-hover:bg-gold transition"><ArrowRight className="size-4" /></div>
+              <Link key={e.title} href="/explore?cat=experience">
+                <motion.div 
+                  whileTap={{ scale: 0.98 }}
+                  className="group relative aspect-[3/4] rounded-3xl overflow-hidden cursor-pointer"
+                >
+                  <Image src={e.img} alt={e.title} fill loading="lazy" quality={55}
+                    sizes="(min-width: 1024px) 25vw, (min-width: 768px) 50vw, 100vw"
+                    className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/40 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                    <div className="font-display text-xl font-bold">{e.title}</div>
+                    <div className="text-xs text-white/80 mt-1 line-clamp-2">{e.desc}</div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="text-sm font-semibold">from ₹{e.price.toLocaleString('en-IN')}</div>
+                      <div className="size-8 rounded-full bg-white text-charcoal grid place-items-center group-hover:bg-gold transition"><ArrowRight className="size-4" /></div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </motion.div>
+              </Link>
             ))}
           </div>
         </div>
