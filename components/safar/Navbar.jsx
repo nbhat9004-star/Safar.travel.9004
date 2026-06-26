@@ -81,17 +81,27 @@ export default function Navbar({ transparent = false }) {
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="xl:hidden relative rounded-full p-4 bg-white/15 backdrop-blur-md border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.1)] hover:bg-white/25 hover:shadow-[0_6px_20px_rgba(0,0,0,0.15)] transition-all duration-250"
+                whileTap={{ scale: 1.05 }}
+                transition={{ duration: 0.15 }}
+                className="xl:hidden relative rounded-full p-2.5 bg-white/18 backdrop-blur-md border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:bg-white/25 transition-colors duration-200"
               >
                 <motion.div
-                  animate={{ rotate: open ? 180 : 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  animate={{ 
+                    rotate: open ? 180 : [0, 360, 360],
+                  }}
+                  transition={
+                    open 
+                      ? { duration: 0.3, ease: "easeInOut" }
+                      : {
+                          duration: 12,
+                          times: [0, 0.95, 1],
+                          repeat: Infinity,
+                          ease: "linear",
+                        }
+                  }
                   className="relative"
                 >
-                  <Compass className="size-7 text-gold" style={{ strokeWidth: 2.2 }} />
+                  <Compass className="size-5 text-gold" style={{ strokeWidth: 2.4 }} />
                 </motion.div>
               </motion.button>
             </SheetTrigger>
