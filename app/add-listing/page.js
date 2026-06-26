@@ -459,5 +459,5 @@ function AddListingInner() {
 }
 
 export default function App() {
-  return <ProtectedRoute roles={['host','admin']}><AddListingInner /></ProtectedRoute>;
+  return <ProtectedRoute roles={['host','admin','super_admin']}><AddListingInner /></ProtectedRoute>;
 }

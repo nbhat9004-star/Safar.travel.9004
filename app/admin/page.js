@@ -1676,5 +1676,5 @@ function AdminInner() {
 }
 
 export default function App() {
-  return <ProtectedRoute roles={['admin']}><AdminInner /></ProtectedRoute>;
+  return <ProtectedRoute roles={['admin', 'super_admin']}><AdminInner /></ProtectedRoute>;
 }

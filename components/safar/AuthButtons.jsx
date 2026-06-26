@@ -35,7 +35,7 @@ export function AuthButtons({ solid }) {
 
   const initials = (user.name || user.email || 'U').split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase();
   const roleLabel = user.role?.charAt(0).toUpperCase() + user.role?.slice(1);
-  const dashHref = user.role === 'admin' ? '/admin' : user.role === 'host' ? '/dashboard/host' : '/dashboard/traveler';
+  const dashHref = (user.role === 'admin' || user.role === 'super_admin') ? '/admin' : user.role === 'host' ? '/dashboard/host' : '/dashboard/traveler';
 
   return (
     <div className="relative">
@@ -51,11 +51,11 @@ export function AuthButtons({ solid }) {
               <div className="font-display font-semibold text-sm leading-tight">{user.name}</div>
               <div className="text-xs text-muted-foreground">{user.email}</div>
               <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald2/10 text-emerald2 text-[10px] uppercase tracking-wider font-bold">
-                {user.role === 'admin' ? <Shield className="size-3" /> : user.role === 'host' ? <HomeIcon className="size-3" /> : <User className="size-3" />} {roleLabel}
+                {(user.role === 'admin' || user.role === 'super_admin') ? <Shield className="size-3" /> : user.role === 'host' ? <HomeIcon className="size-3" /> : <User className="size-3" />} {roleLabel}
               </div>
             </div>
             <Link href={dashHref} onClick={()=>setMenu(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-secondary"><LayoutDashboard className="size-4" /> Dashboard</Link>
-            {user.role !== 'admin' && (<Link href="/wishlist" onClick={()=>setMenu(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-secondary"><User className="size-4" /> My wishlist</Link>)}
+            {(user.role !== 'admin' && user.role !== 'super_admin') && (<Link href="/wishlist" onClick={()=>setMenu(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-secondary"><User className="size-4" /> My wishlist</Link>)}
             <button onClick={async ()=>{ await logout(); toast.success('Signed out'); setMenu(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-secondary text-rose-600 border-t"><LogOut className="size-4" /> Sign out</button>
           </motion.div>
         )}

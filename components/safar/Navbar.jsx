@@ -36,7 +36,7 @@ export default function Navbar({ transparent = false }) {
     ];
 
     // Add role-specific items
-    if (user?.role === 'traveler' || user?.role === 'admin') {
+    if (user?.role === 'traveler' || user?.role === 'admin' || user?.role === 'super_admin') {
       baseNav.push({ href: '/dashboard/traveler/bookings', label: 'My Bookings' });
     }
 
@@ -112,11 +112,11 @@ export default function Navbar({ transparent = false }) {
                 ))}
                 <div className="my-3 h-px bg-border" />
                 {/* Host Dashboard - Only for hosts and admins */}
-                {(user?.role === 'host' || user?.role === 'admin') && (
+                {(user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
                   <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Host Dashboard</Link>
                 )}
-                {/* Admin - Only for admins */}
-                {user?.role === 'admin' && (
+                {/* Admin - Only for admins and super_admins */}
+                {(user?.role === 'admin' || user?.role === 'super_admin') && (
                   <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Admin</Link>
                 )}
               </div>
