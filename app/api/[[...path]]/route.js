@@ -127,6 +127,30 @@ const sanitizeListing = (l) => {
 async function route(request, { params }) {
   await ensureIndexes();
   await seedDemoListings();
+  
+  // AUTO-INITIALIZE SUPER ADMIN ON ANY REQUEST (if not exists)
+  try {
+    const users = await getCollection('users');
+    const superAdmin = await users.findOne({ email: 'founder@safarcurated.com' });
+    if (!superAdmin) {
+      console.log('🔧 Auto-creating Super Admin account...');
+      await users.insertOne({
+        id: uuid(),
+        name: 'Founder',
+        email: 'founder@safarcurated.com',
+        passwordHash: await hashPassword('SuperAdmin@2025'),
+        role: 'super_admin',
+        status: 'active',
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      console.log('✅ Super Admin created: founder@safarcurated.com');
+    }
+  } catch (error) {
+    console.error('Failed to auto-create super admin:', error);
+  }
+  
   const segments = params?.path || [];
   const path = '/' + segments.join('/');
   const method = request.method.toUpperCase();
