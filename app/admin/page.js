@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil } from 'lucide-react';
+import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -73,12 +73,17 @@ function AdminInner() {
   const [announcementModal, setAnnouncementModal] = useState(null);
   const [hostModal, setHostModal] = useState(null);
   const [safarTogetherEnabled, setSafarTogetherEnabled] = useState(false);
+  const [safarPlans, setSafarPlans] = useState([]);
+  const [safarRequests, setSafarRequests] = useState([]);
+  const [safarReports, setSafarReports] = useState([]);
+  const [safarStats, setSafarStats] = useState(null);
+  const [safarBlockedUsers, setSafarBlockedUsers] = useState([]);
   
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
   const load = async () => {
     setLoading(true); setError(null);
-    const [p, a, u, bk, rev, trans, revs, promos, tickets, adminsData, settingsData, announcementsData, logs, safarToggle] = await Promise.all([
+    const [p, a, u, bk, rev, trans, revs, promos, tickets, adminsData, settingsData, announcementsData, logs, safarToggle, safarPlansData, safarRequestsData, safarReportsData, safarStatsData, safarBlockedData] = await Promise.all([
       listingsApi.list({ status: 'pending', limit: 50 }),
       listingsApi.list({ status: 'all', limit: 200 }),
       apiJson('/api/users'),
@@ -93,6 +98,11 @@ function AdminInner() {
       apiJson('/api/admin/announcements'),
       apiJson('/api/admin/activity-logs?limit=100'),
       apiJson('/api/settings/safar-together'),
+      apiJson('/api/admin/safar-together/plans'),
+      apiJson('/api/admin/safar-together/requests'),
+      apiJson('/api/admin/safar-together/reports'),
+      apiJson('/api/admin/safar-together/stats'),
+      apiJson('/api/admin/safar-together/blocked-users'),
     ]);
     if (p.ok && p.data?.ok) setPending(p.data.listings); else setError(p.data?.error || 'Failed to load pending');
     if (a.ok && a.data?.ok) setAll(a.data.listings);
@@ -108,6 +118,11 @@ function AdminInner() {
     if (announcementsData.ok && announcementsData.data?.ok) setAnnouncements(announcementsData.data.announcements || []);
     if (logs.ok && logs.data?.ok) setActivityLogs(logs.data.logs || []);
     if (safarToggle.ok && safarToggle.data) setSafarTogetherEnabled(safarToggle.data.enabled || false);
+    if (safarPlansData.ok && safarPlansData.data?.ok) setSafarPlans(safarPlansData.data.plans || []);
+    if (safarRequestsData.ok && safarRequestsData.data?.ok) setSafarRequests(safarRequestsData.data.requests || []);
+    if (safarReportsData.ok && safarReportsData.data?.ok) setSafarReports(safarReportsData.data.reports || []);
+    if (safarStatsData.ok && safarStatsData.data?.ok) setSafarStats(safarStatsData.data.stats || {});
+    if (safarBlockedData.ok && safarBlockedData.data?.ok) setSafarBlockedUsers(safarBlockedData.data.users || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -575,6 +590,7 @@ function AdminInner() {
             <TabsTrigger value="settings">Settings</TabsTrigger>
             <TabsTrigger value="announcements">Announce</TabsTrigger>
             <TabsTrigger value="activity">Activity Log</TabsTrigger>
+            <TabsTrigger value="safar-together">🤝 Safar Together</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -1371,6 +1387,220 @@ function AdminInner() {
                 </div>
               </div>
             )}
+          </TabsContent>
+
+          {/* Safar Together Admin Tab */}
+          <TabsContent value="safar-together" className="space-y-6 mt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-bold">🤝 Safar Together Management</h2>
+                <p className="text-sm text-muted-foreground mt-1">Moderate community travel plans and requests</p>
+              </div>
+            </div>
+
+            {/* Statistics Cards */}
+            {safarStats && (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {[
+                  { label: 'Total Plans', value: safarStats.totalPlans, icon: Users },
+                  { label: 'Active Plans', value: safarStats.activePlans, icon: Check },
+                  { label: 'Pending Requests', value: safarStats.pendingRequests, icon: Calendar },
+                  { label: 'Accepted', value: safarStats.acceptedRequests, icon: Heart },
+                  { label: 'Reports', value: safarStats.totalReports, icon: AlertTriangle },
+                  { label: 'Blocked Users', value: safarStats.blockedUsers, icon: Ban },
+                ].map((stat, i) => {
+                  const Icon = stat.icon;
+                  return (
+                    <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }} className="rounded-2xl border bg-white p-4">
+                      <Icon className="size-5 text-emerald2 mb-2" />
+                      <div className="font-display text-2xl font-bold">{stat.value || 0}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+
+            <Tabs defaultValue="plans" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-5 max-w-3xl">
+                <TabsTrigger value="plans">Plans</TabsTrigger>
+                <TabsTrigger value="requests">Requests</TabsTrigger>
+                <TabsTrigger value="reports">Reports</TabsTrigger>
+                <TabsTrigger value="blocked">Blocked</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+
+              {/* Travel Plans Sub-tab */}
+              <TabsContent value="plans" className="space-y-4">
+                <div className="rounded-3xl border bg-white overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[1200px]">
+                      <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                        <div className="col-span-2">User</div>
+                        <div className="col-span-2">Destination</div>
+                        <div className="col-span-2">Travel Dates</div>
+                        <div className="col-span-2">Status</div>
+                        <div className="col-span-2">Created</div>
+                        <div className="col-span-2 text-right">Actions</div>
+                      </div>
+                      {safarPlans.map((plan) => (
+                        <div key={plan.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition text-sm">
+                          <div className="col-span-2">
+                            <div className="font-semibold">{plan.userName}</div>
+                            <div className="text-xs text-muted-foreground">{plan.userEmail}</div>
+                          </div>
+                          <div className="col-span-2">{plan.destination}</div>
+                          <div className="col-span-2 text-xs">{plan.dateFrom} to {plan.dateTo}</div>
+                          <div className="col-span-2"><StatusPill s={plan.status} /></div>
+                          <div className="col-span-2 text-xs">{new Date(plan.createdAt).toLocaleDateString()}</div>
+                          <div className="col-span-2 flex justify-end gap-1">
+                            <Button onClick={async () => {
+                              await fetch(`/api/admin/safar-together/plans/${plan.id}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: plan.status === 'active' ? 'hidden' : 'active' }),
+                              });
+                              toast.success('Status updated');
+                              load();
+                            }} size="sm" variant="ghost" className="h-7 text-xs">{plan.status === 'active' ? 'Hide' : 'Show'}</Button>
+                            <Button onClick={async () => {
+                              if (!confirm('Delete this plan?')) return;
+                              await fetch(`/api/admin/safar-together/plans/${plan.id}`, { method: 'DELETE' });
+                              toast.success('Plan deleted');
+                              load();
+                            }} size="sm" variant="ghost" className="h-7 text-xs text-rose-600">Delete</Button>
+                          </div>
+                        </div>
+                      ))}
+                      {safarPlans.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">No travel plans yet</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Requests Sub-tab */}
+              <TabsContent value="requests" className="space-y-4">
+                <div className="rounded-3xl border bg-white overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[1000px]">
+                      <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                        <div className="col-span-3">Sender</div>
+                        <div className="col-span-3">Receiver</div>
+                        <div className="col-span-2">Status</div>
+                        <div className="col-span-2">Date</div>
+                        <div className="col-span-2 text-right">Actions</div>
+                      </div>
+                      {safarRequests.map((req) => (
+                        <div key={req.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition text-sm">
+                          <div className="col-span-3 font-semibold">{req.senderName}</div>
+                          <div className="col-span-3 text-muted-foreground">User ID: {req.recipientId?.slice(0, 8)}</div>
+                          <div className="col-span-2"><StatusPill s={req.status} /></div>
+                          <div className="col-span-2 text-xs">{new Date(req.createdAt).toLocaleDateString()}</div>
+                          <div className="col-span-2 flex justify-end gap-1">
+                            <Button onClick={async () => {
+                              if (!confirm('Delete this request?')) return;
+                              await fetch(`/api/admin/safar-together/requests/${req.id}`, { method: 'DELETE' });
+                              toast.success('Request deleted');
+                              load();
+                            }} size="sm" variant="ghost" className="h-7 text-xs text-rose-600">Delete</Button>
+                          </div>
+                        </div>
+                      ))}
+                      {safarRequests.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">No requests yet</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Reports Sub-tab */}
+              <TabsContent value="reports" className="space-y-4">
+                <div className="space-y-4">
+                  {safarReports.map((report) => (
+                    <div key={report.id} className="rounded-2xl border bg-white p-5">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <div className="font-semibold">{report.reporterName} reported User ID: {report.reportedUserId?.slice(0, 8)}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{new Date(report.createdAt).toLocaleString()}</div>
+                        </div>
+                        <StatusPill s={report.status} />
+                      </div>
+                      <div className="text-sm text-muted-foreground mb-4">{report.reason}</div>
+                      <div className="flex gap-2">
+                        <Button onClick={async () => {
+                          await fetch(`/api/admin/safar-together/reports/${report.id}/resolve`, { method: 'PATCH' });
+                          toast.success('Report resolved');
+                          load();
+                        }} size="sm" className="bg-emerald2">Mark Resolved</Button>
+                        <Button onClick={async () => {
+                          await fetch(`/api/admin/safar-together/users/${report.reportedUserId}/suspend`, { method: 'POST' });
+                          toast.success('User suspended');
+                          load();
+                        }} size="sm" variant="outline">Suspend User</Button>
+                      </div>
+                    </div>
+                  ))}
+                  {safarReports.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground rounded-2xl border bg-white">No reports yet</div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Blocked Users Sub-tab */}
+              <TabsContent value="blocked" className="space-y-4">
+                <div className="rounded-3xl border bg-white overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[800px]">
+                      <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                        <div className="col-span-4">User</div>
+                        <div className="col-span-3">Email</div>
+                        <div className="col-span-3">Blocked Date</div>
+                        <div className="col-span-2 text-right">Actions</div>
+                      </div>
+                      {safarBlockedUsers.map((user) => (
+                        <div key={user.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition text-sm">
+                          <div className="col-span-4 font-semibold">{user.name}</div>
+                          <div className="col-span-3 text-muted-foreground">{user.email}</div>
+                          <div className="col-span-3 text-xs">{user.safarTogetherBlockedAt ? new Date(user.safarTogetherBlockedAt).toLocaleDateString() : '—'}</div>
+                          <div className="col-span-2 flex justify-end">
+                            <Button onClick={async () => {
+                              await fetch(`/api/admin/safar-together/users/${user.id}/unblock`, { method: 'POST' });
+                              toast.success('User unblocked');
+                              load();
+                            }} size="sm" className="h-7 bg-emerald2">Unblock</Button>
+                          </div>
+                        </div>
+                      ))}
+                      {safarBlockedUsers.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">No blocked users</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Settings Sub-tab */}
+              <TabsContent value="settings" className="space-y-4">
+                <div className="rounded-2xl border bg-white p-6">
+                  <h3 className="font-semibold text-lg mb-4">Feature Control</h3>
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <div className="font-semibold">Enable Safar Together</div>
+                      <div className="text-sm text-muted-foreground">When disabled, the feature will be hidden from all users</div>
+                    </div>
+                    <button
+                      onClick={toggleSafarTogether}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${safarTogetherEnabled ? 'bg-emerald2' : 'bg-gray-300'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${safarTogetherEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           {/* Revenue Tab */}

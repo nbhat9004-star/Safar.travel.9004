@@ -2244,6 +2244,86 @@ Return ONLY the JSON, no other text.`;
     return ok({ ok: true, reports: allReports });
   }
 
+  // Admin: Get All Requests
+  if (path === '/admin/safar-together/requests' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const requests = await getCollection('safarTogetherRequests');
+    const allRequests = await requests.find({}).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, requests: allRequests });
+  }
+
+  // Admin: Update Plan Status (Hide/Show)
+  if (path.match(/^\/admin\/safar-together\/plans\/([^/]+)\/status$/) && method === 'PATCH') {
+    const planId = path.match(/^\/admin\/safar-together\/plans\/([^/]+)\/status$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const { status } = await request.json();
+    const plans = await getCollection('safarTogetherPlans');
+    await plans.updateOne({ id: planId }, { $set: { status } });
+    return ok({ ok: true });
+  }
+
+  // Admin: Resolve Report
+  if (path.match(/^\/admin\/safar-together\/reports\/([^/]+)\/resolve$/) && method === 'PATCH') {
+    const reportId = path.match(/^\/admin\/safar-together\/reports\/([^/]+)\/resolve$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const reports = await getCollection('safarTogetherReports');
+    await reports.updateOne({ id: reportId }, { $set: { status: 'resolved', resolvedAt: new Date(), resolvedBy: me.id } });
+    return ok({ ok: true });
+  }
+
+  // Admin: Suspend User from Safar Together
+  if (path.match(/^\/admin\/safar-together\/users\/([^/]+)\/suspend$/) && method === 'POST') {
+    const userId = path.match(/^\/admin\/safar-together\/users\/([^/]+)\/suspend$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const users = await getCollection('users');
+    await users.updateOne({ id: userId }, { $set: { safarTogetherBlocked: true, safarTogetherBlockedAt: new Date() } });
+    return ok({ ok: true });
+  }
+
+  // Admin: Unblock User from Safar Together
+  if (path.match(/^\/admin\/safar-together\/users\/([^/]+)\/unblock$/) && method === 'POST') {
+    const userId = path.match(/^\/admin\/safar-together\/users\/([^/]+)\/unblock$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const users = await getCollection('users');
+    await users.updateOne({ id: userId }, { $set: { safarTogetherBlocked: false } });
+    return ok({ ok: true });
+  }
+
+  // Admin: Get Safar Together Statistics
+  if (path === '/admin/safar-together/stats' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const plans = await getCollection('safarTogetherPlans');
+    const requests = await getCollection('safarTogetherRequests');
+    const reports = await getCollection('safarTogetherReports');
+    const users = await getCollection('users');
+    
+    const [totalPlans, activePlans, pendingRequests, acceptedRequests, totalReports, blockedUsers] = await Promise.all([
+      plans.countDocuments({}),
+      plans.countDocuments({ status: 'active' }),
+      requests.countDocuments({ status: 'pending' }),
+      requests.countDocuments({ status: 'accepted' }),
+      reports.countDocuments({ status: 'pending' }),
+      users.countDocuments({ safarTogetherBlocked: true }),
+    ]);
+    
+    return ok({ ok: true, stats: { totalPlans, activePlans, pendingRequests, acceptedRequests, totalReports, blockedUsers } });
+  }
+
+  // Admin: Get Blocked Users
+  if (path === '/admin/safar-together/blocked-users' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const users = await getCollection('users');
+    const blockedUsers = await users.find({ safarTogetherBlocked: true }).toArray();
+    return ok({ ok: true, users: blockedUsers });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });
