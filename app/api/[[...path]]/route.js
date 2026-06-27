@@ -2048,17 +2048,30 @@ Return ONLY the JSON, no other text.`;
       if (!me) return err('Authentication required', 401);
       const data = await request.json();
       const plans = await getCollection('safarTogetherPlans');
+      
+      // New: Save plan with "pending_booking" status initially
+      // Plan will be activated after booking confirmation
       const plan = {
         id: uuid(),
         userId: me.id,
         userName: me.name,
         userEmail: me.email,
         ...data,
-        status: 'active',
+        status: 'pending_booking', // Changed from 'active'
+        bookingId: null, // Will be set when booking is completed
         createdAt: new Date(),
+        updatedAt: new Date(),
       };
       await plans.insertOne(plan);
-      return ok({ ok: true, plan }, 201);
+      
+      // Return plan with redirect info for booking
+      return ok({ 
+        ok: true, 
+        plan,
+        redirectToBooking: true,
+        listingId: data.listingId,
+        category: data.listingCategory
+      }, 201);
     } catch (error) {
       console.error('Create travel plan error:', error);
       return err('Failed to create travel plan: ' + error.message, 500);
@@ -2113,6 +2126,39 @@ Return ONLY the JSON, no other text.`;
     } catch (error) {
       console.error('Delete plan error:', error);
       return err('Failed to delete plan: ' + error.message, 500);
+    }
+  }
+
+  // Activate Plan After Booking (called after booking confirmation)
+  if (path.match(/^\/safar-together\/plans\/([^/]+)\/activate$/) && method === 'PATCH') {
+    try {
+      const planId = path.match(/^\/safar-together\/plans\/([^/]+)\/activate$/)[1];
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      
+      const { bookingId } = await request.json();
+      const plans = await getCollection('safarTogetherPlans');
+      
+      const result = await plans.updateOne(
+        { id: planId, userId: me.id, status: 'pending_booking' },
+        { 
+          $set: { 
+            status: 'active', 
+            bookingId: bookingId,
+            activatedAt: new Date(),
+            updatedAt: new Date()
+          } 
+        }
+      );
+      
+      if (result.matchedCount === 0) {
+        return err('Plan not found or already activated', 404);
+      }
+      
+      return ok({ ok: true, message: 'Plan activated successfully' });
+    } catch (error) {
+      console.error('Activate plan error:', error);
+      return err('Failed to activate plan: ' + error.message, 500);
     }
   }
 

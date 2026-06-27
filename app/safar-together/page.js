@@ -102,9 +102,18 @@ function SafarTogetherInner() {
     });
     const data = await res.json();
     if (!data.ok) return toast.error(data.error || 'Failed to create plan');
-    toast.success('Travel plan created!');
+    
+    // New workflow: Redirect to booking page
     resetCreateModal();
-    loadData();
+    toast.success('Plan created! Complete your booking to publish it.');
+    
+    // Store plan ID in sessionStorage for activation after booking
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('pendingSafarPlanId', data.plan.id);
+    }
+    
+    // Redirect to listing details page for booking
+    window.location.href = `/listing/${selectedListing.id}?safarPlan=${data.plan.id}`;
   };
 
   const resetCreateModal = () => {
@@ -181,7 +190,12 @@ function SafarTogetherInner() {
                       <div className="flex items-center gap-3 mb-3">
                         <div className="size-10 rounded-full bg-gradient-emerald grid place-items-center text-white font-semibold">{plan.userName?.[0]}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold truncate">{plan.userName}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold truncate">{plan.userName}</div>
+                            {plan.status === 'active' && (
+                              <Check className="size-4 text-emerald2 flex-shrink-0" title="Verified Booking" />
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground">{plan.age} years · {plan.gender}</div>
                         </div>
                       </div>
@@ -219,7 +233,18 @@ function SafarTogetherInner() {
 
             {/* Create Plan Tab */}
             <TabsContent value="create">
-              <div className="max-w-2xl mx-auto">
+              <div className="max-w-2xl mx-auto space-y-4">
+                <div className="bg-emerald2/5 border border-emerald2/20 rounded-2xl p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <Check className="size-5 text-emerald2 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <div className="font-semibold text-emerald2 mb-1">Verified Bookings Only</div>
+                      <p className="text-muted-foreground">
+                        To ensure safety and trust, you'll need to complete a confirmed booking on Safar Curated before your travel plan is published. Your plan will be saved and you'll be redirected to complete the booking.
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <Button onClick={() => setShowCreateModal(true)} className="w-full bg-emerald2 hover:bg-emerald2-deep h-16 text-lg">
                   + Create Travel Plan
                 </Button>
@@ -238,13 +263,34 @@ function SafarTogetherInner() {
                             <Image src={plan.listingImage} alt={plan.listingTitle} fill className="object-cover" />
                           </div>
                         )}
-                        <div>
-                          <h3 className="font-semibold text-lg mb-1">{plan.listingTitle}</h3>
+                        <div className="flex-1">
+                          <div className="flex items-start gap-2 mb-2">
+                            <h3 className="font-semibold text-lg">{plan.listingTitle}</h3>
+                            {plan.status === 'active' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald2/10 text-emerald2 text-xs font-semibold whitespace-nowrap">
+                                <Check className="size-3" /> Verified Booking
+                              </span>
+                            )}
+                            {plan.status === 'pending_booking' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold whitespace-nowrap">
+                                <AlertTriangle className="size-3" /> Pending Booking
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-muted-foreground space-y-1">
                             <div>{getCategoryEmoji(plan.listingCategory)} {plan.listingCategory}</div>
                             <div>{plan.dateFrom} to {plan.dateTo}</div>
                             <div>{plan.introduction}</div>
                           </div>
+                          {plan.status === 'pending_booking' && (
+                            <div className="mt-3">
+                              <Link href={`/listing/${plan.listingId}?safarPlan=${plan.id}`}>
+                                <Button size="sm" className="bg-emerald2 hover:bg-emerald2-deep">
+                                  Complete Booking
+                                </Button>
+                              </Link>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Button onClick={() => deletePlan(plan.id)} variant="outline" size="sm">Delete</Button>
