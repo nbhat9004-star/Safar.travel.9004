@@ -2018,6 +2018,187 @@ Return ONLY the JSON, no other text.`;
     return ok({ ok: true, logs: allLogs });
   }
 
+  // === SAFAR TOGETHER FEATURE ===
+  
+  // Get Feature Settings
+  if (path === '/settings/safar-together' && method === 'GET') {
+    const settings = await getCollection('settings');
+    const setting = await settings.findOne({ key: 'safarTogether' });
+    return ok({ ok: true, enabled: setting?.enabled || false });
+  }
+
+  // Toggle Feature (Admin Only)
+  if (path === '/admin/safar-together/toggle' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me || me.role !== 'super_admin') return err('Unauthorized', 403);
+    const { enabled } = await request.json();
+    const settings = await getCollection('settings');
+    await settings.updateOne(
+      { key: 'safarTogether' },
+      { $set: { enabled, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    return ok({ ok: true, enabled });
+  }
+
+  // Create Travel Plan
+  if (path === '/safar-together/plans' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const data = await request.json();
+    const plans = await getCollection('safarTogetherPlans');
+    const plan = {
+      id: randomUUID(),
+      userId: me.id,
+      userName: me.name,
+      userEmail: me.email,
+      ...data,
+      status: 'active',
+      createdAt: new Date(),
+    };
+    await plans.insertOne(plan);
+    return ok({ ok: true, plan });
+  }
+
+  // Browse Plans
+  if (path === '/safar-together/plans' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const { destination, dateFrom, dateTo, minAge, maxAge, gender, interests } = Object.fromEntries(new URL(request.url).searchParams);
+    const plans = await getCollection('safarTogetherPlans');
+    let query = { status: 'active', userId: { $ne: me.id } };
+    if (destination) query.destination = { $regex: destination, $options: 'i' };
+    if (dateFrom) query.dateFrom = { $gte: dateFrom };
+    if (dateTo) query.dateTo = { $lte: dateTo };
+    if (minAge) query.age = { $gte: Number(minAge) };
+    if (maxAge) query.age = { ...query.age, $lte: Number(maxAge) };
+    if (gender) query.gender = gender;
+    const allPlans = await plans.find(query).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, plans: allPlans });
+  }
+
+  // My Plans
+  if (path === '/safar-together/my-plans' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const plans = await getCollection('safarTogetherPlans');
+    const myPlans = await plans.find({ userId: me.id }).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, plans: myPlans });
+  }
+
+  // Delete Plan
+  if (path.match(/^\/safar-together\/plans\/([^/]+)$/) && method === 'DELETE') {
+    const planId = path.match(/^\/safar-together\/plans\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const plans = await getCollection('safarTogetherPlans');
+    await plans.deleteOne({ id: planId, userId: me.id });
+    return ok({ ok: true });
+  }
+
+  // Send Request
+  if (path === '/safar-together/requests' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const { planId, recipientId } = await request.json();
+    const requests = await getCollection('safarTogetherRequests');
+    const existing = await requests.findOne({ senderId: me.id, planId, status: { $in: ['pending', 'accepted'] } });
+    if (existing) return err('Request already sent', 400);
+    const request = {
+      id: randomUUID(),
+      planId,
+      senderId: me.id,
+      senderName: me.name,
+      recipientId,
+      status: 'pending',
+      createdAt: new Date(),
+    };
+    await requests.insertOne(request);
+    return ok({ ok: true, request });
+  }
+
+  // My Requests
+  if (path === '/safar-together/requests' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const requests = await getCollection('safarTogetherRequests');
+    const sent = await requests.find({ senderId: me.id }).toArray();
+    const received = await requests.find({ recipientId: me.id }).toArray();
+    return ok({ ok: true, sent, received });
+  }
+
+  // Accept/Decline Request
+  if (path.match(/^\/safar-together\/requests\/([^/]+)\/([^/]+)$/) && method === 'PATCH') {
+    const [, requestId, action] = path.match(/^\/safar-together\/requests\/([^/]+)\/([^/]+)$/);
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const requests = await getCollection('safarTogetherRequests');
+    await requests.updateOne(
+      { id: requestId, recipientId: me.id },
+      { $set: { status: action, updatedAt: new Date() } }
+    );
+    return ok({ ok: true });
+  }
+
+  // My Connections
+  if (path === '/safar-together/connections' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const requests = await getCollection('safarTogetherRequests');
+    const connections = await requests.find({
+      $or: [{ senderId: me.id }, { recipientId: me.id }],
+      status: 'accepted'
+    }).toArray();
+    return ok({ ok: true, connections });
+  }
+
+  // Report User
+  if (path === '/safar-together/report' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const { reportedUserId, reason } = await request.json();
+    const reports = await getCollection('safarTogetherReports');
+    const report = {
+      id: randomUUID(),
+      reporterId: me.id,
+      reporterName: me.name,
+      reportedUserId,
+      reason,
+      status: 'pending',
+      createdAt: new Date(),
+    };
+    await reports.insertOne(report);
+    return ok({ ok: true });
+  }
+
+  // Admin: Get All Plans
+  if (path === '/admin/safar-together/plans' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const plans = await getCollection('safarTogetherPlans');
+    const allPlans = await plans.find({}).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, plans: allPlans });
+  }
+
+  // Admin: Delete Plan
+  if (path.match(/^\/admin\/safar-together\/plans\/([^/]+)$/) && method === 'DELETE') {
+    const planId = path.match(/^\/admin\/safar-together\/plans\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const plans = await getCollection('safarTogetherPlans');
+    await plans.deleteOne({ id: planId });
+    return ok({ ok: true });
+  }
+
+  // Admin: Get Reports
+  if (path === '/admin/safar-together/reports' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const reports = await getCollection('safarTogetherReports');
+    const allReports = await reports.find({}).sort({ createdAt: -1 }).toArray();
+    return ok({ ok: true, reports: allReports });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

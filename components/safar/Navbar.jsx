@@ -14,12 +14,17 @@ export default function Navbar({ transparent = false }) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null); // 'login' | 'signup' | null
+  const [safarTogetherEnabled, setSafarTogetherEnabled] = useState(false);
   
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  
+  useEffect(() => {
+    fetch('/api/settings/safar-together').then(r => r.json()).then(d => setSafarTogetherEnabled(d.enabled));
   }, []);
   
   const solid = !transparent || scrolled;
@@ -34,6 +39,11 @@ export default function Navbar({ transparent = false }) {
       { href: '/explore?nearme=true',     label: 'Near Me' },
       { href: '/ai-planner',              label: 'AI Planner' },
     ];
+
+    // Add Safar Together if enabled and user is logged in
+    if (safarTogetherEnabled && user) {
+      baseNav.splice(5, 0, { href: '/safar-together', label: '🤝 Safar Together' });
+    }
 
     // Add role-specific items
     if (user?.role === 'traveler' || user?.role === 'admin' || user?.role === 'super_admin') {

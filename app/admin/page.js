@@ -72,12 +72,13 @@ function AdminInner() {
   const [adminModal, setAdminModal] = useState(null);
   const [announcementModal, setAnnouncementModal] = useState(null);
   const [hostModal, setHostModal] = useState(null);
+  const [safarTogetherEnabled, setSafarTogetherEnabled] = useState(false);
   
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
   const load = async () => {
     setLoading(true); setError(null);
-    const [p, a, u, bk, rev, trans, revs, promos, tickets, adminsData, settingsData, announcementsData, logs] = await Promise.all([
+    const [p, a, u, bk, rev, trans, revs, promos, tickets, adminsData, settingsData, announcementsData, logs, safarToggle] = await Promise.all([
       listingsApi.list({ status: 'pending', limit: 50 }),
       listingsApi.list({ status: 'all', limit: 200 }),
       apiJson('/api/users'),
@@ -91,6 +92,7 @@ function AdminInner() {
       apiJson('/api/admin/settings'),
       apiJson('/api/admin/announcements'),
       apiJson('/api/admin/activity-logs?limit=100'),
+      apiJson('/api/settings/safar-together'),
     ]);
     if (p.ok && p.data?.ok) setPending(p.data.listings); else setError(p.data?.error || 'Failed to load pending');
     if (a.ok && a.data?.ok) setAll(a.data.listings);
@@ -105,6 +107,7 @@ function AdminInner() {
     if (settingsData.ok && settingsData.data?.ok) setSettings(settingsData.data.settings || {});
     if (announcementsData.ok && announcementsData.data?.ok) setAnnouncements(announcementsData.data.announcements || []);
     if (logs.ok && logs.data?.ok) setActivityLogs(logs.data.logs || []);
+    if (safarToggle.ok && safarToggle.data) setSafarTogetherEnabled(safarToggle.data.enabled || false);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -336,6 +339,19 @@ function AdminInner() {
     toast.success(`Host created! Email: ${hostData.email}, Password: ${hostData.password}`);
     setHostModal(null);
     load();
+  };
+
+  const toggleSafarTogether = async () => {
+    const newState = !safarTogetherEnabled;
+    const res = await fetch('/api/admin/safar-together/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: newState }),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error('Failed to toggle feature');
+    setSafarTogetherEnabled(newState);
+    toast.success(newState ? 'Safar Together enabled' : 'Safar Together disabled');
   };
 
   const updateAdminRole = async (adminId, role) => {
@@ -1249,6 +1265,24 @@ function AdminInner() {
                   <div>
                     <label className="text-sm font-semibold">Commission Rate (%)</label>
                     <input name="commissionRate" type="number" step="0.1" defaultValue={settings?.commissionRate || 15} className="w-full mt-1 px-3 py-2 border rounded-lg" />
+                  </div>
+                  <div className="col-span-2 border-t pt-4">
+                    <h3 className="font-semibold text-lg mb-4">Feature Toggles</h3>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <div className="font-semibold">🤝 Safar Together</div>
+                        <div className="text-sm text-muted-foreground">Allow travelers to connect and travel together</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={toggleSafarTogether}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${safarTogetherEnabled ? 'bg-emerald2' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${safarTogetherEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-6">
