@@ -1849,6 +1849,39 @@ Return ONLY the JSON, no other text.`;
     return ok({ ok: true, admin: newAdmin });
   }
 
+  // Create Host Account (Admin/Super Admin Only)
+  if (path === '/admin/hosts' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    
+    const { name, email, mobile, password, businessName, status, verified } = await request.json();
+    const users = await getCollection('users');
+    
+    const exists = await users.findOne({ email });
+    if (exists) return err('Email already exists', 400);
+    
+    const newHost = {
+      id: randomUUID(),
+      name,
+      email,
+      mobile,
+      password: await hashPassword(password),
+      role: 'host',
+      status: status || 'active',
+      verified: verified || false,
+      businessName: businessName || '',
+      createdAt: new Date(),
+      listingCount: 0,
+      bookingCount: 0,
+    };
+    await users.insertOne(newHost);
+    
+    // Log activity
+    await logActivity(me, 'host_created', `Created host: ${name} (${email})`);
+    
+    return ok({ ok: true, host: newHost });
+  }
+
   // Update Admin Role
   if (path.match(/^\/admin\/admins\/([^/]+)\/role$/) && method === 'PATCH') {
     const adminId = path.match(/^\/admin\/admins\/([^/]+)\/role$/)[1];

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp } from 'lucide-react';
+import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -71,6 +71,7 @@ function AdminInner() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [adminModal, setAdminModal] = useState(null);
   const [announcementModal, setAnnouncementModal] = useState(null);
+  const [hostModal, setHostModal] = useState(null);
   
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
@@ -321,6 +322,19 @@ function AdminInner() {
     if (!data.ok) return toast.error(data.error || 'Create failed');
     toast.success('Admin created successfully');
     setAdminModal(null);
+    load();
+  };
+
+  const createHost = async (hostData) => {
+    const res = await fetch('/api/admin/hosts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({...hostData, role: 'host'}),
+    });
+    const data = await res.json();
+    if (!data.ok) return toast.error(data.error || 'Failed to create host');
+    toast.success(`Host created! Email: ${hostData.email}, Password: ${hostData.password}`);
+    setHostModal(null);
     load();
   };
 
@@ -659,7 +673,10 @@ function AdminInner() {
                 <h2 className="font-display text-2xl font-bold">Host Management</h2>
                 <p className="text-sm text-muted-foreground mt-1">Manage all hosts and their listings</p>
               </div>
-              <span className="text-sm text-muted-foreground">{hosts.length} total hosts</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">{hosts.length} total hosts</span>
+                <Button onClick={()=>setHostModal({mode:'create'})} className="rounded-full bg-emerald2 hover:bg-emerald2-deep">+ Create Host</Button>
+              </div>
             </div>
             {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
             {!loading && hosts.length === 0 && (
@@ -702,9 +719,9 @@ function AdminInner() {
                         </div>
                         <div className="col-span-2 text-sm">{h.bookingCount || 0} bookings</div>
                         <div className="col-span-3 flex justify-end gap-1">
+                          <Button onClick={()=>setHostModal({...h, mode:'edit'})} size="sm" variant="ghost" className="rounded-full h-8" title="Edit"><Pencil className="size-3.5" /></Button>
                           {h.status !== 'suspended' && <Button onClick={()=>suspendUser(h.id)} size="sm" variant="ghost" className="rounded-full h-8" title="Suspend"><Ban className="size-3.5" /></Button>}
                           {h.status === 'suspended' && <Button onClick={()=>reactivateUser(h.id)} size="sm" variant="ghost" className="rounded-full h-8 text-emerald2" title="Reactivate"><RotateCcw className="size-3.5" /></Button>}
-                          <Button onClick={()=>blacklistUser(h.id)} size="sm" variant="ghost" className="rounded-full h-8 text-rose-600" title="Blacklist"><Shield className="size-3.5" /></Button>
                           <Button onClick={()=>setUserModal(h)} size="sm" className="rounded-full h-8 bg-emerald2 hover:bg-emerald2-deep">View</Button>
                         </div>
                       </div>
@@ -1603,6 +1620,72 @@ function AdminInner() {
               <DialogFooter className="mt-4">
                 <Button type="button" onClick={()=>setAdminModal(null)} variant="outline">Cancel</Button>
                 <Button type="submit" className="bg-emerald2 hover:bg-emerald2-deep">Create Admin</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Host Creation/Edit Modal */}
+      {hostModal && (
+        <Dialog open={!!hostModal} onOpenChange={()=>setHostModal(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{hostModal.mode === 'create' ? 'Create Host Account' : 'Edit Host'}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const hostData = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                mobile: formData.get('mobile'),
+                password: formData.get('password'),
+                businessName: formData.get('businessName'),
+                status: formData.get('status'),
+                verified: formData.get('verified') === 'on',
+              };
+              createHost(hostData);
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-semibold">Full Name *</label>
+                  <input name="name" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Host Name" defaultValue={hostModal.name || ''} />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Email *</label>
+                  <input name="email" type="email" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="host@example.com" defaultValue={hostModal.email || ''} />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Mobile Number *</label>
+                  <input name="mobile" type="tel" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="+91 XXXXX XXXXX" defaultValue={hostModal.mobile || ''} />
+                </div>
+                {hostModal.mode === 'create' && (
+                  <div>
+                    <label className="text-sm font-semibold">Password *</label>
+                    <input name="password" type="password" required className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Minimum 8 characters" />
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm font-semibold">Business Name</label>
+                  <input name="businessName" className="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Optional" defaultValue={hostModal.businessName || ''} />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Account Status</label>
+                  <select name="status" className="w-full mt-1 px-3 py-2 border rounded-lg" defaultValue={hostModal.status || 'active'}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" name="verified" id="verified" className="size-4" defaultChecked={hostModal.verified} />
+                  <label htmlFor="verified" className="text-sm font-semibold">Verified Host</label>
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
+                <Button type="button" onClick={()=>setHostModal(null)} variant="outline">Cancel</Button>
+                <Button type="submit" className="bg-emerald2 hover:bg-emerald2-deep">{hostModal.mode === 'create' ? 'Create Host' : 'Save Changes'}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
