@@ -2235,6 +2235,50 @@ Return ONLY the JSON, no other text.`;
     return ok({ ok: true });
   }
 
+  // Admin: Get Plan Details with Related Data
+  if (path.match(/^\/admin\/safar-together\/plans\/([^/]+)\/details$/) && method === 'GET') {
+    const planId = path.match(/^\/admin\/safar-together\/plans\/([^/]+)\/details$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    
+    const plans = await getCollection('safarTogetherPlans');
+    const users = await getCollection('users');
+    const requests = await getCollection('safarTogetherRequests');
+    const reports = await getCollection('safarTogetherReports');
+    
+    const plan = await plans.findOne({ id: planId });
+    if (!plan) return err('Plan not found', 404);
+    
+    const creator = await users.findOne({ id: plan.userId });
+    const planRequests = await requests.find({ planId }).sort({ createdAt: -1 }).toArray();
+    const acceptedRequests = await requests.find({ planId, status: 'accepted' }).toArray();
+    
+    // Get joined travelers
+    const joinedTravelerIds = acceptedRequests.map(r => r.senderId);
+    const joinedTravelers = await users.find({ id: { $in: joinedTravelerIds } }).toArray();
+    
+    // Get reports related to this plan's users
+    const allUserIds = [plan.userId, ...joinedTravelerIds];
+    const planReports = await reports.find({ 
+      $or: [
+        { reportedUserId: { $in: allUserIds } },
+        { reporterId: { $in: allUserIds } }
+      ]
+    }).sort({ createdAt: -1 }).toArray();
+    
+    return ok({ 
+      ok: true, 
+      plan, 
+      creator, 
+      requests: planRequests,
+      joinedTravelers: joinedTravelers.map(t => ({
+        ...t,
+        joinedDate: acceptedRequests.find(r => r.senderId === t.id)?.updatedAt || acceptedRequests.find(r => r.senderId === t.id)?.createdAt
+      })),
+      reports: planReports
+    });
+  }
+
   // Admin: Get Reports
   if (path === '/admin/safar-together/reports' && method === 'GET') {
     const me = await getCurrentUser(request);

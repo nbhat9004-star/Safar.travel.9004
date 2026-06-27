@@ -78,6 +78,7 @@ function AdminInner() {
   const [safarReports, setSafarReports] = useState([]);
   const [safarStats, setSafarStats] = useState(null);
   const [safarBlockedUsers, setSafarBlockedUsers] = useState([]);
+  const [safarPlanDetails, setSafarPlanDetails] = useState(null);
   
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
@@ -367,6 +368,13 @@ function AdminInner() {
     if (!data.ok) return toast.error('Failed to toggle feature');
     setSafarTogetherEnabled(newState);
     toast.success(newState ? 'Safar Together enabled' : 'Safar Together disabled');
+  };
+
+  const loadPlanDetails = async (planId) => {
+    const res = await fetch(`/api/admin/safar-together/plans/${planId}/details`);
+    const data = await res.json();
+    if (!data.ok) return toast.error('Failed to load plan details');
+    setSafarPlanDetails(data);
   };
 
   const updateAdminRole = async (adminId, role) => {
@@ -1454,6 +1462,7 @@ function AdminInner() {
                           <div className="col-span-2"><StatusPill s={plan.status} /></div>
                           <div className="col-span-2 text-xs">{new Date(plan.createdAt).toLocaleDateString()}</div>
                           <div className="col-span-2 flex justify-end gap-1">
+                            <Button onClick={() => loadPlanDetails(plan.id)} size="sm" className="h-7 text-xs bg-emerald2">View</Button>
                             <Button onClick={async () => {
                               await fetch(`/api/admin/safar-together/plans/${plan.id}/status`, {
                                 method: 'PATCH',
@@ -1886,6 +1895,168 @@ function AdminInner() {
                 <Button type="submit" className="bg-emerald2 hover:bg-emerald2-deep">Create Admin</Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Safar Together Plan Details Modal */}
+      {safarPlanDetails && (
+        <Dialog open={!!safarPlanDetails} onOpenChange={() => setSafarPlanDetails(null)}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-2xl">Travel Plan Details</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-6">
+              {/* Plan Information */}
+              <div className="rounded-xl border bg-white p-5">
+                <h3 className="font-semibold text-lg mb-4">Plan Information</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div><span className="text-muted-foreground">Plan ID:</span> <span className="font-mono text-xs">{safarPlanDetails.plan.id?.slice(0, 12)}...</span></div>
+                  <div><span className="text-muted-foreground">Status:</span> <StatusPill s={safarPlanDetails.plan.status} /></div>
+                  <div><span className="text-muted-foreground">Created:</span> {new Date(safarPlanDetails.plan.createdAt).toLocaleDateString()}</div>
+                  <div><span className="text-muted-foreground">Destination:</span> <span className="font-semibold">{safarPlanDetails.plan.destination}</span></div>
+                  <div><span className="text-muted-foreground">Start:</span> {safarPlanDetails.plan.dateFrom}</div>
+                  <div><span className="text-muted-foreground">End:</span> {safarPlanDetails.plan.dateTo}</div>
+                  <div><span className="text-muted-foreground">Duration:</span> {safarPlanDetails.plan.duration}</div>
+                  <div><span className="text-muted-foreground">Travelers Joined:</span> {safarPlanDetails.joinedTravelers?.length || 0}</div>
+                </div>
+              </div>
+
+              {/* Plan Creator */}
+              <div className="rounded-xl border bg-white p-5">
+                <h3 className="font-semibold text-lg mb-4">Plan Creator</h3>
+                {safarPlanDetails.creator && (
+                  <div>
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="size-16 rounded-full bg-gradient-emerald grid place-items-center text-white font-bold text-2xl">{safarPlanDetails.creator.name?.[0]}</div>
+                      <div className="flex-1">
+                        <div className="font-semibold text-lg">{safarPlanDetails.creator.name}</div>
+                        <div className="text-sm text-muted-foreground">{safarPlanDetails.creator.email}</div>
+                        <div className="text-sm text-muted-foreground">{safarPlanDetails.creator.mobile || 'No phone'}</div>
+                        <div className="flex gap-2 mt-2">
+                          <StatusPill s={safarPlanDetails.creator.role} />
+                          <StatusPill s={safarPlanDetails.creator.status || 'active'} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                      <div><span className="text-muted-foreground">Age:</span> {safarPlanDetails.plan.age}</div>
+                      <div><span className="text-muted-foreground">Gender:</span> {safarPlanDetails.plan.gender}</div>
+                      <div><span className="text-muted-foreground">Languages:</span> {safarPlanDetails.plan.languages}</div>
+                      <div><span className="text-muted-foreground">Interests:</span> {safarPlanDetails.plan.interests}</div>
+                    </div>
+                    <div className="text-sm mb-4"><span className="text-muted-foreground">Introduction:</span> {safarPlanDetails.plan.introduction}</div>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button onClick={async () => {
+                        await fetch(`/api/admin/safar-together/users/${safarPlanDetails.creator.id}/suspend`, { method: 'POST' });
+                        toast.success('Creator suspended');
+                        setSafarPlanDetails(null);
+                        load();
+                      }} size="sm" variant="outline">Suspend Creator</Button>
+                      <Button onClick={()=>suspendUser(safarPlanDetails.creator.id)} size="sm" variant="outline" className="text-rose-600">Ban Creator</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Travelers Who Joined */}
+              <div className="rounded-xl border bg-white p-5">
+                <h3 className="font-semibold text-lg mb-4">Travelers Who Joined ({safarPlanDetails.joinedTravelers?.length || 0})</h3>
+                {safarPlanDetails.joinedTravelers?.length > 0 ? (
+                  <div className="space-y-3">
+                    {safarPlanDetails.joinedTravelers.map((traveler) => (
+                      <div key={traveler.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="size-10 rounded-full bg-gradient-emerald grid place-items-center text-white font-semibold">{traveler.name?.[0]}</div>
+                          <div>
+                            <div className="font-semibold">{traveler.name}</div>
+                            <div className="text-xs text-muted-foreground">{traveler.email} · Joined {traveler.joinedDate ? new Date(traveler.joinedDate).toLocaleDateString() : 'N/A'}</div>
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button onClick={async () => {
+                            await fetch(`/api/admin/safar-together/users/${traveler.id}/suspend`, { method: 'POST' });
+                            toast.success('User suspended');
+                            loadPlanDetails(safarPlanDetails.plan.id);
+                          }} size="sm" variant="outline" className="h-8 text-xs">Suspend</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground">No travelers joined yet</div>
+                )}
+              </div>
+
+              {/* Pending Requests */}
+              <div className="rounded-xl border bg-white p-5">
+                <h3 className="font-semibold text-lg mb-4">Pending Requests ({safarPlanDetails.requests?.filter(r => r.status === 'pending').length || 0})</h3>
+                {safarPlanDetails.requests?.filter(r => r.status === 'pending').length > 0 ? (
+                  <div className="space-y-2">
+                    {safarPlanDetails.requests.filter(r => r.status === 'pending').map((req) => (
+                      <div key={req.id} className="flex items-center justify-between p-3 border rounded-lg text-sm">
+                        <div>
+                          <div className="font-semibold">{req.senderName}</div>
+                          <div className="text-xs text-muted-foreground">Requested {new Date(req.createdAt).toLocaleDateString()}</div>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-xs">Delete</Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground text-sm">No pending requests</div>
+                )}
+              </div>
+
+              {/* Reports */}
+              <div className="rounded-xl border bg-white p-5">
+                <h3 className="font-semibold text-lg mb-4">Reports ({safarPlanDetails.reports?.length || 0})</h3>
+                {safarPlanDetails.reports?.length > 0 ? (
+                  <div className="space-y-3">
+                    {safarPlanDetails.reports.map((report) => (
+                      <div key={report.id} className="p-3 border rounded-lg text-sm">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <span className="font-semibold">{report.reporterName}</span> reported <span className="font-semibold">User #{report.reportedUserId?.slice(0, 8)}</span>
+                          </div>
+                          <StatusPill s={report.status} />
+                        </div>
+                        <div className="text-muted-foreground mb-2">{report.reason}</div>
+                        <div className="text-xs text-muted-foreground">{new Date(report.createdAt).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground text-sm">No reports</div>
+                )}
+              </div>
+
+              {/* Admin Controls */}
+              <div className="rounded-xl border bg-white p-5">
+                <h3 className="font-semibold text-lg mb-4">Admin Controls</h3>
+                <div className="flex gap-2 flex-wrap">
+                  <Button onClick={async () => {
+                    await fetch(`/api/admin/safar-together/plans/${safarPlanDetails.plan.id}/status`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: safarPlanDetails.plan.status === 'active' ? 'hidden' : 'active' }),
+                    });
+                    toast.success('Plan status updated');
+                    setSafarPlanDetails(null);
+                    load();
+                  }} size="sm" variant="outline">{safarPlanDetails.plan.status === 'active' ? 'Hide Plan' : 'Show Plan'}</Button>
+                  <Button onClick={async () => {
+                    if (!confirm('Delete this plan permanently?')) return;
+                    await fetch(`/api/admin/safar-together/plans/${safarPlanDetails.plan.id}`, { method: 'DELETE' });
+                    toast.success('Plan deleted');
+                    setSafarPlanDetails(null);
+                    load();
+                  }} size="sm" variant="outline" className="text-rose-600">Delete Plan</Button>
+                  <Button onClick={() => setSafarPlanDetails(null)} size="sm">Close</Button>
+                </div>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       )}
