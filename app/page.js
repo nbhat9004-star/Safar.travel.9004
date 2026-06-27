@@ -2,16 +2,18 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/safar/Navbar';
-import Footer from '@/components/safar/Footer';
 import PropertyCard from '@/components/safar/PropertyCard';
 import CategoryPills from '@/components/safar/CategoryPills';
-import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
 import { LISTINGS, CATEGORIES, IMG, STATS, TESTIMONIALS, AI_PROMPT_SUGGESTIONS } from '@/lib/data';
+
+// PERF: Lazy load below-the-fold components to reduce initial JS bundle and defer Framer Motion
+const Footer = dynamic(() => import('@/components/safar/Footer'), { ssr: true });
+const AIAssistantFloating = dynamic(() => import('@/components/safar/AIAssistantFloating'), { ssr: false });
 
 // Kashmir seasonal images - ultra-premium iconic landmarks collection
 const SEASONAL_IMAGES = [
@@ -70,8 +72,6 @@ function App() {
   const router = useRouter();
   const [cat, setCat] = useState('all');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const { scrollY } = useScroll();
-  const heroY = useTransform(scrollY, [0, 500], [0, 150]); // Parallax effect
   
   // Hero search state — fully functional, drives /explore navigation
   const [where, setWhere] = useState('');
@@ -107,21 +107,12 @@ function App() {
 
       {/* HERO with Seasonal Slideshow */}
       <section className="relative min-h-[100svh] w-full overflow-hidden">
-        {/* Seasonal Background Slideshow */}
-        <motion.div style={{ y: heroY }} className="absolute inset-0">
+        {/* Seasonal Background Slideshow - PERF: Removed parallax effect to reduce JavaScript load */}
+        <div className="absolute inset-0">
           {SEASONAL_IMAGES.map((image, index) => (
-            <motion.div
+            <div
               key={index}
-              className={`absolute inset-0`}
-              initial={{ opacity: 0 }}
-              animate={{ 
-                opacity: index === currentImageIndex ? 1 : 0,
-                scale: index === currentImageIndex ? 1 : 1.05
-              }}
-              transition={{ 
-                opacity: { duration: 2, ease: "easeInOut" },
-                scale: { duration: 7, ease: "linear" }
-              }}
+              className={`absolute inset-0 transition-opacity duration-2000 ${index === currentImageIndex ? 'opacity-100' : 'opacity-0'}`}
             >
               <Image
                 src={image.src}
@@ -129,30 +120,26 @@ function App() {
                 fill
                 priority={index === 0}
                 sizes="100vw"
-                quality={90}
+                quality={75}
                 className="object-cover"
               />
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
+        </div>
 
         {/* Premium dark gradient overlay for text readability (30-40% darkness) */}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.50)_0%,rgba(15,20,25,0.35)_35%,rgba(15,20,25,0.60)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
         <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
-          <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.9, ease: 'easeOut' }}
-            className="max-w-3xl text-white">
-            <motion.div
+          <div className="max-w-3xl text-white animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div
               key={currentImageIndex}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6 }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold animate-in fade-in zoom-in-95 duration-500"
             >
               <Sparkles className="size-3.5 text-gold" />
               Curated by locals • Trusted by travelers • {SEASONAL_IMAGES[currentImageIndex].emoji} {SEASONAL_IMAGES[currentImageIndex].season} in Kashmir
-            </motion.div>
+            </div>
             <h1 className="font-display font-bold mt-6 text-[clamp(2.6rem,6.4vw,5.6rem)] leading-[1.02] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.
             </h1>
@@ -160,37 +147,23 @@ function App() {
               Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
                 <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-7 h-14 font-semibold text-base">
                   <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
                 </Button>
-              </motion.div>
-              <motion.div
-                animate={{
-                  y: [0, -8, 0],
-                }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
+              </div>
+              <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
                 <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-7 h-14 font-semibold text-base">
                   <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
                 </Button>
-              </motion.div>
+              </div>
             </div>
-          </motion.div>
+          </div>
 
           {/* Search Card — responsive, fully contained at all viewports */}
-          <motion.form
+          <form
             onSubmit={onSearch}
-            initial={{ y: 60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.9, delay: 0.3 }}
-            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl"
+            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300"
           >
             {/* Fields wrapper: stack on mobile, 2x2 grid on sm-tablet, inline row on lg+ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-1 lg:items-stretch gap-2 lg:gap-0 min-w-0">
@@ -255,11 +228,10 @@ function App() {
             >
               <Search className="size-5 mr-2" /> <span>Search</span>
             </Button>
-          </motion.form>
+          </form>
 
           {/* Trust strip */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.6 }}
-            className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-white/90 text-[13px]">
+          <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-white/90 text-[13px] animate-in fade-in slide-in-from-bottom-4 duration-700 delay-500">
             {[
               {t:'Verified Hosts'},
               {t:'Secure Payments'},
@@ -274,7 +246,7 @@ function App() {
                 <span className="font-medium drop-shadow">{tr.t}</span>
               </div>
             ))}
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -282,11 +254,10 @@ function App() {
       <section className="py-12 border-b">
         <div className="container grid grid-cols-2 md:grid-cols-4 gap-6">
           {STATS.map((s, i) => (
-            <motion.div key={s.label} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: i*0.05 }}
-              className="text-center md:text-left">
+            <div key={s.label} className="text-center md:text-left animate-in fade-in slide-in-from-bottom-6 duration-500" style={{animationDelay: `${i*50}ms`}}>
               <div className="font-display text-3xl md:text-4xl font-bold gradient-text-emerald">{s.value}</div>
               <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -318,13 +289,9 @@ function App() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {destinations.map((d, i) => (
               <Link key={d.name} href={`/explore?location=${d.name}`}>
-                <motion.div 
-                  initial={{ opacity: 0, y: 30 }} 
-                  whileInView={{ opacity: 1, y: 0 }} 
-                  viewport={{ once: true, margin: '-100px' }} 
-                  transition={{ duration: 0.55, delay: i*0.06 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer"
+                <div 
+                  className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer animate-in fade-in slide-in-from-bottom-8 duration-700 hover:scale-[1.02] active:scale-[0.98] transition-transform"
+                  style={{animationDelay: `${i*60}ms`}}
                 >
                   <Image src={d.img} alt={d.name} fill loading="lazy" quality={60}
                     sizes="(min-width: 1024px) 25vw, 50vw"
@@ -335,7 +302,7 @@ function App() {
                     <div className="font-display text-2xl font-bold mt-1">{d.name}</div>
                     <div className="mt-1 text-xs text-white/75">{d.count} stays · from ₹2,900</div>
                   </div>
-                </motion.div>
+                </div>
               </Link>
             ))}
           </div>
@@ -364,8 +331,7 @@ function App() {
               </Button>
             </div>
           </div>
-          <motion.div initial={{ opacity: 0, scale: 0.96 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ duration: 0.7 }}
-            className="relative">
+          <div className="relative animate-in fade-in zoom-in-95 duration-700">
             <div className="absolute -inset-6 bg-gradient-to-tr from-emerald-200/30 via-gold/20 to-transparent rounded-[3rem] blur-2xl" />
             <div className="relative rounded-3xl bg-white border shadow-2xl overflow-hidden">
               <div className="px-5 py-4 bg-gradient-emerald text-white flex items-center gap-3">
@@ -388,7 +354,7 @@ function App() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -405,9 +371,8 @@ function App() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             {experiences.map((e, i) => (
               <Link key={e.title} href="/explore?cat=experience">
-                <motion.div 
-                  whileTap={{ scale: 0.98 }}
-                  className="group relative aspect-[3/4] rounded-3xl overflow-hidden cursor-pointer"
+                <div 
+                  className="group relative aspect-[3/4] rounded-3xl overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform"
                 >
                   <Image src={e.img} alt={e.title} fill loading="lazy" quality={55}
                     sizes="(min-width: 1024px) 25vw, (min-width: 768px) 50vw, 100vw"
@@ -421,7 +386,7 @@ function App() {
                       <div className="size-8 rounded-full bg-white text-charcoal grid place-items-center group-hover:bg-gold transition"><ArrowRight className="size-4" /></div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               </Link>
             ))}
           </div>
@@ -457,7 +422,7 @@ function App() {
           </div>
           <div className="grid md:grid-cols-3 gap-5">
             {TESTIMONIALS.map((t, i) => (
-              <motion.div key={t.name} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: i*0.07 }}
+              <div key={t.name} initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: i*0.07 }}
                 className="bg-white rounded-3xl p-7 border shadow-sm">
                 <div className="flex items-center gap-1 text-gold">{Array.from({length: t.rating}).map((_,j)=><Star key={j} className="size-4 fill-gold" />)}</div>
                 <p className="mt-4 text-charcoal/85 leading-relaxed">“{t.text}”</p>
@@ -468,7 +433,7 @@ function App() {
                     <div className="text-xs text-muted-foreground">{t.city}</div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>

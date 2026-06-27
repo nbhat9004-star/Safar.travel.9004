@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+
 import { Heart, Star, MapPin, Navigation } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -63,7 +63,7 @@ export default function PropertyCard({ item, index = 0, priority = false }) {
   };
 
   return (
-    <motion.div
+    <div
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px', amount: 0.2 }}
@@ -140,6 +140,6 @@ export default function PropertyCard({ item, index = 0, priority = false }) {
           </div>
         </div>
       </Link>
-    </motion.div>
+    </div>
   );
 }

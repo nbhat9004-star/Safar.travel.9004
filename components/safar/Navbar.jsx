@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+
 import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -102,7 +102,7 @@ export default function Navbar({ transparent = false }) {
 
   const visibleNav = getVisibleNavItems();
   return (
-    <motion.header
+    <header
       initial={{ y: -24, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -201,12 +201,12 @@ export default function Navbar({ transparent = false }) {
           <AuthButtons solid={solid} />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <motion.button
+              <button
                 whileTap={{ scale: 1.05 }}
                 transition={{ duration: 0.15 }}
                 className="xl:hidden relative rounded-full p-2.5 bg-white/18 backdrop-blur-md border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.08)] hover:bg-white/25 transition-colors duration-200"
               >
-                <motion.div
+                <div
                   animate={{ 
                     rotate: open ? 180 : [0, 360, 360],
                   }}
@@ -223,8 +223,8 @@ export default function Navbar({ transparent = false }) {
                   className="relative"
                 >
                   <Compass className="size-5 text-gold" style={{ strokeWidth: 2.4 }} />
-                </motion.div>
-              </motion.button>
+                </div>
+              </button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background">
               <div className="p-6 border-b">
@@ -267,6 +267,6 @@ export default function Navbar({ transparent = false }) {
       </div>
       {/* Root-level AuthModal so Radix Sheet's pointer-events lock doesn't pass clicks through to nav Links underneath. */}
       <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={()=>setAuthMode(null)} />
-    </motion.header>
+    </header>
   );
 }
