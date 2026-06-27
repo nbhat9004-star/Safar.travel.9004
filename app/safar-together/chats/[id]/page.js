@@ -140,9 +140,9 @@ function ChatConversationInner() {
 
   if (loading) {
     return (
-      <div className="h-screen flex flex-col bg-sage/5">
+      <div className="h-[100dvh] flex flex-col bg-white">
         <Navbar />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center mt-16 md:mt-20">
           <div className="text-muted-foreground">Loading conversation...</div>
         </div>
       </div>
@@ -151,9 +151,9 @@ function ChatConversationInner() {
 
   if (!conversation) {
     return (
-      <div className="h-screen flex flex-col bg-sage/5">
+      <div className="h-[100dvh] flex flex-col bg-white">
         <Navbar />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center mt-16 md:mt-20">
           <div className="text-muted-foreground">Conversation not found</div>
         </div>
       </div>
@@ -164,11 +164,11 @@ function ChatConversationInner() {
   const partner = messages[0]?.senderId === partnerId ? messages[0] : messages.find(m => m.senderId === partnerId);
 
   return (
-    <div className="h-screen flex flex-col bg-sage/5">
+    <div className="h-[100dvh] flex flex-col bg-white">
       <Navbar />
       
-      {/* Chat Header - Compact */}
-      <div className="bg-white border-b px-4 py-3 flex-shrink-0">
+      {/* Chat Header - Compact, below fixed navbar */}
+      <div className="bg-white border-b px-4 py-3 flex-shrink-0 mt-16 md:mt-20">
         <div className="flex items-center justify-between max-w-5xl mx-auto">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <Button onClick={() => router.back()} variant="ghost" size="icon" className="rounded-full flex-shrink-0 h-9 w-9">
@@ -195,14 +195,10 @@ function ChatConversationInner() {
         </div>
       </div>
 
-      {/* Messages Container - Full Height */}
+      {/* Messages Container - Flexible, fills remaining space */}
       <div 
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto bg-white"
-        style={{ 
-          height: 'calc(100vh - 64px - 70px)', // Viewport - Navbar - Input
-          minHeight: '0'
-        }}
+        className="flex-1 overflow-y-auto bg-gray-50 min-h-0"
       >
         <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">
           {messages.length === 0 ? (

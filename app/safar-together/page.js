@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import Image from 'next/image';
 import Navbar from '@/components/safar/Navbar';
-import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -150,7 +149,7 @@ function SafarTogetherInner() {
   return (
     <div className="min-h-screen bg-sage/5">
       <Navbar />
-      <main className="container mx-auto px-4 py-12">
+      <main className="container mx-auto px-4 py-12 pt-24 md:pt-28">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">🤝 Safar Together</h1>
@@ -419,7 +418,11 @@ function SafarTogetherInner() {
         </Dialog>
       )}
 
-      <Footer />
+      {/* Simple Branding Footer - Safar Together Only */}
+      <footer className="py-16 text-center">
+        <div className="font-display text-2xl font-bold text-charcoal mb-1">Safar</div>
+        <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">KASHMIR · REIMAGINED</div>
+      </footer>
     </div>
   );
 }

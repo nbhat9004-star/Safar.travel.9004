@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { MessageCircle, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
-import Footer from '@/components/safar/Footer';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
 
 function MyChatsInner() {
@@ -34,7 +33,7 @@ function MyChatsInner() {
   return (
     <div className="min-h-screen bg-sage/5">
       <Navbar />
-      <main className="container mx-auto px-4 py-12">
+      <main className="container mx-auto px-4 py-12 pt-24 md:pt-28">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -103,7 +102,12 @@ function MyChatsInner() {
           </div>
         </div>
       </main>
-      <Footer />
+      
+      {/* Simple Branding Footer - Safar Together Only */}
+      <footer className="py-16 text-center">
+        <div className="font-display text-2xl font-bold text-charcoal mb-1">Safar</div>
+        <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">KASHMIR · REIMAGINED</div>
+      </footer>
     </div>
   );
 }
