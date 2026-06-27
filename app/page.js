@@ -132,10 +132,10 @@ function App() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
         <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
-          <div className="max-w-3xl text-white animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div className="max-w-3xl text-white">
             <div
               key={currentImageIndex}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold animate-in fade-in zoom-in-95 duration-500"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold"
             >
               <Sparkles className="size-3.5 text-gold" />
               Curated by locals • Trusted by travelers • {SEASONAL_IMAGES[currentImageIndex].emoji} {SEASONAL_IMAGES[currentImageIndex].season} in Kashmir
@@ -163,7 +163,7 @@ function App() {
           {/* Search Card — responsive, fully contained at all viewports */}
           <form
             onSubmit={onSearch}
-            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300"
+            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl"
           >
             {/* Fields wrapper: stack on mobile, 2x2 grid on sm-tablet, inline row on lg+ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-1 lg:items-stretch gap-2 lg:gap-0 min-w-0">
@@ -231,7 +231,7 @@ function App() {
           </form>
 
           {/* Trust strip */}
-          <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-white/90 text-[13px] animate-in fade-in slide-in-from-bottom-4 duration-700 delay-500">
+          <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-white/90 text-[13px]">
             {[
               {t:'Verified Hosts'},
               {t:'Secure Payments'},
@@ -254,7 +254,7 @@ function App() {
       <section className="py-12 border-b">
         <div className="container grid grid-cols-2 md:grid-cols-4 gap-6">
           {STATS.map((s, i) => (
-            <div key={s.label} className="text-center md:text-left animate-in fade-in slide-in-from-bottom-6 duration-500" style={{animationDelay: `${i*50}ms`}}>
+            <div key={s.label} className="text-center md:text-left" style={{animationDelay: `${i*50}ms`}}>
               <div className="font-display text-3xl md:text-4xl font-bold gradient-text-emerald">{s.value}</div>
               <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
             </div>
@@ -290,7 +290,7 @@ function App() {
             {destinations.map((d, i) => (
               <Link key={d.name} href={`/explore?location=${d.name}`}>
                 <div 
-                  className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer animate-in fade-in slide-in-from-bottom-8 duration-700 hover:scale-[1.02] active:scale-[0.98] transition-transform"
+                  className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer"
                   style={{animationDelay: `${i*60}ms`}}
                 >
                   <Image src={d.img} alt={d.name} fill loading="lazy" quality={60}
@@ -331,7 +331,7 @@ function App() {
               </Button>
             </div>
           </div>
-          <div className="relative animate-in fade-in zoom-in-95 duration-700">
+          <div className="relative">
             <div className="absolute -inset-6 bg-gradient-to-tr from-emerald-200/30 via-gold/20 to-transparent rounded-[3rem] blur-2xl" />
             <div className="relative rounded-3xl bg-white border shadow-2xl overflow-hidden">
               <div className="px-5 py-4 bg-gradient-emerald text-white flex items-center gap-3">
