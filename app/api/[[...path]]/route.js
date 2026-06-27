@@ -2164,10 +2164,51 @@ Return ONLY the JSON, no other text.`;
       const me = await getCurrentUser(request);
       if (!me) return err('Authentication required', 401);
       const requests = await getCollection('safarTogetherRequests');
+      const travelRequest = await requests.findOne({ id: requestId });
+      
       await requests.updateOne(
         { id: requestId, recipientId: me.id },
         { $set: { status: action, updatedAt: new Date() } }
       );
+      
+      // If accepted, create conversation and send notifications
+      if (action === 'accepted' && travelRequest) {
+        const conversations = await getCollection('safarTogetherConversations');
+        const plans = await getCollection('safarTogetherPlans');
+        const plan = await plans.findOne({ id: travelRequest.planId });
+        
+        // Check if conversation already exists
+        const existingConvo = await conversations.findOne({
+          participants: { $all: [travelRequest.senderId, me.id] }
+        });
+        
+        if (!existingConvo && plan) {
+          // Create new conversation
+          await conversations.insertOne({
+            id: uuid(),
+            participants: [travelRequest.senderId, me.id],
+            planId: travelRequest.planId,
+            planDestination: plan.destination,
+            planDates: { from: plan.dateFrom, to: plan.dateTo },
+            createdAt: new Date(),
+            lastMessageAt: new Date(),
+          });
+        }
+        
+        // Send notification to requester
+        const notifications = await getCollection('notifications');
+        await notifications.insertOne({
+          id: uuid(),
+          userId: travelRequest.senderId,
+          type: 'request_accepted',
+          title: 'Request Accepted!',
+          description: `${me.name} accepted your travel request`,
+          link: `/safar-together/chats`,
+          read: false,
+          createdAt: new Date(),
+        });
+      }
+      
       return ok({ ok: true });
     } catch (error) {
       console.error('Update request error:', error);
@@ -2213,6 +2254,230 @@ Return ONLY the JSON, no other text.`;
     } catch (error) {
       console.error('Report user error:', error);
       return err('Failed to report user: ' + error.message, 500);
+    }
+  }
+
+  // === CHAT & NOTIFICATIONS ===
+
+  // Get My Conversations
+  if (path === '/safar-together/conversations' && method === 'GET') {
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const conversations = await getCollection('safarTogetherConversations');
+      const messages = await getCollection('safarTogetherMessages');
+      
+      const myConvos = await conversations.find({
+        participants: me.id,
+        blocked: { $ne: true }
+      }).sort({ lastMessageAt: -1 }).toArray();
+      
+      // Get last message and unread count for each
+      const convosWithDetails = await Promise.all(myConvos.map(async (convo) => {
+        const lastMessage = await messages.findOne({ conversationId: convo.id }, { sort: { createdAt: -1 } });
+        const unreadCount = await messages.countDocuments({ 
+          conversationId: convo.id, 
+          senderId: { $ne: me.id },
+          readBy: { $ne: me.id }
+        });
+        const partnerId = convo.participants.find(p => p !== me.id);
+        const users = await getCollection('users');
+        const partner = await users.findOne({ id: partnerId });
+        return { ...convo, lastMessage, unreadCount, partner };
+      }));
+      
+      return ok({ ok: true, conversations: convosWithDetails });
+    } catch (error) {
+      console.error('Get conversations error:', error);
+      return err('Failed to fetch conversations: ' + error.message, 500);
+    }
+  }
+
+  // Get Conversation Messages
+  if (path.match(/^\/safar-together\/conversations\/([^/]+)\/messages$/) && method === 'GET') {
+    try {
+      const conversationId = path.match(/^\/safar-together\/conversations\/([^/]+)\/messages$/)[1];
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      
+      const conversations = await getCollection('safarTogetherConversations');
+      const convo = await conversations.findOne({ id: conversationId });
+      if (!convo || !convo.participants.includes(me.id)) return err('Unauthorized', 403);
+      
+      const messages = await getCollection('safarTogetherMessages');
+      const allMessages = await messages.find({ conversationId }).sort({ createdAt: 1 }).toArray();
+      
+      // Mark messages as read
+      await messages.updateMany(
+        { conversationId, senderId: { $ne: me.id }, readBy: { $ne: me.id } },
+        { $addToSet: { readBy: me.id }, $set: { readAt: new Date() } }
+      );
+      
+      return ok({ ok: true, messages: allMessages, conversation: convo });
+    } catch (error) {
+      console.error('Get messages error:', error);
+      return err('Failed to fetch messages: ' + error.message, 500);
+    }
+  }
+
+  // Send Message
+  if (path.match(/^\/safar-together\/conversations\/([^/]+)\/messages$/) && method === 'POST') {
+    try {
+      const conversationId = path.match(/^\/safar-together\/conversations\/([^/]+)\/messages$/)[1];
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const { text } = await request.json();
+      
+      const conversations = await getCollection('safarTogetherConversations');
+      const convo = await conversations.findOne({ id: conversationId });
+      if (!convo || !convo.participants.includes(me.id)) return err('Unauthorized', 403);
+      
+      const messages = await getCollection('safarTogetherMessages');
+      const message = {
+        id: uuid(),
+        conversationId,
+        senderId: me.id,
+        senderName: me.name,
+        text,
+        readBy: [me.id],
+        createdAt: new Date(),
+      };
+      await messages.insertOne(message);
+      
+      // Update conversation last message time
+      await conversations.updateOne({ id: conversationId }, { $set: { lastMessageAt: new Date() } });
+      
+      // Create notification for recipient
+      const recipientId = convo.participants.find(p => p !== me.id);
+      const notifications = await getCollection('notifications');
+      await notifications.insertOne({
+        id: uuid(),
+        userId: recipientId,
+        type: 'chat_message',
+        title: 'New Message',
+        description: `${me.name} sent you a message`,
+        link: `/safar-together/chats/${conversationId}`,
+        read: false,
+        createdAt: new Date(),
+      });
+      
+      return ok({ ok: true, message }, 201);
+    } catch (error) {
+      console.error('Send message error:', error);
+      return err('Failed to send message: ' + error.message, 500);
+    }
+  }
+
+  // Block User in Conversation
+  if (path.match(/^\/safar-together\/conversations\/([^/]+)\/block$/) && method === 'POST') {
+    try {
+      const conversationId = path.match(/^\/safar-together\/conversations\/([^/]+)\/block$/)[1];
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      
+      const conversations = await getCollection('safarTogetherConversations');
+      await conversations.updateOne({ id: conversationId }, { $set: { blocked: true, blockedBy: me.id } });
+      return ok({ ok: true });
+    } catch (error) {
+      console.error('Block user error:', error);
+      return err('Failed to block user: ' + error.message, 500);
+    }
+  }
+
+  // Request WhatsApp Share
+  if (path.match(/^\/safar-together\/conversations\/([^/]+)\/share-whatsapp$/) && method === 'POST') {
+    try {
+      const conversationId = path.match(/^\/safar-together\/conversations\/([^/]+)\/share-whatsapp$/)[1];
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      
+      const conversations = await getCollection('safarTogetherConversations');
+      const convo = await conversations.findOne({ id: conversationId });
+      if (!convo) return err('Conversation not found', 404);
+      
+      const whatsappShares = convo.whatsappShares || {};
+      whatsappShares[me.id] = true;
+      
+      const bothApproved = Object.keys(whatsappShares).length === 2;
+      await conversations.updateOne({ id: conversationId }, { $set: { whatsappShares, whatsappShared: bothApproved } });
+      
+      return ok({ ok: true, bothApproved });
+    } catch (error) {
+      console.error('Share WhatsApp error:', error);
+      return err('Failed to share WhatsApp: ' + error.message, 500);
+    }
+  }
+
+  // Get Notifications
+  if (path === '/notifications' && method === 'GET') {
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const notifications = await getCollection('notifications');
+      const userNotifications = await notifications.find({ userId: me.id }).sort({ createdAt: -1 }).limit(50).toArray();
+      const unreadCount = await notifications.countDocuments({ userId: me.id, read: false });
+      return ok({ ok: true, notifications: userNotifications, unreadCount });
+    } catch (error) {
+      console.error('Get notifications error:', error);
+      return err('Failed to fetch notifications: ' + error.message, 500);
+    }
+  }
+
+  // Mark Notification as Read
+  if (path.match(/^\/notifications\/([^/]+)\/read$/) && method === 'PATCH') {
+    try {
+      const notificationId = path.match(/^\/notifications\/([^/]+)\/read$/)[1];
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const notifications = await getCollection('notifications');
+      await notifications.updateOne({ id: notificationId, userId: me.id }, { $set: { read: true, readAt: new Date() } });
+      return ok({ ok: true });
+    } catch (error) {
+      console.error('Mark notification read error:', error);
+      return err('Failed to mark notification as read: ' + error.message, 500);
+    }
+  }
+
+  // Mark All Notifications as Read
+  if (path === '/notifications/read-all' && method === 'POST') {
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const notifications = await getCollection('notifications');
+      await notifications.updateMany({ userId: me.id, read: false }, { $set: { read: true, readAt: new Date() } });
+      return ok({ ok: true });
+    } catch (error) {
+      console.error('Mark all read error:', error);
+      return err('Failed to mark all as read: ' + error.message, 500);
+    }
+  }
+
+  // Admin: Get All Conversations
+  if (path === '/admin/safar-together/conversations' && method === 'GET') {
+    try {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+      const conversations = await getCollection('safarTogetherConversations');
+      const allConvos = await conversations.find({}).sort({ lastMessageAt: -1 }).toArray();
+      return ok({ ok: true, conversations: allConvos });
+    } catch (error) {
+      console.error('Admin get conversations error:', error);
+      return err('Failed to fetch conversations: ' + error.message, 500);
+    }
+  }
+
+  // Admin: Delete Message
+  if (path.match(/^\/admin\/safar-together\/messages\/([^/]+)$/) && method === 'DELETE') {
+    try {
+      const messageId = path.match(/^\/admin\/safar-together\/messages\/([^/]+)$/)[1];
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+      const messages = await getCollection('safarTogetherMessages');
+      await messages.deleteOne({ id: messageId });
+      return ok({ ok: true });
+    } catch (error) {
+      console.error('Admin delete message error:', error);
+      return err('Failed to delete message: ' + error.message, 500);
     }
   }
 
