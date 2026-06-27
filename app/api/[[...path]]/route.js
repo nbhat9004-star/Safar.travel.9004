@@ -1702,7 +1702,7 @@ Return ONLY the JSON, no other text.`;
     const promos = await getCollection('promoCodes');
     const promo = {
       ...data,
-      id: randomUUID(),
+      id: uuid(),
       createdAt: new Date(),
       createdBy: me.id,
       usedCount: 0,
@@ -1747,7 +1747,7 @@ Return ONLY the JSON, no other text.`;
     const tickets = await getCollection('supportTickets');
     const ticket = {
       ...data,
-      id: randomUUID(),
+      id: uuid(),
       ticketNumber: `TKT${Date.now().toString().slice(-8)}`,
       status: 'open',
       priority: data.priority || 'medium',
@@ -1805,7 +1805,7 @@ Return ONLY the JSON, no other text.`;
     const superAdmin = await users.findOne({ email: 'founder@safarcurated.com' });
     if (!superAdmin) {
       await users.insertOne({
-        id: randomUUID(),
+        id: uuid(),
         name: 'Founder',
         email: 'founder@safarcurated.com',
         password: await hashPassword('SuperAdmin@2025'),
@@ -1833,7 +1833,7 @@ Return ONLY the JSON, no other text.`;
     if (exists) return err('Email already exists', 400);
     
     const newAdmin = {
-      id: randomUUID(),
+      id: uuid(),
       name,
       email,
       password: await hashPassword(password),
@@ -1861,7 +1861,7 @@ Return ONLY the JSON, no other text.`;
     if (exists) return err('Email already exists', 400);
     
     const newHost = {
-      id: randomUUID(),
+      id: uuid(),
       name,
       email,
       mobile,
@@ -1984,7 +1984,7 @@ Return ONLY the JSON, no other text.`;
     const announcements = await getCollection('announcements');
     const announcement = {
       ...data,
-      id: randomUUID(),
+      id: uuid(),
       createdAt: new Date(),
       createdBy: me.id,
       createdByName: me.name,
@@ -2043,132 +2043,177 @@ Return ONLY the JSON, no other text.`;
 
   // Create Travel Plan
   if (path === '/safar-together/plans' && method === 'POST') {
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const data = await request.json();
-    const plans = await getCollection('safarTogetherPlans');
-    const plan = {
-      id: randomUUID(),
-      userId: me.id,
-      userName: me.name,
-      userEmail: me.email,
-      ...data,
-      status: 'active',
-      createdAt: new Date(),
-    };
-    await plans.insertOne(plan);
-    return ok({ ok: true, plan });
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const data = await request.json();
+      const plans = await getCollection('safarTogetherPlans');
+      const plan = {
+        id: uuid(),
+        userId: me.id,
+        userName: me.name,
+        userEmail: me.email,
+        ...data,
+        status: 'active',
+        createdAt: new Date(),
+      };
+      await plans.insertOne(plan);
+      return ok({ ok: true, plan }, 201);
+    } catch (error) {
+      console.error('Create travel plan error:', error);
+      return err('Failed to create travel plan: ' + error.message, 500);
+    }
   }
 
   // Browse Plans
   if (path === '/safar-together/plans' && method === 'GET') {
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const { destination, dateFrom, dateTo, minAge, maxAge, gender, interests } = Object.fromEntries(new URL(request.url).searchParams);
-    const plans = await getCollection('safarTogetherPlans');
-    let query = { status: 'active', userId: { $ne: me.id } };
-    if (destination) query.destination = { $regex: destination, $options: 'i' };
-    if (dateFrom) query.dateFrom = { $gte: dateFrom };
-    if (dateTo) query.dateTo = { $lte: dateTo };
-    if (minAge) query.age = { $gte: Number(minAge) };
-    if (maxAge) query.age = { ...query.age, $lte: Number(maxAge) };
-    if (gender) query.gender = gender;
-    const allPlans = await plans.find(query).sort({ createdAt: -1 }).toArray();
-    return ok({ ok: true, plans: allPlans });
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const { destination, dateFrom, dateTo, minAge, maxAge, gender, interests } = Object.fromEntries(new URL(request.url).searchParams);
+      const plans = await getCollection('safarTogetherPlans');
+      let query = { status: 'active', userId: { $ne: me.id } };
+      if (destination) query.destination = { $regex: destination, $options: 'i' };
+      if (dateFrom) query.dateFrom = { $gte: dateFrom };
+      if (dateTo) query.dateTo = { $lte: dateTo };
+      if (minAge) query.age = { $gte: Number(minAge) };
+      if (maxAge) query.age = { ...query.age, $lte: Number(maxAge) };
+      if (gender) query.gender = gender;
+      const allPlans = await plans.find(query).sort({ createdAt: -1 }).toArray();
+      return ok({ ok: true, plans: allPlans });
+    } catch (error) {
+      console.error('Browse plans error:', error);
+      return err('Failed to browse plans: ' + error.message, 500);
+    }
   }
 
   // My Plans
   if (path === '/safar-together/my-plans' && method === 'GET') {
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const plans = await getCollection('safarTogetherPlans');
-    const myPlans = await plans.find({ userId: me.id }).sort({ createdAt: -1 }).toArray();
-    return ok({ ok: true, plans: myPlans });
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const plans = await getCollection('safarTogetherPlans');
+      const myPlans = await plans.find({ userId: me.id }).sort({ createdAt: -1 }).toArray();
+      return ok({ ok: true, plans: myPlans });
+    } catch (error) {
+      console.error('My plans error:', error);
+      return err('Failed to fetch plans: ' + error.message, 500);
+    }
   }
 
   // Delete Plan
   if (path.match(/^\/safar-together\/plans\/([^/]+)$/) && method === 'DELETE') {
-    const planId = path.match(/^\/safar-together\/plans\/([^/]+)$/)[1];
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const plans = await getCollection('safarTogetherPlans');
-    await plans.deleteOne({ id: planId, userId: me.id });
-    return ok({ ok: true });
+    try {
+      const planId = path.match(/^\/safar-together\/plans\/([^/]+)$/)[1];
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const plans = await getCollection('safarTogetherPlans');
+      await plans.deleteOne({ id: planId, userId: me.id });
+      return ok({ ok: true });
+    } catch (error) {
+      console.error('Delete plan error:', error);
+      return err('Failed to delete plan: ' + error.message, 500);
+    }
   }
 
   // Send Request
   if (path === '/safar-together/requests' && method === 'POST') {
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const { planId, recipientId } = await request.json();
-    const requests = await getCollection('safarTogetherRequests');
-    const existing = await requests.findOne({ senderId: me.id, planId, status: { $in: ['pending', 'accepted'] } });
-    if (existing) return err('Request already sent', 400);
-    const request = {
-      id: randomUUID(),
-      planId,
-      senderId: me.id,
-      senderName: me.name,
-      recipientId,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-    await requests.insertOne(request);
-    return ok({ ok: true, request });
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const { planId, recipientId } = await request.json();
+      const requests = await getCollection('safarTogetherRequests');
+      const existing = await requests.findOne({ senderId: me.id, planId, status: { $in: ['pending', 'accepted'] } });
+      if (existing) return err('Request already sent', 400);
+      const travelRequest = {
+        id: uuid(),
+        planId,
+        senderId: me.id,
+        senderName: me.name,
+        recipientId,
+        status: 'pending',
+        createdAt: new Date(),
+      };
+      await requests.insertOne(travelRequest);
+      return ok({ ok: true, request: travelRequest }, 201);
+    } catch (error) {
+      console.error('Send request error:', error);
+      return err('Failed to send request: ' + error.message, 500);
+    }
   }
 
   // My Requests
   if (path === '/safar-together/requests' && method === 'GET') {
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const requests = await getCollection('safarTogetherRequests');
-    const sent = await requests.find({ senderId: me.id }).toArray();
-    const received = await requests.find({ recipientId: me.id }).toArray();
-    return ok({ ok: true, sent, received });
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const requests = await getCollection('safarTogetherRequests');
+      const sent = await requests.find({ senderId: me.id }).toArray();
+      const received = await requests.find({ recipientId: me.id }).toArray();
+      return ok({ ok: true, sent, received });
+    } catch (error) {
+      console.error('Get requests error:', error);
+      return err('Failed to fetch requests: ' + error.message, 500);
+    }
   }
 
   // Accept/Decline Request
   if (path.match(/^\/safar-together\/requests\/([^/]+)\/([^/]+)$/) && method === 'PATCH') {
-    const [, requestId, action] = path.match(/^\/safar-together\/requests\/([^/]+)\/([^/]+)$/);
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const requests = await getCollection('safarTogetherRequests');
-    await requests.updateOne(
-      { id: requestId, recipientId: me.id },
-      { $set: { status: action, updatedAt: new Date() } }
-    );
-    return ok({ ok: true });
+    try {
+      const [, requestId, action] = path.match(/^\/safar-together\/requests\/([^/]+)\/([^/]+)$/);
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const requests = await getCollection('safarTogetherRequests');
+      await requests.updateOne(
+        { id: requestId, recipientId: me.id },
+        { $set: { status: action, updatedAt: new Date() } }
+      );
+      return ok({ ok: true });
+    } catch (error) {
+      console.error('Update request error:', error);
+      return err('Failed to update request: ' + error.message, 500);
+    }
   }
 
   // My Connections
   if (path === '/safar-together/connections' && method === 'GET') {
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const requests = await getCollection('safarTogetherRequests');
-    const connections = await requests.find({
-      $or: [{ senderId: me.id }, { recipientId: me.id }],
-      status: 'accepted'
-    }).toArray();
-    return ok({ ok: true, connections });
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const requests = await getCollection('safarTogetherRequests');
+      const connections = await requests.find({
+        $or: [{ senderId: me.id }, { recipientId: me.id }],
+        status: 'accepted'
+      }).toArray();
+      return ok({ ok: true, connections });
+    } catch (error) {
+      console.error('Get connections error:', error);
+      return err('Failed to fetch connections: ' + error.message, 500);
+    }
   }
 
   // Report User
   if (path === '/safar-together/report' && method === 'POST') {
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    const { reportedUserId, reason } = await request.json();
-    const reports = await getCollection('safarTogetherReports');
-    const report = {
-      id: randomUUID(),
-      reporterId: me.id,
-      reporterName: me.name,
-      reportedUserId,
-      reason,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-    await reports.insertOne(report);
-    return ok({ ok: true });
+    try {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const { reportedUserId, reason } = await request.json();
+      const reports = await getCollection('safarTogetherReports');
+      const report = {
+        id: uuid(),
+        reporterId: me.id,
+        reporterName: me.name,
+        reportedUserId,
+        reason,
+        status: 'pending',
+        createdAt: new Date(),
+      };
+      await reports.insertOne(report);
+      return ok({ ok: true });
+    } catch (error) {
+      console.error('Report user error:', error);
+      return err('Failed to report user: ' + error.message, 500);
+    }
   }
 
   // Admin: Get All Plans
