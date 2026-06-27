@@ -78,13 +78,14 @@ function AdminInner() {
   const [safarReports, setSafarReports] = useState([]);
   const [safarStats, setSafarStats] = useState(null);
   const [safarBlockedUsers, setSafarBlockedUsers] = useState([]);
+  const [safarConversations, setSafarConversations] = useState([]);
   const [safarPlanDetails, setSafarPlanDetails] = useState(null);
   
   const revenueChart = [22,28,34,30,42,55,49,62,68,71,84,96];
 
   const load = async () => {
     setLoading(true); setError(null);
-    const [p, a, u, bk, rev, trans, revs, promos, tickets, adminsData, settingsData, announcementsData, logs, safarToggle, safarPlansData, safarRequestsData, safarReportsData, safarStatsData, safarBlockedData] = await Promise.all([
+    const [p, a, u, bk, rev, trans, revs, promos, tickets, adminsData, settingsData, announcementsData, logs, safarToggle, safarPlansData, safarRequestsData, safarReportsData, safarStatsData, safarBlockedData, safarConversationsData] = await Promise.all([
       listingsApi.list({ status: 'pending', limit: 50 }),
       listingsApi.list({ status: 'all', limit: 200 }),
       apiJson('/api/users'),
@@ -104,6 +105,7 @@ function AdminInner() {
       apiJson('/api/admin/safar-together/reports'),
       apiJson('/api/admin/safar-together/stats'),
       apiJson('/api/admin/safar-together/blocked-users'),
+      apiJson('/api/admin/safar-together/conversations'),
     ]);
     if (p.ok && p.data?.ok) setPending(p.data.listings); else setError(p.data?.error || 'Failed to load pending');
     if (a.ok && a.data?.ok) setAll(a.data.listings);
@@ -124,6 +126,7 @@ function AdminInner() {
     if (safarReportsData.ok && safarReportsData.data?.ok) setSafarReports(safarReportsData.data.reports || []);
     if (safarStatsData.ok && safarStatsData.data?.ok) setSafarStats(safarStatsData.data.stats || {});
     if (safarBlockedData.ok && safarBlockedData.data?.ok) setSafarBlockedUsers(safarBlockedData.data.users || []);
+    if (safarConversationsData.ok && safarConversationsData.data?.ok) setSafarConversations(safarConversationsData.data.conversations || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -1430,9 +1433,10 @@ function AdminInner() {
             )}
 
             <Tabs defaultValue="plans" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-5 max-w-3xl">
+              <TabsList className="grid w-full grid-cols-6 max-w-4xl">
                 <TabsTrigger value="plans">Plans</TabsTrigger>
                 <TabsTrigger value="requests">Requests</TabsTrigger>
+                <TabsTrigger value="conversations">Chats</TabsTrigger>
                 <TabsTrigger value="reports">Reports</TabsTrigger>
                 <TabsTrigger value="blocked">Blocked</TabsTrigger>
                 <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -1519,6 +1523,35 @@ function AdminInner() {
                       ))}
                       {safarRequests.length === 0 && (
                         <div className="text-center py-12 text-muted-foreground">No requests yet</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Conversations Sub-tab */}
+              <TabsContent value="conversations" className="space-y-4">
+                <div className="rounded-3xl border bg-white overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[1000px]">
+                      <div className="grid grid-cols-12 px-5 py-3 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b">
+                        <div className="col-span-4">Participants</div>
+                        <div className="col-span-3">Destination</div>
+                        <div className="col-span-3">Created</div>
+                        <div className="col-span-2 text-right">Actions</div>
+                      </div>
+                      {safarConversations.map((convo) => (
+                        <div key={convo.id} className="grid grid-cols-12 px-5 py-3 border-b last:border-0 items-center hover:bg-secondary/40 transition text-sm">
+                          <div className="col-span-4 font-mono text-xs">{convo.participants?.[0]?.slice(0, 8)} ↔ {convo.participants?.[1]?.slice(0, 8)}</div>
+                          <div className="col-span-3">{convo.planDestination || 'N/A'}</div>
+                          <div className="col-span-3 text-xs">{new Date(convo.createdAt).toLocaleDateString()}</div>
+                          <div className="col-span-2 flex justify-end gap-1">
+                            <Button onClick={() => window.open(`/safar-together/chats/${convo.id}`, '_blank')} size="sm" variant="ghost" className="h-7 text-xs">View</Button>
+                          </div>
+                        </div>
+                      ))}
+                      {safarConversations.length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">No conversations yet</div>
                       )}
                     </div>
                   </div>

@@ -2,30 +2,72 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Menu, User, UserPlus, Sparkles, MapPin, Compass } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
 import AuthModal from '@/components/safar/AuthModal';
 import { useAuth } from '@/lib/auth-context';
+import { useRouter } from 'next/navigation';
 
 export default function Navbar({ transparent = false }) {
   const { user } = useAuth();
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null); // 'login' | 'signup' | null
   const [safarTogetherEnabled, setSafarTogetherEnabled] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
   
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+    
+    // Close notifications on outside click
+    const handleClick = (e) => {
+      if (showNotifications && !e.target.closest('.notification-dropdown')) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [showNotifications]);
   
   useEffect(() => {
     fetch('/api/settings/safar-together').then(r => r.json()).then(d => setSafarTogetherEnabled(d.enabled));
-  }, []);
+    if (user) {
+      loadNotifications();
+      const interval = setInterval(loadNotifications, 30000); // Refresh every 30s
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+  
+  const loadNotifications = async () => {
+    if (!user) return;
+    const res = await fetch('/api/notifications');
+    const data = await res.json();
+    if (data.ok) {
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unreadCount || 0);
+    }
+  };
+  
+  const markAsRead = async (notificationId) => {
+    await fetch(`/api/notifications/${notificationId}/read`, { method: 'PATCH' });
+    loadNotifications();
+  };
+  
+  const markAllAsRead = async () => {
+    await fetch('/api/notifications/read-all', { method: 'POST' });
+    loadNotifications();
+  };
   
   const solid = !transparent || scrolled;
 
@@ -87,6 +129,75 @@ export default function Navbar({ transparent = false }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Notification Bell */}
+          {user && (
+            <div className="relative">
+              <Button
+                onClick={() => setShowNotifications(!showNotifications)}
+                variant="ghost"
+                size="icon"
+                className="relative rounded-full"
+              >
+                <Bell className="size-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 size-5 rounded-full bg-rose-600 text-white text-[10px] grid place-items-center font-bold">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Button>
+              
+              {/* Notifications Dropdown */}
+              {showNotifications && (
+                <div className="absolute top-full right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-2xl border shadow-lg z-50 max-h-[500px] overflow-hidden flex flex-col notification-dropdown">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <div className="font-semibold">Notifications</div>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllAsRead} className="text-xs text-emerald2 hover:underline">
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto flex-1">
+                    {notifications.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground text-sm">
+                        <Bell className="size-8 mx-auto mb-2 text-muted-foreground/50" />
+                        No notifications
+                      </div>
+                    ) : (
+                      notifications.map((notif) => (
+                        <div
+                          key={notif.id}
+                          onClick={() => {
+                            markAsRead(notif.id);
+                            if (notif.link) router.push(notif.link);
+                            setShowNotifications(false);
+                          }}
+                          className={`p-4 border-b hover:bg-secondary cursor-pointer ${!notif.read ? 'bg-emerald2/5' : ''}`}
+                        >
+                          <div className="flex gap-3">
+                            <div className="size-10 rounded-full bg-gradient-emerald grid place-items-center text-white flex-shrink-0">
+                              {notif.type === 'chat_message' ? <MessageCircle className="size-5" /> : <Bell className="size-5" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-sm">{notif.title}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">{notif.description}</div>
+                              <div className="text-[10px] text-muted-foreground mt-1">
+                                {new Date(notif.createdAt).toLocaleString()}
+                              </div>
+                            </div>
+                            {!notif.read && (
+                              <div className="size-2 rounded-full bg-emerald2 flex-shrink-0" />
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
           <AuthButtons solid={solid} />
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -132,6 +243,12 @@ export default function Navbar({ transparent = false }) {
                   </Link>
                 ))}
                 <div className="my-3 h-px bg-border" />
+                {/* My Chats - Only for logged in users with Safar Together enabled */}
+                {user && safarTogetherEnabled && (
+                  <Link href="/safar-together/chats" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">
+                    <span className="flex items-center gap-2"><MessageCircle className="size-4" /> My Chats</span>
+                  </Link>
+                )}
                 {/* Host Dashboard - Only for hosts and admins */}
                 {(user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
                   <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Host Dashboard</Link>
