@@ -63,6 +63,7 @@
   .mask-fade-r { mask-image: linear-gradient(to right, black 80%, transparent 100%); }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
   .safe-right { padding-right: env(safe-area-inset-right); }
+  .pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
 }
 
 .aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }

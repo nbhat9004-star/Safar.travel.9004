@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
@@ -226,8 +226,9 @@ export default function Navbar({ transparent = false }) {
                 </div>
               </button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background">
-              <div className="p-6 border-b">
+            <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background flex flex-col h-full">
+              {/* Fixed Header */}
+              <div className="p-6 border-b flex-shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-md"><MapPin className="size-5 text-gold" /></div>
                   <div>
@@ -236,30 +237,103 @@ export default function Navbar({ transparent = false }) {
                   </div>
                 </div>
               </div>
-              <div className="p-3 max-h-[calc(100vh-180px)] overflow-y-auto">
-                {visibleNav.map((n) => (
-                  <Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                    {n.label}
-                  </Link>
-                ))}
-                <div className="my-3 h-px bg-border" />
-                {/* My Chats - Only for logged in users with Safar Together enabled */}
-                {user && safarTogetherEnabled && (
-                  <Link href="/safar-together/chats" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">
-                    <span className="flex items-center gap-2"><MessageCircle className="size-4" /> My Chats</span>
-                  </Link>
-                )}
-                {/* Host Dashboard - Only for hosts and admins */}
-                {(user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
-                  <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Host Dashboard</Link>
-                )}
-                {/* Admin - Only for admins and super_admins */}
-                {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                  <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-secondary text-sm">Admin</Link>
-                )}
+              
+              {/* Scrollable Navigation Content */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-3 pb-6">
+                  {/* EXPLORE Section */}
+                  <div className="mb-4">
+                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Explore</div>
+                    <Link href="/explore?cat=all" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                      Stays
+                    </Link>
+                    <Link href="/explore?cat=experience" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                      Experiences
+                    </Link>
+                    <Link href="/explore?cat=transport" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                      Bikes & Cars
+                    </Link>
+                    <Link href="/explore?cat=tour" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                      Tour Guides
+                    </Link>
+                    <Link href="/explore?nearme=true" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                      Near Me
+                    </Link>
+                  </div>
+
+                  <div className="h-px bg-border mb-4" />
+
+                  {/* TRAVEL Section */}
+                  <div className="mb-4">
+                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Travel</div>
+                    {safarTogetherEnabled && user && (
+                      <Link href="/safar-together" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                        🤝 Safar Together
+                      </Link>
+                    )}
+                    <Link href="/ai-planner" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                      AI Planner
+                    </Link>
+                    {(user?.role === 'traveler' || user?.role === 'admin' || user?.role === 'super_admin') && (
+                      <Link href="/dashboard/traveler/bookings" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                        My Bookings
+                      </Link>
+                    )}
+                    {user && safarTogetherEnabled && (
+                      <Link href="/safar-together/chats" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                        <span className="flex items-center gap-2"><MessageCircle className="size-4" /> My Chats</span>
+                      </Link>
+                    )}
+                  </div>
+
+                  {/* HOST Section - Only show if not logged in or if user is host/admin */}
+                  {(!user || user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
+                    <>
+                      <div className="h-px bg-border mb-4" />
+                      <div className="mb-4">
+                        <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Host</div>
+                        {!user && (
+                          <Link href="/add-listing" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                            Become a Host
+                          </Link>
+                        )}
+                        {(user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
+                          <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                            Host Dashboard
+                          </Link>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* ADMINISTRATION Section - Only for admins */}
+                  {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                    <>
+                      <div className="h-px bg-border mb-4" />
+                      <div className="mb-4">
+                        <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Administration</div>
+                        <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                          <span className="flex items-center gap-2"><Shield className="size-4" /> Admin Dashboard</span>
+                        </Link>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Extra padding at bottom to ensure last item is always visible */}
+                  <div className="h-20" />
+                </div>
               </div>
-              <div className="p-4 border-t flex flex-col gap-2 safe-bottom">
-                <MobileAuthButtons onClose={()=>setOpen(false)} onOpenAuth={(m)=>setAuthMode(m)} />
+              
+              {/* Fixed Account Section at Bottom */}
+              <div className="border-t flex-shrink-0 bg-background">
+                <div className="p-4 pb-safe">
+                  {user && (
+                    <div className="mb-3">
+                      <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Account</div>
+                    </div>
+                  )}
+                  <MobileAuthButtons onClose={()=>setOpen(false)} onOpenAuth={(m)=>setAuthMode(m)} />
+                </div>
               </div>
             </SheetContent>
           </Sheet>

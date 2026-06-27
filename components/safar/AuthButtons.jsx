@@ -85,16 +85,28 @@ export function MobileAuthButtons({ onClose, onOpenAuth }) {
       </>
     );
   }
+  
+  const dashHref = (user.role === 'admin' || user.role === 'super_admin') ? '/admin' : user.role === 'host' ? '/dashboard/host' : '/dashboard/traveler';
+  const roleLabel = user.role?.charAt(0).toUpperCase() + user.role?.slice(1);
+  
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3 p-3 rounded-2xl bg-secondary">
         <div className="size-10 rounded-full bg-gradient-emerald text-white grid place-items-center font-bold">{(user.name||'U').split(' ').map(s=>s[0]).slice(0,2).join('').toUpperCase()}</div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm truncate">{user.name}</div>
-          <div className="text-xs text-muted-foreground truncate">{user.email} · {user.role}</div>
+          <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+          <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald2/10 text-emerald2 text-[10px] uppercase tracking-wider font-bold">
+            {roleLabel}
+          </div>
         </div>
       </div>
-      <Button variant="outline" className="w-full h-11 rounded-full font-semibold text-rose-600" onClick={async ()=>{ await logout(); toast.success('Signed out'); onClose?.(); }}><LogOut className="size-4 mr-2" /> Sign out</Button>
+      <Link href={dashHref} onClick={onClose} className="w-full">
+        <Button variant="outline" className="w-full h-11 rounded-full font-semibold">
+          <User className="size-4 mr-2" /> View Profile
+        </Button>
+      </Link>
+      <Button variant="outline" className="w-full h-11 rounded-full font-semibold text-rose-600 hover:text-rose-600" onClick={async ()=>{ await logout(); toast.success('Signed out'); onClose?.(); }}><LogOut className="size-4 mr-2" /> Logout</Button>
     </div>
   );
 }
