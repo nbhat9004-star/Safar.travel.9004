@@ -2679,6 +2679,267 @@ Return ONLY the JSON, no other text.`;
     return ok({ ok: true, users: blockedUsers });
   }
 
+  // ========== AI MARKETPLACE BUILDER (MODULE 1) ==========
+  // Helper: Super Admin Only middleware
+  function requireSuperAdmin(user) {
+    if (!user) return { ok: false, status: 401, error: 'Authentication required' };
+    if (user.role?.toLowerCase() !== 'super_admin') {
+      return { ok: false, status: 403, error: 'Forbidden: Super Admin access only' };
+    }
+    return { ok: true };
+  }
+
+  // Helper: Encrypt/Decrypt API keys
+  async function encryptApiKey(plaintext) {
+    if (!plaintext) return null;
+    const crypto = await import('crypto');
+    const algorithm = 'aes-256-cbc';
+    const key = crypto.scryptSync(process.env.JWT_SECRET || 'dev-insecure-secret-change-me', 'salt', 32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+  }
+
+  async function decryptApiKey(encrypted) {
+    if (!encrypted || typeof encrypted !== 'string') return null;
+    try {
+      const crypto = await import('crypto');
+      const algorithm = 'aes-256-cbc';
+      const key = crypto.scryptSync(process.env.JWT_SECRET || 'dev-insecure-secret-change-me', 'salt', 32);
+      const parts = encrypted.split(':');
+      if (parts.length !== 2) return null;
+      const iv = Buffer.from(parts[0], 'hex');
+      const encryptedText = parts[1];
+      const decipher = crypto.createDecipheriv(algorithm, key, iv);
+      let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch {
+      return null;
+    }
+  }
+
+  // Helper: Log marketplace audit
+  async function logMarketplaceAudit(user, action, details, ipAddress = null) {
+    try {
+      const logs = await getCollection('mpAuditLogs');
+      await logs.insertOne({
+        id: uuid(),
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action,
+        details,
+        ipAddress,
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      console.error('Failed to log marketplace audit:', error);
+    }
+  }
+
+  // GET /api/marketplace/settings - Get marketplace settings (Super Admin only)
+  if (path === '/marketplace/settings' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const settings = await getCollection('mpSettings');
+    let config = await settings.findOne({ type: 'provider_config' });
+    
+    if (!config) {
+      // Initialize default config
+      config = {
+        id: uuid(),
+        type: 'provider_config',
+        providers: {
+          googlePlaces: { enabled: false, hasApiKey: false }
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await settings.insertOne(config);
+    }
+    
+    // Never send encrypted API keys to frontend
+    const safeConfig = {
+      providers: {
+        googlePlaces: {
+          enabled: config.providers?.googlePlaces?.enabled || false,
+          hasApiKey: !!config.providers?.googlePlaces?.apiKey,
+        }
+      }
+    };
+    
+    return ok({ settings: safeConfig });
+  }
+
+  // POST /api/marketplace/settings - Save marketplace settings (Super Admin only)
+  if (path === '/marketplace/settings' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { googlePlacesApiKey, googlePlacesEnabled } = await readBody(request);
+    
+    const settings = await getCollection('mpSettings');
+    let config = await settings.findOne({ type: 'provider_config' });
+    
+    const updates = {
+      type: 'provider_config',
+      providers: {
+        googlePlaces: {
+          enabled: !!googlePlacesEnabled,
+          hasApiKey: false,
+        }
+      },
+      updatedAt: new Date(),
+      updatedBy: me.id,
+    };
+    
+    // Encrypt and store API key if provided
+    if (googlePlacesApiKey && googlePlacesApiKey.trim()) {
+      const encrypted = await encryptApiKey(googlePlacesApiKey.trim());
+      updates.providers.googlePlaces.apiKey = encrypted;
+      updates.providers.googlePlaces.hasApiKey = true;
+    } else if (config?.providers?.googlePlaces?.apiKey) {
+      // Keep existing key if not updated
+      updates.providers.googlePlaces.apiKey = config.providers.googlePlaces.apiKey;
+      updates.providers.googlePlaces.hasApiKey = true;
+    }
+    
+    if (!config) {
+      updates.id = uuid();
+      updates.createdAt = new Date();
+      await settings.insertOne(updates);
+    } else {
+      await settings.updateOne({ type: 'provider_config' }, { $set: updates });
+    }
+    
+    // Log audit
+    await logMarketplaceAudit(me, 'Settings Updated', {
+      googlePlacesEnabled: updates.providers.googlePlaces.enabled,
+      apiKeyUpdated: !!googlePlacesApiKey,
+    }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+    
+    return ok({ message: 'Settings saved successfully' });
+  }
+
+  // POST /api/marketplace/settings/test-connection - Test Google Places API
+  if (path === '/marketplace/settings/test-connection' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const settings = await getCollection('mpSettings');
+    const config = await settings.findOne({ type: 'provider_config' });
+    
+    if (!config?.providers?.googlePlaces?.apiKey) {
+      return err('Google Places API key not configured');
+    }
+    
+    const apiKey = await decryptApiKey(config.providers.googlePlaces.apiKey);
+    if (!apiKey) {
+      return err('Failed to decrypt API key');
+    }
+    
+    // Test API with a simple query
+    try {
+      const testUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=restaurants+in+Kashmir&key=${apiKey}`;
+      const response = await fetch(testUrl);
+      const data = await response.json();
+      
+      if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
+        // Log successful test
+        await logMarketplaceAudit(me, 'API Connection Tested', {
+          provider: 'Google Places',
+          status: 'success',
+        }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+        
+        return ok({ 
+          success: true, 
+          message: 'Connection successful! Google Places API is working.',
+          resultsFound: data.results?.length || 0
+        });
+      } else {
+        return err(`API returned error: ${data.error_message || data.status}`);
+      }
+    } catch (error) {
+      return err(`Connection failed: ${error.message}`);
+    }
+  }
+
+  // GET /api/marketplace/audit-logs - Get marketplace audit logs (Super Admin only)
+  if (path === '/marketplace/audit-logs' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const skip = parseInt(url.searchParams.get('skip') || '0');
+    
+    const logs = await getCollection('mpAuditLogs');
+    const total = await logs.countDocuments();
+    const records = await logs.find({})
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(Math.min(limit, 100))
+      .toArray();
+    
+    return ok({ logs: records, total, limit, skip });
+  }
+
+  // GET /api/marketplace/api-usage - Get API usage stats (Super Admin only)
+  if (path === '/marketplace/api-usage' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const usage = await getCollection('mpApiUsage');
+    
+    // Get today's usage
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(today);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+    
+    const todayUsage = await usage.find({
+      provider: 'googlePlaces',
+      timestamp: { $gte: today, $lt: todayEnd }
+    }).toArray();
+    
+    // Get this month's usage
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthUsage = await usage.find({
+      provider: 'googlePlaces',
+      timestamp: { $gte: monthStart }
+    }).toArray();
+    
+    // Get last sync info
+    const logs = await getCollection('mpAuditLogs');
+    const lastSync = await logs.findOne(
+      { action: { $regex: /sync|import|discovery/i } },
+      { sort: { timestamp: -1 } }
+    );
+    
+    const lastSuccess = await logs.findOne(
+      { action: { $regex: /sync|import|discovery/i }, 'details.status': 'success' },
+      { sort: { timestamp: -1 } }
+    );
+    
+    const lastFailure = await logs.findOne(
+      { action: { $regex: /sync|import|discovery/i }, 'details.status': { $in: ['failed', 'error'] } },
+      { sort: { timestamp: -1 } }
+    );
+    
+    return ok({
+      requestsToday: todayUsage.length,
+      requestsThisMonth: monthUsage.length,
+      remainingQuota: null, // Will be calculated based on Google Places quota
+      estimatedCost: (monthUsage.length * 0.032), // ~$32 per 1000 requests (Text Search)
+      lastApiCall: lastSync?.timestamp || null,
+      lastSuccessfulSync: lastSuccess?.timestamp || null,
+      lastFailedSync: lastFailure?.timestamp || null,
+    });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

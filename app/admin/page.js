@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart } from 'lucide-react';
+import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
 import { listingsApi, apiJson, bookingsApi } from '@/lib/listings-api';
+import { useAuth } from '@/lib/auth-context';
 
 function LineChart({ data }) {
   const max = Math.max(...data); const min = Math.min(...data);
@@ -39,6 +40,7 @@ const StatusPill = ({ s }) => {
 };
 
 function AdminInner() {
+  const { user } = useAuth(); // Get current user to check role
   const [pending, setPending] = useState([]);
   const [all, setAll] = useState([]);
   const [users, setUsers] = useState([]);
@@ -564,6 +566,11 @@ function AdminInner() {
             <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold shrink-0">
               <Link href="/admin/import"><Upload className="size-4 mr-2" /> Import Listings</Link>
             </Button>
+            {user?.role === 'super_admin' && (
+              <Button asChild className="rounded-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold shrink-0">
+                <Link href="/admin/marketplace"><Sparkles className="size-4 mr-2" /> AI Marketplace Builder</Link>
+              </Button>
+            )}
           </div>
         </div>
 
