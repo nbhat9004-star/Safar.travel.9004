@@ -3332,6 +3332,79 @@ Return ONLY the JSON, no other text.`;
       
       console.log('Total detailed results:', detailedResults.length);
       
+      // ===== DUPLICATE DETECTION (MODULE 3) =====
+      if (detailedResults.length > 0) {
+        const listings = await getCollection('listings');
+        
+        // Batch check all place IDs
+        const placeIds = detailedResults.map(r => r.placeId);
+        const existingByPlaceId = await listings.find({
+          googlePlaceId: { $in: placeIds }
+        }).toArray();
+        
+        // Create lookup maps
+        const placeIdMap = new Map();
+        existingByPlaceId.forEach(listing => {
+          placeIdMap.set(listing.googlePlaceId, listing);
+        });
+        
+        // Check each result for duplicates
+        for (const result of detailedResults) {
+          let isDuplicate = false;
+          let existingListing = null;
+          
+          // Priority 1: Google Place ID (exact match)
+          if (placeIdMap.has(result.placeId)) {
+            isDuplicate = true;
+            existingListing = placeIdMap.get(result.placeId);
+          }
+          
+          // Priority 2: Business Name + Address (case-insensitive)
+          if (!isDuplicate && result.name && result.address) {
+            const nameAddressMatch = await listings.findOne({
+              title: { $regex: new RegExp(`^${result.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+              location: { $regex: new RegExp(`^${result.address.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+            });
+            if (nameAddressMatch) {
+              isDuplicate = true;
+              existingListing = nameAddressMatch;
+            }
+          }
+          
+          // Priority 3: Business Name + Coordinates (tolerance: ~100m = 0.001 degrees)
+          if (!isDuplicate && result.name && result.coordinates?.lat && result.coordinates?.lng) {
+            const tolerance = 0.001;
+            const coordMatch = await listings.findOne({
+              title: { $regex: new RegExp(`^${result.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+              'coordinates.lat': { 
+                $gte: result.coordinates.lat - tolerance, 
+                $lte: result.coordinates.lat + tolerance 
+              },
+              'coordinates.lng': { 
+                $gte: result.coordinates.lng - tolerance, 
+                $lte: result.coordinates.lng + tolerance 
+              }
+            });
+            if (coordMatch) {
+              isDuplicate = true;
+              existingListing = coordMatch;
+            }
+          }
+          
+          // Add duplicate detection fields
+          result.isDuplicate = isDuplicate;
+          result.existingListingId = existingListing?.id || null;
+          result.existingListingTitle = existingListing?.title || null;
+        }
+        
+        console.log('Duplicate check complete:', {
+          total: detailedResults.length,
+          duplicates: detailedResults.filter(r => r.isDuplicate).length,
+          new: detailedResults.filter(r => !r.isDuplicate).length
+        });
+      }
+      // ===== END DUPLICATE DETECTION =====
+      
       // Log audit
       await logMarketplaceAudit(me, 'Business Discovery', {
         query: fullQuery,

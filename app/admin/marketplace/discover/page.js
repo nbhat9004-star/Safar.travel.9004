@@ -91,10 +91,11 @@ function DiscoverInner() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedBusinesses.size === results.length) {
+    const importableBusinesses = results.filter(r => !r.isDuplicate);
+    if (selectedBusinesses.size === importableBusinesses.length) {
       setSelectedBusinesses(new Set());
     } else {
-      setSelectedBusinesses(new Set(results.map(r => r.placeId)));
+      setSelectedBusinesses(new Set(importableBusinesses.map(r => r.placeId)));
     }
   };
 
@@ -337,31 +338,50 @@ function DiscoverInner() {
             </div>
 
             <div className="space-y-4">
-              {results.map((business) => (
-                <div
-                  key={business.placeId}
-                  className={`p-4 rounded-xl border-2 transition cursor-pointer ${
-                    selectedBusinesses.has(business.placeId)
-                      ? 'border-emerald2 bg-emerald-50/50'
-                      : 'border-transparent bg-secondary/40 hover:border-secondary'
-                  }`}
-                  onClick={() => toggleSelection(business.placeId)}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="shrink-0">
-                      <div className={`size-6 rounded-full border-2 flex items-center justify-center ${
-                        selectedBusinesses.has(business.placeId)
-                          ? 'border-emerald2 bg-emerald2'
-                          : 'border-gray-300 bg-white'
-                      }`}>
-                        {selectedBusinesses.has(business.placeId) && (
-                          <CheckCircle2 className="size-4 text-white" />
+              {results.map((business) => {
+                const isSelected = selectedBusinesses.has(business.placeId);
+                const isDuplicate = business.isDuplicate;
+                
+                return (
+                  <div
+                    key={business.placeId}
+                    className={`p-4 rounded-xl border-2 transition ${
+                      isDuplicate
+                        ? 'border-amber-300 bg-amber-50/50 opacity-75'
+                        : isSelected
+                        ? 'border-emerald2 bg-emerald-50/50 cursor-pointer'
+                        : 'border-transparent bg-secondary/40 hover:border-secondary cursor-pointer'
+                    }`}
+                    onClick={() => !isDuplicate && toggleSelection(business.placeId)}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="shrink-0">
+                        {isDuplicate ? (
+                          <div className="size-6 rounded-full border-2 border-amber-500 bg-amber-100 flex items-center justify-center">
+                            <CheckCircle2 className="size-4 text-amber-600" />
+                          </div>
+                        ) : (
+                          <div className={`size-6 rounded-full border-2 flex items-center justify-center ${
+                            isSelected
+                              ? 'border-emerald2 bg-emerald2'
+                              : 'border-gray-300 bg-white'
+                          }`}>
+                            {isSelected && (
+                              <CheckCircle2 className="size-4 text-white" />
+                            )}
+                          </div>
                         )}
                       </div>
-                    </div>
 
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-lg">{business.name}</h3>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-lg">{business.name}</h3>
+                          {isDuplicate && (
+                            <span className="shrink-0 px-3 py-1 rounded-full bg-amber-200 text-amber-800 text-xs font-bold uppercase tracking-wider">
+                              Already Imported
+                            </span>
+                          )}
+                        </div>
                       
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                         {business.rating && (
