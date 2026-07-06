@@ -2825,7 +2825,7 @@ Return ONLY the JSON, no other text.`;
     return ok({ message: 'Settings saved successfully' });
   }
 
-  // POST /api/marketplace/settings/test-connection - Test Google Places API
+  // POST /api/marketplace/settings/test-connection - Test Google Places API (New)
   if (path === '/marketplace/settings/test-connection' && method === 'POST') {
     const me = await getCurrentUser(request);
     const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
@@ -2842,26 +2842,37 @@ Return ONLY the JSON, no other text.`;
       return err('Failed to decrypt API key');
     }
     
-    // Test API with a simple query
+    // Test API with a simple query using NEW Places API
     try {
-      const testUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=restaurants+in+Kashmir&key=${apiKey}`;
-      const response = await fetch(testUrl);
+      const testUrl = 'https://places.googleapis.com/v1/places:searchText';
+      const response = await fetch(testUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.displayName,places.id'
+        },
+        body: JSON.stringify({
+          textQuery: 'restaurants in Kashmir'
+        })
+      });
+      
       const data = await response.json();
       
-      if (data.status === 'OK' || data.status === 'ZERO_RESULTS') {
+      if (response.ok && data.places) {
         // Log successful test
         await logMarketplaceAudit(me, 'API Connection Tested', {
-          provider: 'Google Places',
+          provider: 'Google Places (New)',
           status: 'success',
         }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
         
         return ok({ 
           success: true, 
-          message: 'Connection successful! Google Places API is working.',
-          resultsFound: data.results?.length || 0
+          message: 'Connection successful! Google Places API (New) is working.',
+          resultsFound: data.places?.length || 0
         });
       } else {
-        return err(`API returned error: ${data.error_message || data.status}`);
+        return err(`API returned error: ${data.error?.message || 'Unknown error'}`);
       }
     } catch (error) {
       return err(`Connection failed: ${error.message}`);
@@ -2941,7 +2952,7 @@ Return ONLY the JSON, no other text.`;
   }
 
   // ========== AI MARKETPLACE BUILDER (MODULE 2) ==========
-  // POST /api/marketplace/discover - Search Google Places API
+  // POST /api/marketplace/discover - Search Google Places API (New)
   if (path === '/marketplace/discover' && method === 'POST') {
     const me = await getCurrentUser(request);
     const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
@@ -2975,71 +2986,127 @@ Return ONLY the JSON, no other text.`;
       const location = city ? ` in ${city}` : '';
       const fullQuery = `${searchQuery}${location}`;
       
-      // Call Google Places API (Text Search)
-      const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(fullQuery)}&key=${apiKey}`;
-      const response = await fetch(searchUrl);
-      const data = await response.json();
+      // Call NEW Google Places API (Text Search)
+      const searchUrl = 'https://places.googleapis.com/v1/places:searchText';
+      const searchResponse = await fetch(searchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.types'
+        },
+        body: JSON.stringify({
+          textQuery: fullQuery,
+          pageSize: 20
+        })
+      });
       
-      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        return err(`Google Places API error: ${data.error_message || data.status}`);
+      const searchData = await searchResponse.json();
+      
+      if (!searchResponse.ok) {
+        return err(`Google Places API error: ${searchData.error?.message || 'Unknown error'}`);
       }
       
-      const results = data.results || [];
+      const places = searchData.places || [];
       
-      // Get additional details for each place
+      if (places.length === 0) {
+        // Log API usage for search
+        const usage = await getCollection('mpApiUsage');
+        await usage.insertOne({
+          id: uuid(),
+          provider: 'googlePlaces',
+          endpoint: 'text_search_new',
+          timestamp: new Date(),
+          cost: 0.032
+        });
+        
+        return ok({ 
+          results: [],
+          total: 0,
+          query: fullQuery
+        });
+      }
+      
+      // Get additional details for each place using new API
       const detailedResults = [];
-      for (const place of results.slice(0, 20)) { // Limit to 20 results
+      for (const place of places) {
         try {
-          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,website,geometry,rating,user_ratings_total,opening_hours,photos,types,business_status&key=${apiKey}`;
-          const detailsResponse = await fetch(detailsUrl);
+          // Get place details using new API
+          const detailsUrl = `https://places.googleapis.com/v1/${place.id}`;
+          const detailsResponse = await fetch(detailsUrl, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': apiKey,
+              'X-Goog-FieldMask': 'id,displayName,formattedAddress,internationalPhoneNumber,websiteUri,location,rating,userRatingCount,primaryType,types,regularOpeningHours,photos,businessStatus,googleMapsUri'
+            }
+          });
+          
           const detailsData = await detailsResponse.json();
           
-          if (detailsData.status === 'OK' && detailsData.result) {
+          if (detailsResponse.ok && detailsData) {
+            // Process photos - new API format
+            const photos = [];
+            if (detailsData.photos && detailsData.photos.length > 0) {
+              for (let i = 0; i < Math.min(5, detailsData.photos.length); i++) {
+                const photo = detailsData.photos[i];
+                // New API photo URL format
+                const photoUrl = `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=800&key=${apiKey}`;
+                photos.push({
+                  reference: photo.name,
+                  url: photoUrl
+                });
+              }
+            }
+            
+            // Extract opening hours
+            let openingHours = null;
+            if (detailsData.regularOpeningHours?.weekdayDescriptions) {
+              openingHours = detailsData.regularOpeningHours.weekdayDescriptions;
+            }
+            
             detailedResults.push({
-              placeId: place.place_id,
-              name: detailsData.result.name,
-              address: detailsData.result.formatted_address,
-              phone: detailsData.result.formatted_phone_number || null,
-              website: detailsData.result.website || null,
+              placeId: detailsData.id,
+              name: detailsData.displayName?.text || detailsData.displayName || 'Unnamed',
+              address: detailsData.formattedAddress || '',
+              phone: detailsData.internationalPhoneNumber || null,
+              website: detailsData.websiteUri || null,
               coordinates: {
-                lat: detailsData.result.geometry?.location?.lat,
-                lng: detailsData.result.geometry?.location?.lng
+                lat: detailsData.location?.latitude || 0,
+                lng: detailsData.location?.longitude || 0
               },
-              rating: detailsData.result.rating || null,
-              reviewCount: detailsData.result.user_ratings_total || 0,
-              category: detailsData.result.types?.[0] || 'business',
-              openingHours: detailsData.result.opening_hours?.weekday_text || null,
-              photos: detailsData.result.photos?.slice(0, 5).map(p => ({
-                reference: p.photo_reference,
-                url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${p.photo_reference}&key=${apiKey}`
-              })) || [],
-              businessStatus: detailsData.result.business_status || 'OPERATIONAL',
-              googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
+              rating: detailsData.rating || null,
+              reviewCount: detailsData.userRatingCount || 0,
+              category: detailsData.primaryType || detailsData.types?.[0] || 'business',
+              openingHours: openingHours,
+              photos: photos,
+              businessStatus: detailsData.businessStatus || 'OPERATIONAL',
+              googleMapsUrl: detailsData.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(detailsData.formattedAddress || detailsData.displayName?.text || '')}`
             });
           }
           
-          // Log API usage
+          // Log API usage for place details
           const usage = await getCollection('mpApiUsage');
           await usage.insertOne({
             id: uuid(),
             provider: 'googlePlaces',
-            endpoint: 'place_details',
+            endpoint: 'place_details_new',
             timestamp: new Date(),
-            cost: 0.017 // Place Details cost
+            cost: 0.017
           });
         } catch (error) {
           console.error('Error fetching place details:', error);
         }
       }
       
-      // Log API usage for search
+      // Log API usage for text search
       const usage = await getCollection('mpApiUsage');
       await usage.insertOne({
         id: uuid(),
         provider: 'googlePlaces',
-        endpoint: 'text_search',
+        endpoint: 'text_search_new',
         timestamp: new Date(),
-        cost: 0.032 // Text Search cost
+        cost: 0.032
       });
       
       // Log audit

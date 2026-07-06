@@ -141,9 +141,12 @@ function SettingsInner() {
         {/* Google Places API Configuration */}
         <section className="rounded-3xl border bg-white p-6 mb-6">
           <div className="mb-6">
-            <h2 className="font-display text-xl font-bold">Google Places API</h2>
+            <h2 className="font-display text-xl font-bold">Google Places API (New)</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Configure Google Places API for business discovery
+              Configure Google Places API (New) for business discovery
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              ✓ Using latest Places API (New) - future-proof and reliable
             </p>
           </div>
 
