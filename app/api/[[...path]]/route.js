@@ -2844,7 +2844,15 @@ Return ONLY the JSON, no other text.`;
     
     // Test API with a simple query using NEW Places API
     try {
+      console.log('=== GOOGLE PLACES API TEST CONNECTION ===');
+      console.log('API Key (first 10 chars):', apiKey.substring(0, 10) + '...');
+      
       const testUrl = 'https://places.googleapis.com/v1/places:searchText';
+      const requestBody = { textQuery: 'restaurants in Kashmir' };
+      
+      console.log('Test URL:', testUrl);
+      console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+      
       const response = await fetch(testUrl, {
         method: 'POST',
         headers: {
@@ -2852,14 +2860,17 @@ Return ONLY the JSON, no other text.`;
           'X-Goog-Api-Key': apiKey,
           'X-Goog-FieldMask': 'places.displayName,places.id'
         },
-        body: JSON.stringify({
-          textQuery: 'restaurants in Kashmir'
-        })
+        body: JSON.stringify(requestBody)
       });
       
+      console.log('Response Status:', response.status, response.statusText);
+      
       const data = await response.json();
+      console.log('Response Data:', JSON.stringify(data, null, 2));
       
       if (response.ok && data.places) {
+        console.log('✅ Test connection successful! Found', data.places.length, 'places');
+        
         // Log successful test
         await logMarketplaceAudit(me, 'API Connection Tested', {
           provider: 'Google Places (New)',
@@ -2872,9 +2883,29 @@ Return ONLY the JSON, no other text.`;
           resultsFound: data.places?.length || 0
         });
       } else {
-        return err(`API returned error: ${data.error?.message || 'Unknown error'}`);
+        console.error('❌ Test connection failed');
+        console.error('Error:', data.error);
+        
+        const errorMessage = data.error?.message || 'Unknown error';
+        const errorStatus = data.error?.status || 'UNKNOWN';
+        
+        // Provide helpful error messages
+        if (errorMessage.includes('API key') || errorStatus === 'INVALID_ARGUMENT') {
+          return err('Invalid API key. Please check your Google Places API key.');
+        }
+        if (errorMessage.includes('not enabled') || errorStatus === 'PERMISSION_DENIED') {
+          return err('Places API (New) is not enabled. Enable it here: https://console.cloud.google.com/apis/library/places-backend.googleapis.com');
+        }
+        if (errorMessage.includes('billing')) {
+          return err('Billing not enabled on your Google Cloud project. Enable it here: https://console.cloud.google.com/billing');
+        }
+        
+        return err(`API returned error: ${errorMessage} (Status: ${errorStatus})`);
       }
     } catch (error) {
+      console.error('=== TEST CONNECTION ERROR ===');
+      console.error('Error:', error);
+      console.error('Error Message:', error.message);
       return err(`Connection failed: ${error.message}`);
     }
   }
@@ -2986,8 +3017,25 @@ Return ONLY the JSON, no other text.`;
       const location = city ? ` in ${city}` : '';
       const fullQuery = `${searchQuery}${location}`;
       
+      console.log('=== GOOGLE PLACES API REQUEST ===');
+      console.log('Full Query:', fullQuery);
+      console.log('API Key (first 10 chars):', apiKey.substring(0, 10) + '...');
+      
       // Call NEW Google Places API (Text Search)
       const searchUrl = 'https://places.googleapis.com/v1/places:searchText';
+      const requestBody = {
+        textQuery: fullQuery,
+        pageSize: 20
+      };
+      
+      console.log('Request URL:', searchUrl);
+      console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+      console.log('Request Headers:', {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey.substring(0, 10) + '...',
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.types'
+      });
+      
       const searchResponse = await fetch(searchUrl, {
         method: 'POST',
         headers: {
@@ -2995,22 +3043,46 @@ Return ONLY the JSON, no other text.`;
           'X-Goog-Api-Key': apiKey,
           'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.primaryType,places.types'
         },
-        body: JSON.stringify({
-          textQuery: fullQuery,
-          pageSize: 20
-        })
+        body: JSON.stringify(requestBody)
       });
       
+      console.log('Response Status:', searchResponse.status, searchResponse.statusText);
+      
       const searchData = await searchResponse.json();
+      console.log('=== GOOGLE PLACES API RESPONSE ===');
+      console.log('Full Response:', JSON.stringify(searchData, null, 2));
       
       if (!searchResponse.ok) {
-        return err(`Google Places API error: ${searchData.error?.message || 'Unknown error'}`);
+        console.error('API Error Response:', searchData);
+        const errorMessage = searchData.error?.message || 'Unknown error';
+        const errorStatus = searchData.error?.status || 'UNKNOWN';
+        const errorDetails = searchData.error?.details || [];
+        
+        console.error('Error Status:', errorStatus);
+        console.error('Error Message:', errorMessage);
+        console.error('Error Details:', JSON.stringify(errorDetails, null, 2));
+        
+        // Check for common issues
+        if (errorMessage.includes('API key') || errorMessage.includes('API_KEY_INVALID')) {
+          return err('Invalid API key. Please check your Google Places API key in Settings.');
+        }
+        if (errorMessage.includes('not enabled') || errorMessage.includes('SERVICE_DISABLED')) {
+          return err('Places API (New) is not enabled. Please enable it in Google Cloud Console: https://console.cloud.google.com/apis/library/places-backend.googleapis.com');
+        }
+        if (errorMessage.includes('billing') || errorMessage.includes('BILLING_NOT_ENABLED')) {
+          return err('Billing is not enabled on your Google Cloud project. Please enable billing: https://console.cloud.google.com/billing');
+        }
+        
+        return err(`Google Places API error: ${errorMessage} (Status: ${errorStatus})`);
       }
       
       const places = searchData.places || [];
+      console.log('Number of places found:', places.length);
       
       if (places.length === 0) {
-        // Log API usage for search
+        console.log('No places found for query:', fullQuery);
+        
+        // Log API usage for search even if no results
         const usage = await getCollection('mpApiUsage');
         await usage.insertOne({
           id: uuid(),
@@ -3023,7 +3095,8 @@ Return ONLY the JSON, no other text.`;
         return ok({ 
           results: [],
           total: 0,
-          query: fullQuery
+          query: fullQuery,
+          message: 'No businesses found. Try a different search query or city.'
         });
       }
       
@@ -3031,6 +3104,8 @@ Return ONLY the JSON, no other text.`;
       const detailedResults = [];
       for (const place of places) {
         try {
+          console.log('Fetching details for place:', place.id);
+          
           // Get place details using new API
           const detailsUrl = `https://places.googleapis.com/v1/${place.id}`;
           const detailsResponse = await fetch(detailsUrl, {
@@ -3045,6 +3120,8 @@ Return ONLY the JSON, no other text.`;
           const detailsData = await detailsResponse.json();
           
           if (detailsResponse.ok && detailsData) {
+            console.log('Place details received for:', detailsData.displayName?.text || place.id);
+            
             // Process photos - new API format
             const photos = [];
             if (detailsData.photos && detailsData.photos.length > 0) {
@@ -3083,6 +3160,8 @@ Return ONLY the JSON, no other text.`;
               businessStatus: detailsData.businessStatus || 'OPERATIONAL',
               googleMapsUrl: detailsData.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(detailsData.formattedAddress || detailsData.displayName?.text || '')}`
             });
+          } else {
+            console.error('Failed to fetch place details:', detailsResponse.status, detailsData);
           }
           
           // Log API usage for place details
@@ -3109,6 +3188,8 @@ Return ONLY the JSON, no other text.`;
         cost: 0.032
       });
       
+      console.log('Total detailed results:', detailedResults.length);
+      
       // Log audit
       await logMarketplaceAudit(me, 'Business Discovery', {
         query: fullQuery,
@@ -3121,7 +3202,10 @@ Return ONLY the JSON, no other text.`;
         query: fullQuery
       });
     } catch (error) {
-      console.error('Discovery error:', error);
+      console.error('=== DISCOVERY ERROR ===');
+      console.error('Error:', error);
+      console.error('Error Message:', error.message);
+      console.error('Error Stack:', error.stack);
       return err(`Discovery failed: ${error.message}`);
     }
   }
