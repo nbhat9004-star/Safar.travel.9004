@@ -2990,21 +2990,46 @@ Return ONLY the JSON, no other text.`;
     const settings = await getCollection('mpSettings');
     const config = await settings.findOne({ type: 'provider_config' });
     
+    const diagnostics = {
+      timestamp: new Date().toISOString(),
+      database: {
+        configExists: !!config,
+        hasGooglePlacesConfig: !!config?.providers?.googlePlaces,
+        hasEncryptedKey: !!config?.providers?.googlePlaces?.apiKey,
+        encryptedKeyLength: config?.providers?.googlePlaces?.apiKey?.length || 0,
+        encryptedKeyPreview: config?.providers?.googlePlaces?.apiKey?.substring(0, 20) + '...' || 'N/A',
+        enabled: config?.providers?.googlePlaces?.enabled || false,
+        lastUpdated: config?.updatedAt || null
+      }
+    };
+    
     if (!config?.providers?.googlePlaces?.apiKey) {
-      return err('Google Places API key not configured');
+      diagnostics.error = 'No API key found in database';
+      return ok(diagnostics);
     }
     
     const apiKey = await decryptApiKey(config.providers.googlePlaces.apiKey);
+    
+    diagnostics.decryption = {
+      success: !!apiKey,
+      decryptedKeyLength: apiKey?.length || 0,
+      decryptedKeyFirst10: apiKey ? apiKey.substring(0, 10) + '...' : 'DECRYPTION FAILED',
+      decryptedKeyFirst15: apiKey ? apiKey.substring(0, 15) + '...' : 'DECRYPTION FAILED',
+      startsWithAIza: apiKey ? apiKey.startsWith('AIza') : false,
+      looksValid: apiKey ? (apiKey.startsWith('AIza') && apiKey.length >= 39) : false
+    };
+    
     if (!apiKey) {
-      return err('Failed to decrypt API key');
+      diagnostics.error = 'Failed to decrypt API key';
+      return ok(diagnostics);
     }
     
-    const diagnostics = {
-      timestamp: new Date().toISOString(),
-      apiKeyPresent: true,
-      apiKeyLength: apiKey.length,
-      apiKeyPrefix: apiKey.substring(0, 15) + '...',
-    };
+    console.log('=== API KEY VERIFICATION ===');
+    console.log('Encrypted key from DB (first 20):', config.providers.googlePlaces.apiKey.substring(0, 20) + '...');
+    console.log('Decrypted key (first 15):', apiKey.substring(0, 15) + '...');
+    console.log('Key length:', apiKey.length);
+    console.log('Starts with AIza:', apiKey.startsWith('AIza'));
+    console.log('Looks valid:', apiKey.startsWith('AIza') && apiKey.length >= 39);
     
     try {
       // Test 1: Simple text search
@@ -3032,10 +3057,8 @@ Return ONLY the JSON, no other text.`;
       
       console.log('=== DIAGNOSTIC API CALL ===');
       console.log('URL:', requestUrl);
-      console.log('Headers:', JSON.stringify(requestHeaders, (key, value) => 
-        key === 'X-Goog-Api-Key' ? value.substring(0, 15) + '...' : value
-      , 2));
-      console.log('Body:', JSON.stringify(requestBody, null, 2));
+      console.log('Query:', testQuery);
+      console.log('API Key (first 15):', apiKey.substring(0, 15) + '...');
       
       const response = await fetch(requestUrl, {
         method: 'POST',
@@ -3065,6 +3088,13 @@ Return ONLY the JSON, no other text.`;
           placesArray: Array.isArray(responseData.places),
           firstPlace: responseData.places?.[0] || null
         };
+        
+        if (responseData.places && responseData.places.length > 0) {
+          console.log('✅ SUCCESS! Found', responseData.places.length, 'places');
+          console.log('First place:', responseData.places[0].displayName);
+        } else {
+          console.log('⚠️ API call succeeded but returned 0 places');
+        }
       } else {
         diagnostics.analysis = {
           success: false,
@@ -3073,12 +3103,18 @@ Return ONLY the JSON, no other text.`;
           errorMessage: responseData.error?.message,
           errorStatus: responseData.error?.status
         };
+        
+        console.error('❌ API call failed');
+        console.error('Error:', responseData.error?.message);
+        console.error('Status:', responseData.error?.status);
       }
       
       console.log('=== DIAGNOSTIC COMPLETE ===');
       
       return ok(diagnostics);
     } catch (error) {
+      console.error('=== DIAGNOSTIC ERROR ===');
+      console.error('Error:', error.message);
       diagnostics.error = {
         message: error.message,
         stack: error.stack
