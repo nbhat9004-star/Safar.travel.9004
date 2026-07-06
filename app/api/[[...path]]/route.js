@@ -3248,7 +3248,8 @@ Return ONLY the JSON, no other text.`;
           console.log('Fetching details for place:', place.id);
           
           // Get place details using new API
-          const detailsUrl = `https://places.googleapis.com/v1/${place.id}`;
+          const placeId = place.id.startsWith('places/') ? place.id : `places/${place.id}`;
+          const detailsUrl = `https://places.googleapis.com/v1/${placeId}`;
           const detailsResponse = await fetch(detailsUrl, {
             method: 'GET',
             headers: {
