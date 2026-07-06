@@ -2940,6 +2940,419 @@ Return ONLY the JSON, no other text.`;
     });
   }
 
+  // ========== AI MARKETPLACE BUILDER (MODULE 2) ==========
+  // POST /api/marketplace/discover - Search Google Places API
+  if (path === '/marketplace/discover' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { query, category, city, radius = 5000 } = await readBody(request);
+    
+    if (!query && !category) {
+      return err('Search query or category is required');
+    }
+    
+    // Get API key from settings
+    const settings = await getCollection('mpSettings');
+    const config = await settings.findOne({ type: 'provider_config' });
+    
+    if (!config?.providers?.googlePlaces?.apiKey) {
+      return err('Google Places API key not configured. Please configure in Settings.');
+    }
+    
+    if (!config.providers.googlePlaces.enabled) {
+      return err('Google Places provider is disabled. Please enable in Settings.');
+    }
+    
+    const apiKey = await decryptApiKey(config.providers.googlePlaces.apiKey);
+    if (!apiKey) {
+      return err('Failed to decrypt API key');
+    }
+    
+    try {
+      // Build search query
+      const searchQuery = query || category;
+      const location = city ? ` in ${city}` : '';
+      const fullQuery = `${searchQuery}${location}`;
+      
+      // Call Google Places API (Text Search)
+      const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(fullQuery)}&key=${apiKey}`;
+      const response = await fetch(searchUrl);
+      const data = await response.json();
+      
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        return err(`Google Places API error: ${data.error_message || data.status}`);
+      }
+      
+      const results = data.results || [];
+      
+      // Get additional details for each place
+      const detailedResults = [];
+      for (const place of results.slice(0, 20)) { // Limit to 20 results
+        try {
+          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_address,formatted_phone_number,website,geometry,rating,user_ratings_total,opening_hours,photos,types,business_status&key=${apiKey}`;
+          const detailsResponse = await fetch(detailsUrl);
+          const detailsData = await detailsResponse.json();
+          
+          if (detailsData.status === 'OK' && detailsData.result) {
+            detailedResults.push({
+              placeId: place.place_id,
+              name: detailsData.result.name,
+              address: detailsData.result.formatted_address,
+              phone: detailsData.result.formatted_phone_number || null,
+              website: detailsData.result.website || null,
+              coordinates: {
+                lat: detailsData.result.geometry?.location?.lat,
+                lng: detailsData.result.geometry?.location?.lng
+              },
+              rating: detailsData.result.rating || null,
+              reviewCount: detailsData.result.user_ratings_total || 0,
+              category: detailsData.result.types?.[0] || 'business',
+              openingHours: detailsData.result.opening_hours?.weekday_text || null,
+              photos: detailsData.result.photos?.slice(0, 5).map(p => ({
+                reference: p.photo_reference,
+                url: `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${p.photo_reference}&key=${apiKey}`
+              })) || [],
+              businessStatus: detailsData.result.business_status || 'OPERATIONAL',
+              googleMapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
+            });
+          }
+          
+          // Log API usage
+          const usage = await getCollection('mpApiUsage');
+          await usage.insertOne({
+            id: uuid(),
+            provider: 'googlePlaces',
+            endpoint: 'place_details',
+            timestamp: new Date(),
+            cost: 0.017 // Place Details cost
+          });
+        } catch (error) {
+          console.error('Error fetching place details:', error);
+        }
+      }
+      
+      // Log API usage for search
+      const usage = await getCollection('mpApiUsage');
+      await usage.insertOne({
+        id: uuid(),
+        provider: 'googlePlaces',
+        endpoint: 'text_search',
+        timestamp: new Date(),
+        cost: 0.032 // Text Search cost
+      });
+      
+      // Log audit
+      await logMarketplaceAudit(me, 'Business Discovery', {
+        query: fullQuery,
+        resultsFound: detailedResults.length
+      }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+      
+      return ok({ 
+        results: detailedResults,
+        total: detailedResults.length,
+        query: fullQuery
+      });
+    } catch (error) {
+      console.error('Discovery error:', error);
+      return err(`Discovery failed: ${error.message}`);
+    }
+  }
+
+  // POST /api/marketplace/import - Start bulk import job
+  if (path === '/marketplace/import' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { businesses } = await readBody(request);
+    
+    if (!businesses || !Array.isArray(businesses) || businesses.length === 0) {
+      return err('No businesses provided for import');
+    }
+    
+    // Create import job
+    const jobs = await getCollection('mpDiscoveryJobs');
+    const jobId = uuid();
+    const job = {
+      id: jobId,
+      type: 'import',
+      status: 'pending',
+      progress: 0,
+      total: businesses.length,
+      processed: 0,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      currentItem: null,
+      errors: [],
+      businesses: businesses,
+      createdBy: me.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    await jobs.insertOne(job);
+    
+    // Log audit
+    await logMarketplaceAudit(me, 'Import Started', {
+      jobId,
+      totalBusinesses: businesses.length
+    }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+    
+    // Start background processing (don't await)
+    processImportJob(jobId).catch(err => {
+      console.error('Import job error:', err);
+    });
+    
+    return ok({ jobId, message: 'Import job started' });
+  }
+
+  // Background job processor
+  async function processImportJob(jobId) {
+    const jobs = await getCollection('mpDiscoveryJobs');
+    const job = await jobs.findOne({ id: jobId });
+    
+    if (!job) return;
+    
+    // Update status to running
+    await jobs.updateOne({ id: jobId }, {
+      $set: { status: 'running', updatedAt: new Date() }
+    });
+    
+    const listings = await getCollection('listings');
+    
+    for (let i = 0; i < job.businesses.length; i++) {
+      const business = job.businesses[i];
+      
+      // Check if job was cancelled
+      const currentJob = await jobs.findOne({ id: jobId });
+      if (currentJob.status === 'cancelled') {
+        break;
+      }
+      
+      try {
+        // Update current item
+        await jobs.updateOne({ id: jobId }, {
+          $set: { 
+            currentItem: business.name,
+            updatedAt: new Date()
+          }
+        });
+        
+        // Check for duplicates
+        const duplicate = await listings.findOne({
+          $or: [
+            { googlePlaceId: business.placeId },
+            { 
+              title: business.name,
+              location: business.address
+            },
+            {
+              'contact.phone': business.phone,
+              'contact.phone': { $ne: null }
+            },
+            {
+              'coordinates.lat': business.coordinates.lat,
+              'coordinates.lng': business.coordinates.lng
+            }
+          ]
+        });
+        
+        if (duplicate) {
+          await jobs.updateOne({ id: jobId }, {
+            $inc: { processed: 1, skipped: 1 },
+            $set: { 
+              progress: Math.round(((i + 1) / job.businesses.length) * 100),
+              updatedAt: new Date()
+            }
+          });
+          
+          // Log duplicate skip
+          const logs = await getCollection('mpAuditLogs');
+          await logs.insertOne({
+            id: uuid(),
+            userId: job.createdBy,
+            userName: 'System',
+            userRole: 'super_admin',
+            action: 'Duplicate Skipped',
+            details: {
+              jobId,
+              businessName: business.name,
+              reason: 'Duplicate found'
+            },
+            ipAddress: null,
+            timestamp: new Date()
+          });
+          
+          continue;
+        }
+        
+        // Create draft listing
+        const listingId = uuid();
+        const now = new Date();
+        
+        const listing = {
+          id: listingId,
+          title: business.name,
+          description: `${business.name} located at ${business.address}. Imported from Google Places.`,
+          category: business.category === 'lodging' ? 'stay' : 
+                   business.category === 'restaurant' || business.category === 'cafe' ? 'experience' :
+                   business.category === 'tourist_attraction' ? 'tour' : 'experience',
+          subcategory: business.category,
+          location: business.address,
+          coordinates: business.coordinates,
+          googlePlaceId: business.placeId,
+          googleMapsUrl: business.googleMapsUrl,
+          contact: {
+            phone: business.phone,
+            website: business.website,
+            email: null
+          },
+          rating: business.rating,
+          reviews: business.reviewCount,
+          openingHours: business.openingHours,
+          images: business.photos.map(p => p.url),
+          price: 0,
+          amenities: [],
+          services: [],
+          status: 'draft',
+          featured: false,
+          isPublic: false,
+          isDraft: true,
+          importSource: 'google_places',
+          hostId: null,
+          hostName: 'Unclaimed',
+          createdAt: now,
+          updatedAt: now,
+          importedBy: job.createdBy,
+          importJobId: jobId
+        };
+        
+        await listings.insertOne(listing);
+        
+        // Update job progress
+        await jobs.updateOne({ id: jobId }, {
+          $inc: { processed: 1, imported: 1 },
+          $set: { 
+            progress: Math.round(((i + 1) / job.businesses.length) * 100),
+            updatedAt: new Date()
+          }
+        });
+        
+      } catch (error) {
+        console.error('Import error for business:', business.name, error);
+        
+        // Log error
+        await jobs.updateOne({ id: jobId }, {
+          $inc: { processed: 1, failed: 1 },
+          $push: { errors: { business: business.name, error: error.message } },
+          $set: { 
+            progress: Math.round(((i + 1) / job.businesses.length) * 100),
+            updatedAt: new Date()
+          }
+        });
+      }
+    }
+    
+    // Mark job as complete
+    const finalJob = await jobs.findOne({ id: jobId });
+    const finalStatus = finalJob.status === 'cancelled' ? 'cancelled' : 'completed';
+    
+    await jobs.updateOne({ id: jobId }, {
+      $set: { 
+        status: finalStatus,
+        progress: 100,
+        currentItem: null,
+        completedAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+    
+    // Log audit
+    const logs = await getCollection('mpAuditLogs');
+    await logs.insertOne({
+      id: uuid(),
+      userId: finalJob.createdBy,
+      userName: 'System',
+      userRole: 'super_admin',
+      action: finalStatus === 'cancelled' ? 'Import Cancelled' : 'Import Completed',
+      details: {
+        jobId,
+        total: finalJob.total,
+        imported: finalJob.imported,
+        skipped: finalJob.skipped,
+        failed: finalJob.failed
+      },
+      ipAddress: null,
+      timestamp: new Date()
+    });
+  }
+
+  // GET /api/marketplace/jobs/:jobId - Get job status
+  if (path.match(/^\/marketplace\/jobs\/([^/]+)$/) && method === 'GET') {
+    const jobId = path.match(/^\/marketplace\/jobs\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const jobs = await getCollection('mpDiscoveryJobs');
+    const job = await jobs.findOne({ id: jobId });
+    
+    if (!job) return err('Job not found', 404);
+    
+    return ok({ job });
+  }
+
+  // POST /api/marketplace/jobs/:jobId/cancel - Cancel job
+  if (path.match(/^\/marketplace\/jobs\/([^/]+)\/cancel$/) && method === 'POST') {
+    const jobId = path.match(/^\/marketplace\/jobs\/([^/]+)\/cancel$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const jobs = await getCollection('mpDiscoveryJobs');
+    const job = await jobs.findOne({ id: jobId });
+    
+    if (!job) return err('Job not found', 404);
+    
+    if (job.status !== 'running' && job.status !== 'pending') {
+      return err('Job cannot be cancelled in current status');
+    }
+    
+    await jobs.updateOne({ id: jobId }, {
+      $set: { 
+        status: 'cancelled',
+        updatedAt: new Date()
+      }
+    });
+    
+    // Log audit
+    await logMarketplaceAudit(me, 'Import Cancelled', {
+      jobId,
+      processed: job.processed,
+      total: job.total
+    }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+    
+    return ok({ message: 'Job cancelled' });
+  }
+
+  // GET /api/marketplace/jobs - List all jobs
+  if (path === '/marketplace/jobs' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    const skip = parseInt(url.searchParams.get('skip') || '0');
+    
+    const jobs = await getCollection('mpDiscoveryJobs');
+    const total = await jobs.countDocuments();
+    const records = await jobs.find({})
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Math.min(limit, 100))
+      .toArray();
+    
+    return ok({ jobs: records, total, limit, skip });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

@@ -12,7 +12,8 @@ import {
   Calendar,
   DollarSign,
   Database,
-  Clock
+  Clock,
+  Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
@@ -97,6 +98,12 @@ function MarketplaceInner() {
               </p>
             </div>
             <div className="flex gap-3">
+              <Link href="/admin/marketplace/discover">
+                <Button className="rounded-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white">
+                  <Search className="size-4 mr-2" />
+                  Discover & Import
+                </Button>
+              </Link>
               <Link href="/admin/marketplace/audit-logs">
                 <Button variant="outline" className="rounded-full">
                   <Activity className="size-4 mr-2" />
