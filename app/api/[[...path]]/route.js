@@ -2982,6 +2982,111 @@ Return ONLY the JSON, no other text.`;
     });
   }
 
+  // GET /api/marketplace/debug/places-api - Debug Google Places API
+  if (path === '/marketplace/debug/places-api' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const settings = await getCollection('mpSettings');
+    const config = await settings.findOne({ type: 'provider_config' });
+    
+    if (!config?.providers?.googlePlaces?.apiKey) {
+      return err('Google Places API key not configured');
+    }
+    
+    const apiKey = await decryptApiKey(config.providers.googlePlaces.apiKey);
+    if (!apiKey) {
+      return err('Failed to decrypt API key');
+    }
+    
+    const diagnostics = {
+      timestamp: new Date().toISOString(),
+      apiKeyPresent: true,
+      apiKeyLength: apiKey.length,
+      apiKeyPrefix: apiKey.substring(0, 15) + '...',
+    };
+    
+    try {
+      // Test 1: Simple text search
+      const testQuery = 'restaurants in New York';
+      const requestUrl = 'https://places.googleapis.com/v1/places:searchText';
+      const requestHeaders = {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress'
+      };
+      const requestBody = {
+        textQuery: testQuery
+      };
+      
+      diagnostics.request = {
+        url: requestUrl,
+        method: 'POST',
+        headers: {
+          'Content-Type': requestHeaders['Content-Type'],
+          'X-Goog-Api-Key': apiKey.substring(0, 15) + '...',
+          'X-Goog-FieldMask': requestHeaders['X-Goog-FieldMask']
+        },
+        body: requestBody
+      };
+      
+      console.log('=== DIAGNOSTIC API CALL ===');
+      console.log('URL:', requestUrl);
+      console.log('Headers:', JSON.stringify(requestHeaders, (key, value) => 
+        key === 'X-Goog-Api-Key' ? value.substring(0, 15) + '...' : value
+      , 2));
+      console.log('Body:', JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: requestHeaders,
+        body: JSON.stringify(requestBody)
+      });
+      
+      diagnostics.response = {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      };
+      
+      const responseData = await response.json();
+      diagnostics.responseBody = responseData;
+      
+      console.log('Response Status:', response.status);
+      console.log('Response Body:', JSON.stringify(responseData, null, 2));
+      
+      // Analyze the response
+      if (response.ok) {
+        diagnostics.analysis = {
+          success: true,
+          placesReturned: responseData.places?.length || 0,
+          hasPlaces: !!responseData.places,
+          placesArray: Array.isArray(responseData.places),
+          firstPlace: responseData.places?.[0] || null
+        };
+      } else {
+        diagnostics.analysis = {
+          success: false,
+          error: responseData.error,
+          errorCode: responseData.error?.code,
+          errorMessage: responseData.error?.message,
+          errorStatus: responseData.error?.status
+        };
+      }
+      
+      console.log('=== DIAGNOSTIC COMPLETE ===');
+      
+      return ok(diagnostics);
+    } catch (error) {
+      diagnostics.error = {
+        message: error.message,
+        stack: error.stack
+      };
+      return ok(diagnostics);
+    }
+  }
+
   // ========== AI MARKETPLACE BUILDER (MODULE 2) ==========
   // POST /api/marketplace/discover - Search Google Places API (New)
   if (path === '/marketplace/discover' && method === 'POST') {
