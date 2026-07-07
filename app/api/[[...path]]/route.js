@@ -3872,6 +3872,295 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ jobs: records, total, limit, skip });
   }
 
+  // ========== SUPER ADMIN DASHBOARD VISUALIZATION (MODULE 7) ==========
+  
+  // GET /api/marketplace/dashboard/overview - Comprehensive Dashboard Stats
+  if (path === '/marketplace/dashboard/overview' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const listings = await getCollection('listings');
+    const users = await getCollection('users');
+    const bookings = await getCollection('bookings');
+    
+    // Get all stats in parallel
+    const [
+      totalListings,
+      publishedListings,
+      importedBusinesses,
+      claimedBusinesses,
+      pendingApprovals,
+      activeHosts,
+      totalBookings,
+      totalUsers,
+      draftListings
+    ] = await Promise.all([
+      listings.countDocuments(),
+      listings.countDocuments({ status: 'published' }),
+      listings.countDocuments({ importSource: 'google_places' }),
+      listings.countDocuments({ hostId: { $ne: null } }),
+      listings.countDocuments({ status: 'draft', claimStatus: 'pending' }),
+      users.countDocuments({ role: 'host', isActive: true }),
+      bookings.countDocuments(),
+      users.countDocuments(),
+      listings.countDocuments({ status: 'draft' })
+    ]);
+    
+    // Calculate revenue (placeholder - sum confirmed booking amounts)
+    const revenueResult = await bookings.aggregate([
+      { $match: { status: 'confirmed' } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]).toArray();
+    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+    
+    return ok({
+      stats: {
+        totalListings,
+        publishedListings,
+        importedBusinesses,
+        claimedBusinesses,
+        pendingApprovals,
+        activeHosts,
+        totalBookings,
+        totalRevenue,
+        totalUsers,
+        draftListings,
+        supportTickets: 0 // Placeholder
+      }
+    });
+  }
+  
+  // GET /api/marketplace/dashboard/analytics - Charts & Trends Data
+  if (path === '/marketplace/dashboard/analytics' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const listings = await getCollection('listings');
+    const bookings = await getCollection('bookings');
+    
+    // Listings growth (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const listingsGrowth = await listings.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      { $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+        count: { $sum: 1 }
+      }},
+      { $sort: { _id: 1 } }
+    ]).toArray();
+    
+    // Bookings trend (last 7 days)
+    const bookingsTrend = await bookings.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      { $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+        count: { $sum: 1 }
+      }},
+      { $sort: { _id: 1 } }
+    ]).toArray();
+    
+    // Revenue trend (last 7 days)
+    const revenueTrend = await bookings.aggregate([
+      { $match: { 
+        createdAt: { $gte: sevenDaysAgo },
+        status: 'confirmed'
+      }},
+      { $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+        revenue: { $sum: '$totalAmount' }
+      }},
+      { $sort: { _id: 1 } }
+    ]).toArray();
+    
+    // Top categories
+    const topCategories = await listings.aggregate([
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 }
+    ]).toArray();
+    
+    // Top cities
+    const topCities = await listings.aggregate([
+      { $match: { city: { $ne: null } } },
+      { $group: { _id: '$city', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 }
+    ]).toArray();
+    
+    // Recently imported (last 10)
+    const recentlyImported = await listings.find({ 
+      importSource: 'google_places' 
+    })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .project({ id: 1, title: 1, city: 1, createdAt: 1, status: 1 })
+      .toArray();
+    
+    return ok({
+      listingsGrowth,
+      bookingsTrend,
+      revenueTrend,
+      topCategories,
+      topCities,
+      recentlyImported
+    });
+  }
+  
+  // GET /api/marketplace/dashboard/activity - Recent Activity Feed
+  if (path === '/marketplace/dashboard/activity' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const limit = parseInt(url.searchParams.get('limit') || '20');
+    
+    const listings = await getCollection('listings');
+    const bookings = await getCollection('bookings');
+    const users = await getCollection('users');
+    const logs = await getCollection('mpAuditLogs');
+    const adminLogs = await getCollection('adminActivityLogs');
+    
+    // Get recent imports
+    const recentImports = await listings.find({ importSource: 'google_places' })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .project({ id: 1, title: 1, city: 1, createdAt: 1 })
+      .toArray();
+    
+    // Get recent bookings
+    const recentBookings = await bookings.find({})
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .project({ id: 1, listingId: 1, userId: 1, status: 1, createdAt: 1 })
+      .toArray();
+    
+    // Get recent user registrations
+    const recentUsers = await users.find({})
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .project({ id: 1, name: 1, email: 1, role: 1, createdAt: 1 })
+      .toArray();
+    
+    // Get recent admin actions
+    const recentActions = await adminLogs.find({})
+      .sort({ timestamp: -1 })
+      .limit(5)
+      .toArray();
+    
+    // Get recent marketplace audit logs
+    const recentAudit = await logs.find({})
+      .sort({ timestamp: -1 })
+      .limit(5)
+      .toArray();
+    
+    // Combine and format activities
+    const activities = [];
+    
+    recentImports.forEach(item => {
+      activities.push({
+        id: item.id,
+        type: 'import',
+        title: `Imported: ${item.title}`,
+        description: item.city || 'No city',
+        timestamp: item.createdAt,
+        icon: 'download'
+      });
+    });
+    
+    recentBookings.forEach(item => {
+      activities.push({
+        id: item.id,
+        type: 'booking',
+        title: `New Booking`,
+        description: `Status: ${item.status}`,
+        timestamp: item.createdAt,
+        icon: 'calendar'
+      });
+    });
+    
+    recentUsers.forEach(item => {
+      activities.push({
+        id: item.id,
+        type: 'user',
+        title: `New User: ${item.name}`,
+        description: `Role: ${item.role}`,
+        timestamp: item.createdAt,
+        icon: 'user'
+      });
+    });
+    
+    recentActions.forEach(item => {
+      activities.push({
+        id: item.id,
+        type: 'admin',
+        title: item.action,
+        description: item.adminName || 'Admin',
+        timestamp: item.timestamp,
+        icon: 'shield'
+      });
+    });
+    
+    recentAudit.forEach(item => {
+      activities.push({
+        id: item.id,
+        type: 'audit',
+        title: item.action,
+        description: item.userName || 'System',
+        timestamp: item.timestamp,
+        icon: 'activity'
+      });
+    });
+    
+    // Sort by timestamp and limit
+    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    return ok({ activities: activities.slice(0, limit) });
+  }
+  
+  // GET /api/marketplace/dashboard/system-status - System Health
+  if (path === '/marketplace/dashboard/system-status' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const jobs = await getCollection('mpDiscoveryJobs');
+    const templates = await getCollection('mpTemplates');
+    const settings = await getCollection('mpSettings');
+    
+    // Check database
+    const dbHealthy = true; // If we got here, DB is working
+    
+    // Check last import job
+    const lastJob = await jobs.findOne({}, { sort: { createdAt: -1 } });
+    const importEngineStatus = lastJob ? 
+      (lastJob.status === 'completed' ? 'healthy' : 
+       lastJob.status === 'processing' ? 'running' : 'error') 
+      : 'idle';
+    
+    // Check templates
+    const templateCount = await templates.countDocuments({ enabled: true });
+    const emailTemplateStatus = templateCount > 0 ? 'healthy' : 'warning';
+    
+    // Check API settings
+    const apiSettings = await settings.findOne({ type: 'api_providers' });
+    const apiHealthy = apiSettings?.providers?.googlePlaces?.enabled ? 'healthy' : 'warning';
+    
+    // Storage placeholder
+    const storageUsage = {
+      used: 0,
+      total: 100,
+      percentage: 0
+    };
+    
+    return ok({
+      database: { status: dbHealthy ? 'healthy' : 'error', message: 'Connected' },
+      importEngine: { status: importEngineStatus, lastRun: lastJob?.createdAt || null },
+      emailTemplates: { status: emailTemplateStatus, count: templateCount },
+      apiHealth: { status: apiHealthy, message: 'Google Places API configured' },
+      storage: storageUsage
+    });
+  }
+
   // ========== PARTNERSHIP CRM & COMMUNICATION CENTER (MODULE 5) ==========
   
   // GET /api/marketplace/crm/dashboard - CRM Dashboard Stats

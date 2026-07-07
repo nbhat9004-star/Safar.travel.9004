@@ -98,6 +98,12 @@ function MarketplaceInner() {
               </p>
             </div>
             <div className="flex gap-3">
+              <Link href="/admin/marketplace/dashboard">
+                <Button className="rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white">
+                  <TrendingUp className="size-4 mr-2" />
+                  Dashboard
+                </Button>
+              </Link>
               <Link href="/admin/marketplace/discover">
                 <Button className="rounded-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white">
                   <Search className="size-4 mr-2" />
