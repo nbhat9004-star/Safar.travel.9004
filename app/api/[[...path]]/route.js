@@ -3478,7 +3478,21 @@ Return ONLY the JSON, no other text.`;
     const jobs = await getCollection('mpDiscoveryJobs');
     const job = await jobs.findOne({ id: jobId });
     
-    if (!job) return;
+    if (!job) {
+      console.error('Job not found:', jobId);
+      return;
+    }
+    
+    console.log(`\n=== Starting import job ${jobId} ===`);
+    console.log('Total businesses to import:', job.businesses?.length || 0);
+    
+    if (!job.businesses || job.businesses.length === 0) {
+      console.error('No businesses in job!');
+      await jobs.updateOne({ id: jobId }, {
+        $set: { status: 'failed', updatedAt: new Date() }
+      });
+      return;
+    }
     
     // Update status to running
     await jobs.updateOne({ id: jobId }, {
@@ -3489,6 +3503,22 @@ Return ONLY the JSON, no other text.`;
     
     for (let i = 0; i < job.businesses.length; i++) {
       const business = job.businesses[i];
+      
+      console.log(`\n--- Processing business ${i + 1}/${job.businesses.length} ---`);
+      console.log('Business object keys:', Object.keys(business || {}));
+      
+      if (!business || !business.name) {
+        console.error('Invalid business object at index', i, ':', business);
+        await jobs.updateOne({ id: jobId }, {
+          $inc: { processed: 1, failed: 1 },
+          $push: { errors: { index: i, error: 'Invalid business object' } },
+          $set: { 
+            progress: Math.round(((i + 1) / job.businesses.length) * 100),
+            updatedAt: new Date()
+          }
+        });
+        continue;
+      }
       
       // Check if job was cancelled
       const currentJob = await jobs.findOne({ id: jobId });
@@ -3505,7 +3535,13 @@ Return ONLY the JSON, no other text.`;
           }
         });
         
-        // Check for duplicates
+        // Check for duplicates (with detailed logging)
+        console.log(`\n=== Checking duplicate for: ${business.name} ===`);
+        console.log('Place ID:', business.placeId);
+        console.log('Address:', business.address);
+        console.log('Phone:', business.phone);
+        console.log('Coordinates:', business.coordinates);
+        
         const duplicate = await listings.findOne({
           $or: [
             { googlePlaceId: business.placeId },
@@ -3513,16 +3549,29 @@ Return ONLY the JSON, no other text.`;
               title: business.name,
               location: business.address
             },
-            {
-              'contact.phone': business.phone,
-              'contact.phone': { $ne: null }
-            },
-            {
+            business.phone ? {
+              'contact.phone': business.phone
+            } : null,
+            (business.coordinates?.lat && business.coordinates?.lng) ? {
               'coordinates.lat': business.coordinates.lat,
               'coordinates.lng': business.coordinates.lng
-            }
-          ]
+            } : null
+          ].filter(Boolean) // Remove null conditions
         });
+        
+        if (duplicate) {
+          console.log('❌ DUPLICATE FOUND:');
+          console.log('  Existing listing:', duplicate.title);
+          console.log('  Existing ID:', duplicate.id);
+          console.log('  Match reason:', 
+            duplicate.googlePlaceId === business.placeId ? 'Place ID' :
+            (duplicate.title === business.name && duplicate.location === business.address) ? 'Name+Address' :
+            duplicate.contact?.phone === business.phone ? 'Phone' :
+            'Coordinates'
+          );
+        } else {
+          console.log('✅ No duplicate found - will import');
+        }
         
         if (duplicate) {
           await jobs.updateOne({ id: jobId }, {
