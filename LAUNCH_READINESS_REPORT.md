@@ -200,7 +200,7 @@
 ## 📝 DEPLOYMENT NOTES
 
 ### Current Environment
-- **URL**: https://marketplace-importer.preview.emergentagent.com
+- **URL**: https://host-claim-review.preview.emergentagent.com
 - **Database**: MongoDB running locally (in container)
 - **Server**: Next.js on port 3000
 - **Status**: ✅ STABLE and RUNNING
@@ -270,4 +270,4 @@ The Safar website is fully functional for user testing and gathering feedback. A
 ---
 
 **Website is LIVE and ready for testing at:**  
-https://marketplace-importer.preview.emergentagent.com
+https://host-claim-review.preview.emergentagent.com

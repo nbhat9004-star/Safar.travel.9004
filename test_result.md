@@ -3074,13 +3074,283 @@ backend:
 
 metadata:
   created_by: "main_agent"
-  version: "2.1"
-  test_sequence: 4
+  version: "2.2"
+  test_sequence: 5
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Email Verification Flow with Resend Integration - Production Testing"
+    - "Module 8 - Host Claim, Review & Publish Workflow"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend:
+  - task: "Module 8 - Host Claim, Review & Publish Workflow"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js, /app/app/present/[token]/page.js, /app/app/review/[token]/page.js, /app/app/admin/marketplace/crm/business/[id]/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          MODULE 8 implemented as additive changes only. No Modules 1–7 UI or endpoints
+          changed. New collections: mpTokens, mpClaims, mpChangeRequests, mpTasks.
+          Reused mpTimeline for audit history.
+
+          NEW ENDPOINTS (all Super Admin, except the public/* endpoints):
+          - POST   /api/marketplace/crm/business/:id/generate-link  body { type: 'review'|'presentation', expiryDays? }
+          - POST   /api/marketplace/crm/business/:id/regenerate-link
+          - POST   /api/marketplace/crm/business/:id/revoke-link    body { type?, tokenId? }
+          - GET    /api/marketplace/crm/business/:id/links
+          - GET    /api/public/token/:token                          — public resolve, returns listing + type + expiresAt
+          - POST   /api/public/review/:token/submit                  — public submit corrections; auto-creates mpTasks per non-empty section
+          - POST   /api/public/claim/:token/submit                   — public submit host claim
+          - GET    /api/marketplace/crm/claims                       — list all claim requests (admin)
+          - GET    /api/marketplace/crm/business/:id/claims          — claims for a business
+          - GET    /api/marketplace/crm/business/:id/change-requests
+          - GET    /api/marketplace/crm/business/:id/tasks
+          - POST   /api/marketplace/crm/tasks/:id/status             — { open|in_progress|done|dismissed }
+          - POST   /api/marketplace/crm/claims/:id/action            — { action: approve|reject|request_info|suspend, notes? }
+          - POST   /api/marketplace/crm/business/:id/publish
+          - POST   /api/marketplace/crm/business/:id/archive
+          - POST   /api/marketplace/crm/business/:id/invite-host     — sends Resend email with review link
+
+          Token defaults: 48-char hex, 30-day expiry, unique per listing per type,
+          revocable & regeneratable (regenerate revokes prior actives).
+
+          Claim approve: promotes/creates a user by email (role='host'), attaches
+          listing.hostId to the new host, sets verified=true, claimStatus='approved',
+          logs to mpTimeline.
+
+          Publish: sets status='approved', isPublished=true, publishedAt=now.
+          Archive: status='archived', isPublished=false, archivedAt=now.
+
+          FRONTEND:
+          - /app/present/[token]/page.js  — public presentation page (photos, description,
+            amenities, pricing, location w/ Google Maps embed if lat/lng, gallery, contact,
+            "Claim this Listing" CTA -> /review/:token#claim).
+          - /app/review/[token]/page.js   — structured sections (description, photos,
+            contact, amenities, pricing, address, mapLocation) with per-section comments,
+            optional general comment, photo URL / document URL uploads (URL-based reusing
+            existing storage), plus embedded claim form (name, email, phone, business role,
+            identity proof url, business proof url, message).
+          - Admin CRM business page extended with a new "Host Claim, Review & Publish"
+            action panel showing Generate/Copy/Open/Regenerate/Revoke buttons for both
+            link types, Invite Host inline form, Publish, Archive actions, plus panels
+            for Change Requests, Auto-generated Tasks (with status dropdown), and
+            Claim Requests (approve/reject/request_info/suspend).
+
+          Please backend-test the following scenarios end-to-end:
+          1) As Super Admin, POST /generate-link (review) -> returns url with /review/:token, expiresAt ~30d.
+          2) GET /links returns array including the newly created record. type='review'.
+          3) POST /generate-link (presentation) -> returns url with /present/:token.
+          4) GET /public/token/:token (review) -> 200, listing payload present.
+          5) GET /public/token/:token (present) -> 200.
+          6) POST /public/review/:token/submit with sections { description: 'fix desc', photos: 'add hero' }
+             and generalComment='overall great' + photos + documents. Expect tasksCreated >= 3 (2 sections + 1 general).
+          7) GET /business/:id/change-requests -> 1 record.
+          8) GET /business/:id/tasks -> at least 3 mpTasks with correct titles ("Fix Description", "Fix Photos", "General feedback from host").
+          9) POST /tasks/:id/status with status='done' -> 200 and status updated.
+          10) POST /public/claim/:token/submit with { name, email, phone, businessRole } -> 200, claim record + listing.claimStatus='pending'.
+          11) GET /crm/claims -> list contains new claim.
+          12) POST /crm/claims/:id/action action='approve' -> creates/updates user role='host', listing.hostId=user.id, listing.claimStatus='approved', verified=true.
+          13) POST /business/:id/publish -> listing.status='approved', isPublished=true, publishedAt set.
+          14) POST /business/:id/archive -> listing.status='archived', isPublished=false.
+          15) POST /revoke-link (type=review) -> revokes; subsequent GET /public/token/:token returns 410 with "revoked" error.
+          16) POST /regenerate-link (type=review) -> revokes prior + creates new (with new token).
+          17) Expired token: manually set expiresAt to past, GET /public/token/:token -> 410 with "expired" error.
+          18) Non-super-admin (traveler or host) should receive 403 for admin endpoints.
+          19) Anonymous access to /public/token/:token and /public/review/:token/submit and /public/claim/:token/submit should work.
+          20) Regression: Auth, listings, bookings, CRM basics unaffected (spot-check /api/auth/me, /api/listings, /api/marketplace/crm/dashboard).
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ MODULE 8 BACKEND TESTING COMPLETE - ALL TESTS PASSED (27/27 - 100% SUCCESS RATE)
+          
+          Test file: /app/module8_backend_test.py
+          Test date: 2026-07-07
+          Super Admin: founder@safarcurated.com (auto-provisioned)
+          Test listing: l1 (existing approved listing)
+          
+          LINK GENERATION & MANAGEMENT (5/5 PASSED):
+          ✅ 1) POST /api/marketplace/crm/business/:id/generate-link (review)
+             - Returns 200 with link object
+             - URL format: http://localhost:3000/review/<48-char-hex-token>
+             - Token is exactly 48 characters (hex)
+             - type='review', revoked=false, expiresAt set to ~30 days in future
+          ✅ 2) POST /api/marketplace/crm/business/:id/generate-link (presentation)
+             - Returns 200 with link object
+             - URL format: http://localhost:3000/present/<48-char-hex-token>
+             - type='presentation', revoked=false
+          ✅ 3) GET /api/marketplace/crm/business/:id/links
+             - Returns array with both review and presentation links
+             - Active links: 1 review + 1 presentation
+             - Each link has url, type, token, revoked, expiresAt fields
+          ✅ 4) Auth check - No auth returns 401
+          ✅ 4b) Auth check - Traveler returns 403 (Super Admin only)
+          
+          PUBLIC TOKEN RESOLVE (3/3 PASSED):
+          ✅ 5) GET /api/public/token/<review_token>
+             - Returns 200 with type='review', listing object, expiresAt
+             - Public access (no auth required)
+          ✅ 6) GET /api/public/token/<presentation_token>
+             - Returns 200 with type='presentation', listing object
+          ✅ 7) GET /api/public/token/bad-token
+             - Returns 404 with error: "Invalid link."
+          
+          REVIEW SUBMIT - PUBLIC (5/5 PASSED):
+          ✅ 8) POST /api/public/review/<token>/submit
+             - Submitted sections: description, photos (non-empty), amenities (empty)
+             - General comment included
+             - Photos and documents URLs provided
+             - Returns 200 with tasksCreated=3 (2 sections + 1 general)
+             - Auto-created tasks in mpTasks collection
+          ✅ 9) POST /api/public/review/<presentation_token>/submit
+             - Returns 403: "This link cannot be used for review submission."
+             - Correctly rejects wrong token type
+          ✅ 10) GET /api/marketplace/crm/business/:id/change-requests
+             - Returns array with 1 change request
+             - Contains sections, generalComment, photos, documents, submittedBy
+          ✅ 11) GET /api/marketplace/crm/business/:id/tasks
+             - Returns 3 tasks with correct titles:
+               * "Fix Description"
+               * "Fix Photos"
+               * "General feedback from host"
+             - Each task has id, businessId, source, status, priority
+          ✅ 12) POST /api/marketplace/crm/tasks/:id/status
+             - Updated task status to 'done'
+             - Verified status change persisted in database
+          
+          CLAIM SUBMIT + ADMIN ACTIONS (5/5 PASSED):
+          ✅ 13) POST /api/public/claim/<token>/submit
+             - Submitted with name, email, phone, businessRole, proof URLs, message
+             - Returns 200 with claim object
+             - claim.status='pending', claim.id is UUID
+             - Listing claimStatus updated to 'pending'
+          ✅ 14) Claim validation - missing fields return 400
+             - Missing name: 400 ✅
+             - Missing email: 400 ✅
+             - Missing phone: 400 ✅
+             - Missing businessRole: 400 ✅
+          ✅ 15) GET /api/marketplace/crm/claims
+             - Returns array with 1 claim
+             - Claim includes businessTitle, businessCity, businessImage (enriched)
+          ✅ 16) POST /api/marketplace/crm/claims/:id/action (request_info)
+             - Returns 200
+             - Claim status updated to 'info_requested'
+             - adminNotes saved
+          ✅ 17) POST /api/marketplace/crm/claims/:id/action (approve)
+             - Returns 200
+             - MongoDB verification:
+               * User created in safar.users with email, role='host'
+               * Listing.hostId set to new user's id
+               * Listing.claimStatus='approved'
+               * Listing.verified=true
+          
+          PUBLISH / ARCHIVE (2/2 PASSED):
+          ✅ 18) POST /api/marketplace/crm/business/:id/publish
+             - Returns 200
+             - MongoDB verification:
+               * listing.status='approved'
+               * listing.isPublished=true
+               * listing.publishedAt set to current timestamp
+          ✅ 19) POST /api/marketplace/crm/business/:id/archive
+             - Returns 200
+             - MongoDB verification:
+               * listing.status='archived'
+               * listing.isPublished=false
+          
+          REVOKE / REGENERATE / EXPIRY (3/3 PASSED):
+          ✅ 20) POST /api/marketplace/crm/business/:id/revoke-link (type=review)
+             - Returns 200 with revokedCount=1
+             - Subsequent GET /api/public/token/<token> returns 410
+             - Error message: "This link has been revoked."
+          ✅ 21) POST /api/marketplace/crm/business/:id/regenerate-link (type=review)
+             - Returns 200 with new link object
+             - New token is different from old token
+             - GET /links shows:
+               * 1 active review link (new)
+               * 1+ revoked review links (old)
+          ✅ 22) Expired token test
+             - Manually set expiresAt to 1 minute ago in MongoDB
+             - GET /api/public/token/<token> returns 410
+             - Error message: "This link has expired."
+          
+          INVITE HOST (1/1 PASSED):
+          ✅ 23) POST /api/marketplace/crm/business/:id/invite-host
+             - Returns 200 with sent=true, reviewUrl (string)
+             - Email sending attempted (may show "RESEND_API_KEY not configured" in logs)
+             - Review link auto-created if none exists
+          
+          REGRESSION SPOT-CHECK (3/3 PASSED):
+          ✅ 24) GET /api/auth/me (with super admin token)
+             - Returns 200 with user object
+             - Email: founder@safarcurated.com
+          ✅ 25) GET /api/listings
+             - Returns 200 with listings array
+             - Count: 11 listings
+          ✅ 26) GET /api/marketplace/crm/dashboard (super admin)
+             - Returns 200 with dashboard stats
+          
+          MONGODB COLLECTIONS VERIFIED:
+          ✅ mpTokens: Tokens stored with id, businessId, type, token, revoked, expiresAt
+          ✅ mpClaims: Claims stored with id, businessId, name, email, phone, status
+          ✅ mpChangeRequests: Change requests with sections, photos, documents
+          ✅ mpTasks: Auto-generated tasks with source='review_change_request'
+          ✅ mpTimeline: Audit trail for all actions
+          ✅ users: Host user created/promoted on claim approval
+          ✅ listings: hostId, claimStatus, verified, isPublished, publishedAt updated correctly
+          
+          CRITICAL FEATURES VERIFIED:
+          ✅ Super Admin role enforcement (requireSuperAdmin helper)
+          ✅ Public endpoints work without authentication
+          ✅ 48-char hex token generation (crypto.randomBytes(24).toString('hex'))
+          ✅ Token expiry validation (expiresAt comparison)
+          ✅ Token revocation (revoked flag + revokedAt timestamp)
+          ✅ Token regeneration (revokes old + creates new)
+          ✅ Auto-task creation from review sections (non-empty only)
+          ✅ Claim approval workflow (user creation/promotion + listing update)
+          ✅ Publish/Archive workflow (status + isPublished flags)
+          ✅ Timeline audit logging (m8AddTimeline helper)
+          
+          NO CRITICAL ISSUES FOUND. ALL ENDPOINTS WORKING AS DESIGNED.
+          MODULE 8 IS PRODUCTION-READY.
+
+
+
+agent_communication:
+  - agent: "testing"
+    message: |
+      ✅ MODULE 8 BACKEND TESTING COMPLETE - ALL TESTS PASSED (27/27)
+      
+      Test file: /app/module8_backend_test.py
+      Test date: 2026-07-07
+      Success rate: 100% (27/27 tests passed)
+      
+      COMPREHENSIVE TEST COVERAGE:
+      ✅ Link Generation & Management (5 tests)
+      ✅ Public Token Resolve (3 tests)
+      ✅ Review Submit - Public (5 tests)
+      ✅ Claim Submit + Admin Actions (5 tests)
+      ✅ Publish / Archive (2 tests)
+      ✅ Revoke / Regenerate / Expiry (3 tests)
+      ✅ Invite Host (1 test)
+      ✅ Regression Spot-Check (3 tests)
+      
+      KEY FEATURES VERIFIED:
+      ✅ Super Admin role enforcement working correctly
+      ✅ Public endpoints accessible without authentication
+      ✅ Token generation (48-char hex), expiry, revocation, regeneration
+      ✅ Review submission creates auto-tasks from non-empty sections
+      ✅ Claim approval creates/promotes host user and updates listing
+      ✅ Publish/Archive workflow updates listing status correctly
+      ✅ MongoDB collections (mpTokens, mpClaims, mpChangeRequests, mpTasks, mpTimeline) working
+      ✅ All regression tests passed (auth, listings, CRM dashboard)
+      
+      NO CRITICAL ISSUES FOUND. MODULE 8 IS PRODUCTION-READY.
+      
+      The test script can be re-run anytime with: python3 /app/module8_backend_test.py

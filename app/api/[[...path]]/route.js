@@ -4660,6 +4660,544 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ templates });
   }
 
+  // ============================================================
+  // MODULE 8 – HOST CLAIM, REVIEW & PUBLISH WORKFLOW
+  // ============================================================
+  // Helpers ---------------------------------------------------
+  const M8_BASE = process.env.NEXT_PUBLIC_BASE_URL || '';
+  async function m8GenToken() {
+    const crypto = await import('crypto');
+    return crypto.randomBytes(24).toString('hex'); // 48-char
+  }
+  function m8Url(type, token) {
+    const path = type === 'review' ? 'review' : 'present';
+    return `${M8_BASE}/${path}/${token}`;
+  }
+  async function m8AddTimeline(businessId, action, user, details) {
+    try {
+      const tl = await getCollection('mpTimeline');
+      await tl.insertOne({
+        id: uuid(),
+        businessId,
+        action,
+        user: user?.name || 'Public',
+        userId: user?.id || null,
+        timestamp: new Date(),
+        details: details || {},
+      });
+    } catch (e) { console.error('m8 timeline error', e); }
+  }
+  async function m8ResolveToken(token) {
+    if (!token) return null;
+    const tokens = await getCollection('mpTokens');
+    const rec = await tokens.findOne({ token });
+    if (!rec) return null;
+    if (rec.revoked) return { rec, error: 'This link has been revoked.' };
+    if (rec.expiresAt && new Date(rec.expiresAt) < new Date()) {
+      return { rec, error: 'This link has expired.' };
+    }
+    return { rec, error: null };
+  }
+
+  // POST /api/marketplace/crm/business/:id/generate-link
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/generate-link$/);
+    if (m && method === 'POST') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const { type, expiryDays } = await readBody(request);
+      if (!['review','presentation'].includes(type)) return err('Invalid link type');
+      const listings = await getCollection('listings');
+      const biz = await listings.findOne({ id: businessId });
+      if (!biz) return err('Business not found', 404);
+      const tokens = await getCollection('mpTokens');
+      // Revoke any existing active token of same type (only one active per type per listing)
+      await tokens.updateMany(
+        { businessId, type, revoked: { $ne: true } },
+        { $set: { revoked: true, revokedAt: new Date(), revokedBy: me.id } }
+      );
+      const token = await m8GenToken();
+      const days = Number.isFinite(Number(expiryDays)) ? Number(expiryDays) : 30;
+      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      const rec = {
+        id: uuid(),
+        businessId,
+        listingId: businessId,
+        type,
+        token,
+        revoked: false,
+        expiresAt,
+        createdAt: new Date(),
+        createdBy: me.id,
+        createdByName: me.name,
+      };
+      await tokens.insertOne(rec);
+      await m8AddTimeline(businessId, type === 'review' ? 'Review Link Generated' : 'Presentation Link Generated', me, { expiresAt });
+      const { _id, ...clean } = rec;
+      return ok({ link: { ...clean, url: m8Url(type, token) } });
+    }
+  }
+
+  // POST /api/marketplace/crm/business/:id/revoke-link
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/revoke-link$/);
+    if (m && method === 'POST') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const { type, tokenId } = await readBody(request);
+      const tokens = await getCollection('mpTokens');
+      const filter = { businessId, revoked: { $ne: true } };
+      if (tokenId) filter.id = tokenId;
+      else if (type) filter.type = type;
+      const res = await tokens.updateMany(filter, { $set: { revoked: true, revokedAt: new Date(), revokedBy: me.id } });
+      await m8AddTimeline(businessId, 'Link Revoked', me, { type, tokenId, count: res.modifiedCount });
+      return ok({ revokedCount: res.modifiedCount });
+    }
+  }
+
+  // POST /api/marketplace/crm/business/:id/regenerate-link
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/regenerate-link$/);
+    if (m && method === 'POST') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const { type, expiryDays } = await readBody(request);
+      if (!['review','presentation'].includes(type)) return err('Invalid link type');
+      const listings = await getCollection('listings');
+      const biz = await listings.findOne({ id: businessId });
+      if (!biz) return err('Business not found', 404);
+      const tokens = await getCollection('mpTokens');
+      await tokens.updateMany({ businessId, type, revoked: { $ne: true } }, { $set: { revoked: true, revokedAt: new Date(), revokedBy: me.id } });
+      const token = await m8GenToken();
+      const days = Number.isFinite(Number(expiryDays)) ? Number(expiryDays) : 30;
+      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      const rec = {
+        id: uuid(),
+        businessId,
+        listingId: businessId,
+        type,
+        token,
+        revoked: false,
+        expiresAt,
+        createdAt: new Date(),
+        createdBy: me.id,
+        createdByName: me.name,
+      };
+      await tokens.insertOne(rec);
+      await m8AddTimeline(businessId, type === 'review' ? 'Review Link Regenerated' : 'Presentation Link Regenerated', me, { expiresAt });
+      const { _id, ...clean } = rec;
+      return ok({ link: { ...clean, url: m8Url(type, token) } });
+    }
+  }
+
+  // GET /api/marketplace/crm/business/:id/links
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/links$/);
+    if (m && method === 'GET') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const tokens = await getCollection('mpTokens');
+      const list = await tokens.find({ businessId }).sort({ createdAt: -1 }).toArray();
+      const enriched = list.map(({ _id, ...t }) => ({ ...t, url: m8Url(t.type, t.token) }));
+      return ok({ links: enriched });
+    }
+  }
+
+  // GET /api/public/token/:token — resolve a public review/present token
+  {
+    const m = path.match(/^\/public\/token\/([^/]+)$/);
+    if (m && method === 'GET') {
+      const token = m[1];
+      const r = await m8ResolveToken(token);
+      if (!r) return err('Invalid link.', 404);
+      if (r.error) return err(r.error, 410);
+      const listings = await getCollection('listings');
+      const listing = await listings.findOne({ id: r.rec.listingId });
+      if (!listing) return err('Listing not found', 404);
+      const { _id, ...clean } = listing;
+      return ok({ type: r.rec.type, expiresAt: r.rec.expiresAt, listing: clean });
+    }
+  }
+
+  // POST /api/public/review/:token/submit — submit corrections
+  {
+    const m = path.match(/^\/public\/review\/([^/]+)\/submit$/);
+    if (m && method === 'POST') {
+      const token = m[1];
+      const r = await m8ResolveToken(token);
+      if (!r) return err('Invalid link.', 404);
+      if (r.error) return err(r.error, 410);
+      if (r.rec.type !== 'review') return err('This link cannot be used for review submission.', 403);
+      const body = await readBody(request);
+      const {
+        sections = {}, // { description, photos, contact, amenities, pricing, address, mapLocation }
+        generalComment = '',
+        photos = [],
+        documents = [],
+        submitterName = '',
+        submitterEmail = '',
+      } = body || {};
+      const listingId = r.rec.listingId;
+      const cr = {
+        id: uuid(),
+        businessId: listingId,
+        listingId,
+        tokenId: r.rec.id,
+        sections,
+        generalComment,
+        photos: Array.isArray(photos) ? photos.slice(0, 30) : [],
+        documents: Array.isArray(documents) ? documents.slice(0, 20) : [],
+        submittedBy: { name: submitterName, email: submitterEmail },
+        status: 'open',
+        createdAt: new Date(),
+      };
+      const crCol = await getCollection('mpChangeRequests');
+      await crCol.insertOne(cr);
+      // Auto-create CRM tasks per non-empty section
+      const tasksCol = await getCollection('mpTasks');
+      const taskDocs = [];
+      const sectionLabels = {
+        description: 'Description',
+        photos: 'Photos',
+        contact: 'Contact',
+        amenities: 'Amenities',
+        pricing: 'Pricing',
+        address: 'Address',
+        mapLocation: 'Map Location',
+      };
+      for (const [key, value] of Object.entries(sections || {})) {
+        const comment = typeof value === 'string' ? value : (value?.comment || '');
+        if (comment && comment.trim()) {
+          taskDocs.push({
+            id: uuid(),
+            businessId: listingId,
+            listingId,
+            source: 'review_change_request',
+            changeRequestId: cr.id,
+            section: key,
+            title: `Fix ${sectionLabels[key] || key}`,
+            description: comment.trim(),
+            status: 'open',
+            priority: 'medium',
+            createdAt: new Date(),
+          });
+        }
+      }
+      if (generalComment && generalComment.trim()) {
+        taskDocs.push({
+          id: uuid(),
+          businessId: listingId,
+          listingId,
+          source: 'review_change_request',
+          changeRequestId: cr.id,
+          section: 'general',
+          title: 'General feedback from host',
+          description: generalComment.trim(),
+          status: 'open',
+          priority: 'low',
+          createdAt: new Date(),
+        });
+      }
+      if (taskDocs.length) await tasksCol.insertMany(taskDocs);
+      await m8AddTimeline(listingId, 'Change Requests Submitted', { name: submitterName || 'Host', id: null }, { sectionsCount: taskDocs.length, photos: cr.photos.length, documents: cr.documents.length });
+      return ok({ changeRequestId: cr.id, tasksCreated: taskDocs.length });
+    }
+  }
+
+  // POST /api/public/claim/:token/submit — host submits claim
+  {
+    const m = path.match(/^\/public\/claim\/([^/]+)\/submit$/);
+    if (m && method === 'POST') {
+      const token = m[1];
+      const r = await m8ResolveToken(token);
+      if (!r) return err('Invalid link.', 404);
+      if (r.error) return err(r.error, 410);
+      const body = await readBody(request);
+      const { name, email, phone, businessRole, identityProofUrl, businessProofUrl, message } = body || {};
+      if (!name || String(name).trim().length < 2) return err('Name is required');
+      if (!isEmail(email)) return err('Valid email is required');
+      if (!phone || String(phone).trim().length < 6) return err('Phone is required');
+      if (!businessRole || String(businessRole).trim().length < 2) return err('Business role is required');
+      const listingId = r.rec.listingId;
+      const claims = await getCollection('mpClaims');
+      const claim = {
+        id: uuid(),
+        businessId: listingId,
+        listingId,
+        tokenId: r.rec.id,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        businessRole: businessRole.trim(),
+        identityProofUrl: identityProofUrl || '',
+        businessProofUrl: businessProofUrl || '',
+        message: message || '',
+        status: 'pending',
+        createdAt: new Date(),
+      };
+      await claims.insertOne(claim);
+      // Mark listing as having a claim in progress (do not change status yet)
+      const listings = await getCollection('listings');
+      await listings.updateOne({ id: listingId }, { $set: { claimStatus: 'pending', updatedAt: new Date() } });
+      await m8AddTimeline(listingId, 'Host Claim Submitted', { name, id: null }, { claimId: claim.id, email: claim.email });
+      const { _id, ...clean } = claim;
+      return ok({ claim: clean });
+    }
+  }
+
+  // GET /api/marketplace/crm/claims — list all claim requests
+  if (path === '/marketplace/crm/claims' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    const status = url.searchParams.get('status') || '';
+    const q = {};
+    if (status) q.status = status;
+    const claims = await getCollection('mpClaims');
+    const list = await claims.find(q).sort({ createdAt: -1 }).limit(200).toArray();
+    const listings = await getCollection('listings');
+    const enriched = [];
+    for (const c of list) {
+      const biz = await listings.findOne({ id: c.listingId }, { projection: { title: 1, city: 1, images: 1 } });
+      const { _id, ...clean } = c;
+      enriched.push({ ...clean, businessTitle: biz?.title || 'Unknown', businessCity: biz?.city || '', businessImage: biz?.images?.[0] || null });
+    }
+    return ok({ claims: enriched });
+  }
+
+  // GET /api/marketplace/crm/business/:id/claims — claims for one business
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/claims$/);
+    if (m && method === 'GET') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const claims = await getCollection('mpClaims');
+      const list = await claims.find({ businessId }).sort({ createdAt: -1 }).toArray();
+      return ok({ claims: list.map(({ _id, ...c }) => c) });
+    }
+  }
+
+  // GET /api/marketplace/crm/business/:id/change-requests
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/change-requests$/);
+    if (m && method === 'GET') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const crCol = await getCollection('mpChangeRequests');
+      const list = await crCol.find({ businessId }).sort({ createdAt: -1 }).toArray();
+      return ok({ changeRequests: list.map(({ _id, ...c }) => c) });
+    }
+  }
+
+  // GET /api/marketplace/crm/business/:id/tasks — auto-generated tasks
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/tasks$/);
+    if (m && method === 'GET') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const tasksCol = await getCollection('mpTasks');
+      const list = await tasksCol.find({ businessId }).sort({ createdAt: -1 }).limit(200).toArray();
+      return ok({ tasks: list.map(({ _id, ...t }) => t) });
+    }
+  }
+
+  // POST /api/marketplace/crm/tasks/:id/status — update task status
+  {
+    const m = path.match(/^\/marketplace\/crm\/tasks\/([^/]+)\/status$/);
+    if (m && method === 'POST') {
+      const taskId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const { status } = await readBody(request);
+      if (!['open','in_progress','done','dismissed'].includes(status)) return err('Invalid status');
+      const tasksCol = await getCollection('mpTasks');
+      const t = await tasksCol.findOne({ id: taskId });
+      if (!t) return err('Task not found', 404);
+      await tasksCol.updateOne({ id: taskId }, { $set: { status, updatedAt: new Date(), updatedBy: me.id } });
+      await m8AddTimeline(t.businessId, 'Task Updated', me, { taskId, status });
+      return ok({ taskId, status });
+    }
+  }
+
+  // POST /api/marketplace/crm/claims/:id/action — approve/reject/request-info/suspend
+  {
+    const m = path.match(/^\/marketplace\/crm\/claims\/([^/]+)\/action$/);
+    if (m && method === 'POST') {
+      const claimId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const { action, notes } = await readBody(request);
+      if (!['approve','reject','request_info','suspend'].includes(action)) return err('Invalid action');
+      const claims = await getCollection('mpClaims');
+      const claim = await claims.findOne({ id: claimId });
+      if (!claim) return err('Claim not found', 404);
+      const listings = await getCollection('listings');
+      const now = new Date();
+      const nextStatus = action === 'approve' ? 'approved'
+        : action === 'reject' ? 'rejected'
+        : action === 'suspend' ? 'suspended'
+        : 'info_requested';
+      await claims.updateOne(
+        { id: claimId },
+        { $set: { status: nextStatus, decidedAt: now, decidedBy: me.id, decidedByName: me.name, adminNotes: notes || '' } }
+      );
+
+      if (action === 'approve') {
+        // Ensure a host user exists / promote user by email
+        const users = await getCollection('users');
+        let hostUser = await users.findOne({ email: claim.email });
+        if (!hostUser) {
+          hostUser = {
+            id: uuid(),
+            email: claim.email,
+            name: claim.name,
+            phone: claim.phone,
+            role: 'host',
+            emailVerified: true,
+            createdAt: now,
+            updatedAt: now,
+            createdVia: 'host_claim',
+          };
+          await users.insertOne(hostUser);
+        } else if (hostUser.role === 'traveler') {
+          await users.updateOne({ id: hostUser.id }, { $set: { role: 'host', updatedAt: now } });
+          hostUser.role = 'host';
+        }
+        // Convert listing into a claimed, verified host listing
+        await listings.updateOne(
+          { id: claim.listingId },
+          { $set: {
+              hostId: hostUser.id,
+              hostName: hostUser.name,
+              claimStatus: 'approved',
+              claimedAt: now,
+              verified: true,
+              updatedAt: now,
+            } }
+        );
+      } else if (action === 'reject') {
+        await listings.updateOne({ id: claim.listingId }, { $set: { claimStatus: 'rejected', updatedAt: now } });
+      } else if (action === 'suspend') {
+        await listings.updateOne({ id: claim.listingId }, { $set: { claimStatus: 'suspended', status: 'suspended', updatedAt: now } });
+      } else if (action === 'request_info') {
+        await listings.updateOne({ id: claim.listingId }, { $set: { claimStatus: 'info_requested', updatedAt: now } });
+      }
+      await m8AddTimeline(claim.listingId, `Claim ${action.replace('_',' ')}`, me, { claimId, notes: notes || '' });
+      return ok({ claimId, status: nextStatus });
+    }
+  }
+
+  // POST /api/marketplace/crm/business/:id/publish — publish to marketplace
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/publish$/);
+    if (m && method === 'POST') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const listings = await getCollection('listings');
+      const biz = await listings.findOne({ id: businessId });
+      if (!biz) return err('Business not found', 404);
+      const now = new Date();
+      await listings.updateOne(
+        { id: businessId },
+        { $set: {
+            status: 'approved',
+            isPublished: true,
+            publishedAt: now,
+            claimStatus: biz.claimStatus === 'approved' ? 'approved' : (biz.claimStatus || 'unclaimed'),
+            updatedAt: now,
+          } }
+      );
+      await m8AddTimeline(businessId, 'Listing Published', me, { publishedAt: now });
+      return ok({ businessId, published: true });
+    }
+  }
+
+  // POST /api/marketplace/crm/business/:id/archive — archive listing
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/archive$/);
+    if (m && method === 'POST') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const listings = await getCollection('listings');
+      const biz = await listings.findOne({ id: businessId });
+      if (!biz) return err('Business not found', 404);
+      await listings.updateOne(
+        { id: businessId },
+        { $set: { status: 'archived', isPublished: false, archivedAt: new Date(), updatedAt: new Date() } }
+      );
+      await m8AddTimeline(businessId, 'Listing Archived', me, {});
+      return ok({ businessId, archived: true });
+    }
+  }
+
+  // POST /api/marketplace/crm/business/:id/invite-host — send invite email w/ claim link
+  {
+    const m = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/invite-host$/);
+    if (m && method === 'POST') {
+      const businessId = m[1];
+      const me = await getCurrentUser(request);
+      const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+      const { email, name, message } = await readBody(request);
+      if (!isEmail(email)) return err('Valid email is required');
+      const listings = await getCollection('listings');
+      const biz = await listings.findOne({ id: businessId });
+      if (!biz) return err('Business not found', 404);
+      // Ensure an active review token exists (or create one) to send with invite
+      const tokens = await getCollection('mpTokens');
+      let rec = await tokens.findOne({ businessId, type: 'review', revoked: { $ne: true }, expiresAt: { $gt: new Date() } });
+      if (!rec) {
+        const token = await m8GenToken();
+        rec = {
+          id: uuid(),
+          businessId,
+          listingId: businessId,
+          type: 'review',
+          token,
+          revoked: false,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          createdAt: new Date(),
+          createdBy: me.id,
+          createdByName: me.name,
+        };
+        await tokens.insertOne(rec);
+      }
+      const reviewUrl = m8Url('review', rec.token);
+      // Send email via Resend (fire and forget)
+      try {
+        const { sendEmail } = await import('@/lib/email');
+        const subject = `You're invited to claim your listing on Safar Curated`;
+        const html = `
+          <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111">
+            <h2 style="margin:0 0 12px">Hello ${name || 'there'},</h2>
+            <p>We have created a listing for <strong>${biz.title || 'your business'}</strong> on Safar Curated.
+            Please review the listing exactly as visitors will see it and request any corrections you would like us to make.
+            You can also claim the listing to manage it directly.</p>
+            ${message ? `<p style="background:#f6f6f6;padding:12px;border-radius:8px">${String(message).replace(/</g,'&lt;')}</p>` : ''}
+            <p style="margin:24px 0">
+              <a href="${reviewUrl}" style="background:#0f766e;color:#fff;text-decoration:none;padding:12px 20px;border-radius:999px;font-weight:600">Review & Claim Your Listing</a>
+            </p>
+            <p style="color:#666;font-size:13px">This link expires on ${new Date(rec.expiresAt).toLocaleDateString()}.</p>
+            <p style="color:#666;font-size:13px">— Safar Curated</p>
+          </div>`;
+        if (typeof sendEmail === 'function') {
+          await sendEmail({ to: email, subject, html });
+        }
+      } catch (e) {
+        console.error('invite-host email error', e);
+      }
+      await m8AddTimeline(businessId, 'Host Invitation Sent', me, { email, reviewUrl });
+      return ok({ sent: true, reviewUrl });
+    }
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

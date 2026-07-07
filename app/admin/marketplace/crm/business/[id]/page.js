@@ -15,7 +15,22 @@ import {
   Clock,
   User,
   Plus,
-  Save
+  Save,
+  Copy,
+  Link as LinkIcon,
+  ExternalLink,
+  RotateCw,
+  Ban,
+  Send,
+  Rocket,
+  Archive as ArchiveIcon,
+  UserPlus,
+  ShieldCheck,
+  ClipboardList,
+  CheckCircle2,
+  XCircle,
+  Info,
+  PauseCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
@@ -47,6 +62,15 @@ function BusinessProfileInner() {
     note: ''
   });
 
+  // Module 8 state ----------------------------------------------------
+  const [m8Links, setM8Links] = useState([]);
+  const [m8Claims, setM8Claims] = useState([]);
+  const [m8ChangeRequests, setM8ChangeRequests] = useState([]);
+  const [m8Tasks, setM8Tasks] = useState([]);
+  const [m8Busy, setM8Busy] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteData, setInviteData] = useState({ email: '', name: '', message: '' });
+
   useEffect(() => {
     if (businessId) {
       loadBusinessProfile();
@@ -64,6 +88,8 @@ function BusinessProfileInner() {
         setTimeline(data.timeline || []);
         setNotes(data.notes || []);
         setFollowups(data.followups || []);
+        // Fire-and-forget Module 8 fetches
+        loadM8();
       } else {
         toast.error('Failed to load business profile');
         router.push('/admin/marketplace/crm');
@@ -155,6 +181,170 @@ function BusinessProfileInner() {
     const cleaned = phone.replace(/[^0-9]/g, '');
     return `https://wa.me/${cleaned}`;
   };
+
+  // -------- Module 8 helpers --------
+  const loadM8 = async () => {
+    try {
+      const [linksRes, claimsRes, crRes, tasksRes] = await Promise.all([
+        fetch(`/api/marketplace/crm/business/${businessId}/links`),
+        fetch(`/api/marketplace/crm/business/${businessId}/claims`),
+        fetch(`/api/marketplace/crm/business/${businessId}/change-requests`),
+        fetch(`/api/marketplace/crm/business/${businessId}/tasks`),
+      ]);
+      const [ldata, cdata, crdata, tdata] = await Promise.all([
+        linksRes.json().catch(() => ({})),
+        claimsRes.json().catch(() => ({})),
+        crRes.json().catch(() => ({})),
+        tasksRes.json().catch(() => ({})),
+      ]);
+      if (ldata.ok) setM8Links(ldata.links || []);
+      if (cdata.ok) setM8Claims(cdata.claims || []);
+      if (crdata.ok) setM8ChangeRequests(crdata.changeRequests || []);
+      if (tdata.ok) setM8Tasks(tdata.tasks || []);
+    } catch (e) {
+      console.error('loadM8 error', e);
+    }
+  };
+
+  const activeLink = (type) => (m8Links || []).find(l => l.type === type && !l.revoked && new Date(l.expiresAt) > new Date());
+
+  const doGenerateLink = async (type) => {
+    if (m8Busy) return;
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/business/${businessId}/generate-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, expiryDays: 30 }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(`${type === 'review' ? 'Review' : 'Presentation'} link generated`);
+        await loadM8();
+      } else toast.error(data.error || 'Failed to generate link');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const doRegenerateLink = async (type) => {
+    if (m8Busy) return;
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/business/${businessId}/regenerate-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, expiryDays: 30 }),
+      });
+      const data = await res.json();
+      if (data.ok) { toast.success('Link regenerated'); await loadM8(); }
+      else toast.error(data.error || 'Failed to regenerate');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const doRevokeLink = async (linkId, type) => {
+    if (m8Busy) return;
+    if (!window.confirm('Revoke this link? It will no longer be usable.')) return;
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/business/${businessId}/revoke-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokenId: linkId, type }),
+      });
+      const data = await res.json();
+      if (data.ok) { toast.success('Link revoked'); await loadM8(); }
+      else toast.error(data.error || 'Failed to revoke');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Link copied');
+    } catch { toast.error('Copy failed'); }
+  };
+
+  const doPublish = async () => {
+    if (m8Busy) return;
+    if (!window.confirm('Publish this listing to the marketplace?')) return;
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/business/${businessId}/publish`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) { toast.success('Listing published'); loadBusinessProfile(); }
+      else toast.error(data.error || 'Failed to publish');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const doArchive = async () => {
+    if (m8Busy) return;
+    if (!window.confirm('Archive this listing? It will be removed from the marketplace.')) return;
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/business/${businessId}/archive`, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) { toast.success('Listing archived'); loadBusinessProfile(); }
+      else toast.error(data.error || 'Failed to archive');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const doInviteHost = async () => {
+    if (!inviteData.email) { toast.error('Email is required'); return; }
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/business/${businessId}/invite-host`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(inviteData),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success('Invitation sent');
+        setShowInvite(false);
+        setInviteData({ email: '', name: '', message: '' });
+        loadM8();
+      } else toast.error(data.error || 'Failed to send invite');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const doClaimAction = async (claimId, action) => {
+    if (m8Busy) return;
+    let notes = '';
+    if (action === 'reject' || action === 'request_info' || action === 'suspend') {
+      notes = window.prompt(`Notes for the host (optional)`) || '';
+    }
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/claims/${claimId}/action`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, notes }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(`Claim ${action.replace('_',' ')}d`);
+        loadBusinessProfile();
+      } else toast.error(data.error || 'Failed');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const doTaskStatus = async (taskId, status) => {
+    setM8Busy(true);
+    try {
+      const res = await fetch(`/api/marketplace/crm/tasks/${taskId}/status`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (data.ok) { toast.success('Task updated'); loadM8(); }
+      else toast.error(data.error || 'Failed');
+    } catch { toast.error('Network error'); }
+    finally { setM8Busy(false); }
+  };
+
+  const activeReview = activeLink('review');
+  const activePresent = activeLink('presentation');
 
   const pipelineStages = [
     { id: 'pending', label: 'Pending' },
@@ -292,6 +482,251 @@ function BusinessProfileInner() {
                 </Button>
               </div>
             </div>
+
+            {/* Module 8: Host Claim, Review & Publish Actions */}
+            <div className="rounded-3xl border bg-white p-6" data-testid="m8-actions-panel">
+              <div className="flex items-center gap-2 mb-4">
+                <ShieldCheck className="size-5 text-emerald-600" />
+                <h3 className="font-semibold">Host Claim, Review & Publish</h3>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-wrap gap-2">
+                {activeReview ? (
+                  <>
+                    <a href={activeReview.url} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" className="rounded-full" data-testid="m8-open-review">
+                        <ExternalLink className="size-4 mr-2" /> Open Review Link
+                      </Button>
+                    </a>
+                    <Button variant="outline" className="rounded-full" onClick={() => copyToClipboard(activeReview.url)} data-testid="m8-copy-review">
+                      <Copy className="size-4 mr-2" /> Copy Review
+                    </Button>
+                    <Button variant="outline" className="rounded-full" onClick={() => doRegenerateLink('review')} disabled={m8Busy} data-testid="m8-regenerate-review">
+                      <RotateCw className="size-4 mr-2" /> Regenerate Review
+                    </Button>
+                    <Button variant="outline" className="rounded-full text-rose-600 border-rose-200 hover:bg-rose-50" onClick={() => doRevokeLink(activeReview.id, 'review')} disabled={m8Busy} data-testid="m8-revoke-review">
+                      <Ban className="size-4 mr-2" /> Revoke Review
+                    </Button>
+                  </>
+                ) : (
+                  <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700" onClick={() => doGenerateLink('review')} disabled={m8Busy} data-testid="m8-generate-review">
+                    <LinkIcon className="size-4 mr-2" /> Generate Review Link
+                  </Button>
+                )}
+
+                {activePresent ? (
+                  <>
+                    <a href={activePresent.url} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" className="rounded-full" data-testid="m8-open-present">
+                        <ExternalLink className="size-4 mr-2" /> Open Presentation
+                      </Button>
+                    </a>
+                    <Button variant="outline" className="rounded-full" onClick={() => copyToClipboard(activePresent.url)} data-testid="m8-copy-present">
+                      <Copy className="size-4 mr-2" /> Copy Presentation
+                    </Button>
+                    <Button variant="outline" className="rounded-full" onClick={() => doRegenerateLink('presentation')} disabled={m8Busy} data-testid="m8-regenerate-present">
+                      <RotateCw className="size-4 mr-2" /> Regenerate Presentation
+                    </Button>
+                    <Button variant="outline" className="rounded-full text-rose-600 border-rose-200 hover:bg-rose-50" onClick={() => doRevokeLink(activePresent.id, 'presentation')} disabled={m8Busy} data-testid="m8-revoke-present">
+                      <Ban className="size-4 mr-2" /> Revoke Presentation
+                    </Button>
+                  </>
+                ) : (
+                  <Button className="rounded-full bg-emerald-600 hover:bg-emerald-700" onClick={() => doGenerateLink('presentation')} disabled={m8Busy} data-testid="m8-generate-present">
+                    <LinkIcon className="size-4 mr-2" /> Generate Presentation Link
+                  </Button>
+                )}
+
+                <Button variant="outline" className="rounded-full" onClick={() => setShowInvite(v => !v)} data-testid="m8-invite-host">
+                  <UserPlus className="size-4 mr-2" /> Invite Host
+                </Button>
+
+                <Button className="rounded-full bg-emerald-700 hover:bg-emerald-800" onClick={doPublish} disabled={m8Busy} data-testid="m8-publish">
+                  <Rocket className="size-4 mr-2" /> Publish
+                </Button>
+
+                <Button variant="outline" className="rounded-full text-charcoal" onClick={doArchive} disabled={m8Busy} data-testid="m8-archive">
+                  <ArchiveIcon className="size-4 mr-2" /> Archive
+                </Button>
+              </div>
+
+              {/* Link details row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                {activeReview && (
+                  <div className="rounded-2xl bg-secondary/20 border p-3 text-xs">
+                    <div className="font-semibold mb-1">Review link</div>
+                    <div className="break-all text-charcoal/70">{activeReview.url}</div>
+                    <div className="mt-1 text-muted-foreground">Expires {new Date(activeReview.expiresAt).toLocaleDateString()}</div>
+                  </div>
+                )}
+                {activePresent && (
+                  <div className="rounded-2xl bg-secondary/20 border p-3 text-xs">
+                    <div className="font-semibold mb-1">Presentation link</div>
+                    <div className="break-all text-charcoal/70">{activePresent.url}</div>
+                    <div className="mt-1 text-muted-foreground">Expires {new Date(activePresent.expiresAt).toLocaleDateString()}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Invite Host inline form */}
+              {showInvite && (
+                <div className="mt-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 space-y-2">
+                  <Input placeholder="Host email" value={inviteData.email} onChange={(e) => setInviteData({ ...inviteData, email: e.target.value })} className="rounded-full" />
+                  <Input placeholder="Host name (optional)" value={inviteData.name} onChange={(e) => setInviteData({ ...inviteData, name: e.target.value })} className="rounded-full" />
+                  <Textarea placeholder="Optional personal message" rows={2} value={inviteData.message} onChange={(e) => setInviteData({ ...inviteData, message: e.target.value })} />
+                  <div className="flex gap-2">
+                    <Button onClick={doInviteHost} className="rounded-full bg-emerald-600 hover:bg-emerald-700" disabled={m8Busy} data-testid="m8-send-invite">
+                      <Send className="size-4 mr-2" /> Send Invitation
+                    </Button>
+                    <Button variant="outline" className="rounded-full" onClick={() => setShowInvite(false)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Change Requests */}
+            {m8ChangeRequests.length > 0 && (
+              <div className="rounded-3xl border bg-white p-6" data-testid="m8-change-requests-panel">
+                <div className="flex items-center gap-2 mb-4">
+                  <ClipboardList className="size-5 text-emerald-600" />
+                  <h3 className="font-semibold">Change Requests</h3>
+                  <span className="text-xs text-muted-foreground">({m8ChangeRequests.length})</span>
+                </div>
+                <div className="space-y-4">
+                  {m8ChangeRequests.slice(0, 10).map(cr => (
+                    <div key={cr.id} className="rounded-2xl border p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="text-xs text-muted-foreground">
+                          Submitted {new Date(cr.createdAt).toLocaleString()} {cr.submittedBy?.name ? `by ${cr.submittedBy.name}` : ''}
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{cr.status || 'open'}</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                        {Object.entries(cr.sections || {}).map(([k, v]) => {
+                          const comment = typeof v === 'string' ? v : v?.comment;
+                          if (!comment) return null;
+                          return (
+                            <div key={k} className="p-2 rounded-lg bg-secondary/30">
+                              <div className="text-xs font-semibold capitalize text-emerald-700">{k}</div>
+                              <div className="text-charcoal/80">{comment}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {cr.generalComment && (
+                        <div className="mt-2 text-sm">
+                          <div className="text-xs font-semibold text-emerald-700">General</div>
+                          <div>{cr.generalComment}</div>
+                        </div>
+                      )}
+                      {(cr.photos?.length || cr.documents?.length) ? (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          {cr.photos?.length ? `${cr.photos.length} photo(s) attached · ` : ''}
+                          {cr.documents?.length ? `${cr.documents.length} document(s) attached` : ''}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Auto-created Tasks */}
+            {m8Tasks.length > 0 && (
+              <div className="rounded-3xl border bg-white p-6" data-testid="m8-tasks-panel">
+                <div className="flex items-center gap-2 mb-4">
+                  <ClipboardList className="size-5 text-emerald-600" />
+                  <h3 className="font-semibold">Auto-generated Tasks</h3>
+                  <span className="text-xs text-muted-foreground">({m8Tasks.length})</span>
+                </div>
+                <div className="space-y-2">
+                  {m8Tasks.slice(0, 20).map(t => (
+                    <div key={t.id} className="flex items-start justify-between gap-3 p-3 rounded-2xl border">
+                      <div className="flex-1">
+                        <div className="text-sm font-semibold">{t.title}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{t.description}</div>
+                        <div className="mt-1 flex gap-2 items-center text-[11px] text-muted-foreground">
+                          <span className="px-2 py-0.5 rounded-full bg-secondary/40 capitalize">{t.section}</span>
+                          <span className={`px-2 py-0.5 rounded-full ${t.status === 'done' ? 'bg-emerald-100 text-emerald-700' : t.status === 'dismissed' ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-700'}`}>{t.status}</span>
+                        </div>
+                      </div>
+                      <Select value={t.status} onValueChange={(v) => doTaskStatus(t.id, v)}>
+                        <SelectTrigger className="rounded-full h-8 w-32 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Open</SelectItem>
+                          <SelectItem value="in_progress">In progress</SelectItem>
+                          <SelectItem value="done">Done</SelectItem>
+                          <SelectItem value="dismissed">Dismissed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Claim Requests */}
+            {m8Claims.length > 0 && (
+              <div className="rounded-3xl border bg-white p-6" data-testid="m8-claims-panel">
+                <div className="flex items-center gap-2 mb-4">
+                  <ShieldCheck className="size-5 text-emerald-600" />
+                  <h3 className="font-semibold">Host Claim Requests</h3>
+                  <span className="text-xs text-muted-foreground">({m8Claims.length})</span>
+                </div>
+                <div className="space-y-3">
+                  {m8Claims.map(c => (
+                    <div key={c.id} className="rounded-2xl border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-sm">{c.name} <span className="text-xs text-muted-foreground">· {c.businessRole}</span></div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {c.email} · {c.phone} · {new Date(c.createdAt).toLocaleDateString()}
+                          </div>
+                          {(c.identityProofUrl || c.businessProofUrl) && (
+                            <div className="mt-1 flex gap-3 text-xs">
+                              {c.identityProofUrl && (
+                                <a href={c.identityProofUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Identity proof</a>
+                              )}
+                              {c.businessProofUrl && (
+                                <a href={c.businessProofUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">Business proof</a>
+                              )}
+                            </div>
+                          )}
+                          {c.message && <div className="mt-2 text-sm text-charcoal/70">{c.message}</div>}
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-full capitalize ${
+                          c.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                          c.status === 'rejected' ? 'bg-rose-100 text-rose-700' :
+                          c.status === 'suspended' ? 'bg-gray-200 text-gray-700' :
+                          c.status === 'info_requested' ? 'bg-sky-100 text-sky-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>{c.status?.replace('_',' ') || 'pending'}</span>
+                      </div>
+
+                      {c.status === 'pending' || c.status === 'info_requested' ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button size="sm" className="rounded-full bg-emerald-600 hover:bg-emerald-700" onClick={() => doClaimAction(c.id, 'approve')} disabled={m8Busy} data-testid="m8-claim-approve">
+                            <CheckCircle2 className="size-3.5 mr-1" /> Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="rounded-full text-rose-700 border-rose-200" onClick={() => doClaimAction(c.id, 'reject')} disabled={m8Busy} data-testid="m8-claim-reject">
+                            <XCircle className="size-3.5 mr-1" /> Reject
+                          </Button>
+                          <Button size="sm" variant="outline" className="rounded-full" onClick={() => doClaimAction(c.id, 'request_info')} disabled={m8Busy} data-testid="m8-claim-info">
+                            <Info className="size-3.5 mr-1" /> Request Info
+                          </Button>
+                          <Button size="sm" variant="outline" className="rounded-full" onClick={() => doClaimAction(c.id, 'suspend')} disabled={m8Busy} data-testid="m8-claim-suspend">
+                            <PauseCircle className="size-3.5 mr-1" /> Suspend
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Photos */}
             {business.images && business.images.length > 1 && (
