@@ -188,7 +188,7 @@ function BusinessProfileInner() {
   }
 
   return (
-    <div className="min-h-screen bg-secondary/20">
+    <div className="min-h-screen bg-secondary/20 pt-20 lg:pt-24">
       <Navbar />
       <div className="container max-w-7xl mx-auto px-4 py-8">
         {/* Header */}

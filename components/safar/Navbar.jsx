@@ -73,6 +73,14 @@ export default function Navbar({ transparent = false }) {
 
   // Filter navigation based on user role
   const getVisibleNavItems = () => {
+    // Admin/Super Admin users: Show ONLY admin navigation
+    if (user?.role === 'admin' || user?.role === 'super_admin') {
+      return [
+        { href: '/admin/marketplace/dashboard', label: 'Dashboard' }
+      ];
+    }
+
+    // Customer navigation (for travelers, hosts, and guests)
     const baseNav = [
       { href: '/explore?cat=all',         label: 'Stays' },
       { href: '/explore?cat=experience',  label: 'Experiences' },
@@ -88,7 +96,7 @@ export default function Navbar({ transparent = false }) {
     }
 
     // Add role-specific items
-    if (user?.role === 'traveler' || user?.role === 'admin' || user?.role === 'super_admin') {
+    if (user?.role === 'traveler') {
       baseNav.push({ href: '/dashboard/traveler/bookings', label: 'My Bookings' });
     }
 

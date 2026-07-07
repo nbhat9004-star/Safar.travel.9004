@@ -1,7 +1,25 @@
+'use client';
 import Link from 'next/link';
 import { Sparkles, Instagram, Twitter, Facebook, Mail, MapPin } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 export default function Footer() {
+  const { user } = useAuth();
+  
+  // Minimal footer for admin users
+  if (user?.role === 'admin' || user?.role === 'super_admin') {
+    return (
+      <footer className="relative mt-12 border-t bg-white">
+        <div className="container relative py-6 text-center">
+          <div className="text-sm text-muted-foreground font-medium">
+            Safar Curated
+          </div>
+        </div>
+      </footer>
+    );
+  }
+  
+  // Full public footer for customers
   return (
     <footer className="relative mt-24 bg-charcoal text-white/80 overflow-hidden">
       <div className="aurora opacity-40" />
