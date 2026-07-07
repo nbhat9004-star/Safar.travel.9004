@@ -3872,6 +3872,291 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ jobs: records, total, limit, skip });
   }
 
+  // ========== PARTNERSHIP CRM & COMMUNICATION CENTER (MODULE 5) ==========
+  
+  // GET /api/marketplace/crm/dashboard - CRM Dashboard Stats
+  if (path === '/marketplace/crm/dashboard' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const listings = await getCollection('listings');
+    
+    const [
+      total,
+      draft,
+      claimed,
+      unclaimed,
+      verified,
+      contacted,
+      activePartners
+    ] = await Promise.all([
+      listings.countDocuments({ importSource: 'google_places' }),
+      listings.countDocuments({ status: 'draft' }),
+      listings.countDocuments({ hostId: { $ne: null } }),
+      listings.countDocuments({ hostId: null }),
+      listings.countDocuments({ 'crmData.verificationStatus': 'verified' }),
+      listings.countDocuments({ 'crmData.pipelineStage': { $in: ['contacted', 'interested', 'meeting_scheduled'] } }),
+      listings.countDocuments({ 'crmData.pipelineStage': 'live_partner' })
+    ]);
+    
+    // Get today's contacts
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const contactedToday = await listings.countDocuments({
+      'crmData.lastContactDate': { $gte: today }
+    });
+    
+    // Get upcoming follow-ups
+    const followups = await getCollection('mpFollowUps');
+    const upcomingFollowups = await followups.countDocuments({
+      followUpDate: { $gte: new Date() },
+      completed: false
+    });
+    
+    return ok({
+      stats: {
+        total,
+        draft,
+        claimed,
+        unclaimed,
+        verified,
+        contacted,
+        contactedToday,
+        upcomingFollowups,
+        activePartners
+      }
+    });
+  }
+  
+  // GET /api/marketplace/crm/businesses - List businesses with filters
+  if (path === '/marketplace/crm/businesses' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const limit = parseInt(url.searchParams.get('limit') || '20');
+    const skip = (page - 1) * limit;
+    
+    const search = url.searchParams.get('search') || '';
+    const category = url.searchParams.get('category') || '';
+    const status = url.searchParams.get('status') || '';
+    const pipelineStage = url.searchParams.get('pipelineStage') || '';
+    const claimed = url.searchParams.get('claimed') || '';
+    const city = url.searchParams.get('city') || '';
+    
+    const query = { importSource: 'google_places' };
+    
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { location: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (category) query.category = category;
+    if (status) query.status = status;
+    if (pipelineStage) query['crmData.pipelineStage'] = pipelineStage;
+    if (claimed === 'true') query.hostId = { $ne: null };
+    if (claimed === 'false') query.hostId = null;
+    if (city) query.city = { $regex: city, $options: 'i' };
+    
+    const listings = await getCollection('listings');
+    const total = await listings.countDocuments(query);
+    const businesses = await listings.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+    
+    return ok({ businesses, total, page, limit });
+  }
+  
+  // GET /api/marketplace/crm/business/:id - Get business profile
+  if (path.match(/^\/marketplace\/crm\/business\/([^/]+)$/) && method === 'GET') {
+    const businessId = path.match(/^\/marketplace\/crm\/business\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const listings = await getCollection('listings');
+    const business = await listings.findOne({ id: businessId });
+    
+    if (!business) return err('Business not found', 404);
+    
+    // Get timeline
+    const timeline = await getCollection('mpTimeline');
+    const events = await timeline.find({ businessId })
+      .sort({ timestamp: -1 })
+      .limit(50)
+      .toArray();
+    
+    // Get notes
+    const notes = await getCollection('mpNotes');
+    const businessNotes = await notes.find({ businessId })
+      .sort({ createdAt: -1 })
+      .toArray();
+    
+    // Get follow-ups
+    const followups = await getCollection('mpFollowUps');
+    const upcomingFollowups = await followups.find({
+      businessId,
+      completed: false
+    }).sort({ followUpDate: 1 }).toArray();
+    
+    return ok({ business, timeline: events, notes: businessNotes, followups: upcomingFollowups });
+  }
+  
+  // POST /api/marketplace/crm/business/:id/note - Add note
+  if (path.match(/^\/marketplace\/crm\/business\/([^/]+)\/note$/) && method === 'POST') {
+    const businessId = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/note$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { content } = await readBody(request);
+    if (!content) return err('Note content is required');
+    
+    const notes = await getCollection('mpNotes');
+    const noteId = uuid();
+    await notes.insertOne({
+      id: noteId,
+      businessId,
+      content,
+      author: me.name,
+      authorId: me.id,
+      createdAt: new Date()
+    });
+    
+    // Log in timeline
+    const timeline = await getCollection('mpTimeline');
+    await timeline.insertOne({
+      id: uuid(),
+      businessId,
+      action: 'Note Added',
+      user: me.name,
+      userId: me.id,
+      timestamp: new Date(),
+      details: { notePreview: content.substring(0, 50) }
+    });
+    
+    return ok({ noteId, message: 'Note added successfully' });
+  }
+  
+  // PUT /api/marketplace/crm/business/:id/status - Update pipeline stage
+  if (path.match(/^\/marketplace\/crm\/business\/([^/]+)\/status$/) && method === 'PUT') {
+    const businessId = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/status$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { pipelineStage, verificationStatus } = await readBody(request);
+    
+    const listings = await getCollection('listings');
+    const updateData = { updatedAt: new Date() };
+    
+    if (pipelineStage) {
+      updateData['crmData.pipelineStage'] = pipelineStage;
+      updateData['crmData.lastStatusChange'] = new Date();
+    }
+    if (verificationStatus) {
+      updateData['crmData.verificationStatus'] = verificationStatus;
+    }
+    
+    await listings.updateOne({ id: businessId }, { $set: updateData });
+    
+    // Log in timeline
+    const timeline = await getCollection('mpTimeline');
+    await timeline.insertOne({
+      id: uuid(),
+      businessId,
+      action: pipelineStage ? 'Status Changed' : 'Verification Updated',
+      user: me.name,
+      userId: me.id,
+      timestamp: new Date(),
+      details: { pipelineStage, verificationStatus }
+    });
+    
+    return ok({ message: 'Status updated successfully' });
+  }
+  
+  // POST /api/marketplace/crm/business/:id/followup - Schedule follow-up
+  if (path.match(/^\/marketplace\/crm\/business\/([^/]+)\/followup$/) && method === 'POST') {
+    const businessId = path.match(/^\/marketplace\/crm\/business\/([^/]+)\/followup$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { followUpDate, reminder, priority, note } = await readBody(request);
+    
+    const followups = await getCollection('mpFollowUps');
+    const followupId = uuid();
+    await followups.insertOne({
+      id: followupId,
+      businessId,
+      followUpDate: new Date(followUpDate),
+      reminder,
+      priority: priority || 'medium',
+      note,
+      assignedTo: me.id,
+      assignedToName: me.name,
+      completed: false,
+      createdAt: new Date()
+    });
+    
+    // Log in timeline
+    const timeline = await getCollection('mpTimeline');
+    await timeline.insertOne({
+      id: uuid(),
+      businessId,
+      action: 'Follow-up Scheduled',
+      user: me.name,
+      userId: me.id,
+      timestamp: new Date(),
+      details: { followUpDate, priority }
+    });
+    
+    return ok({ followupId, message: 'Follow-up scheduled' });
+  }
+  
+  // GET /api/marketplace/crm/followups - Get upcoming follow-ups
+  if (path === '/marketplace/crm/followups' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const followups = await getCollection('mpFollowUps');
+    const upcoming = await followups.find({
+      followUpDate: { $gte: new Date() },
+      completed: false
+    }).sort({ followUpDate: 1 }).limit(20).toArray();
+    
+    // Get business names
+    const listings = await getCollection('listings');
+    for (const followup of upcoming) {
+      const business = await listings.findOne({ id: followup.businessId }, { projection: { title: 1 } });
+      followup.businessName = business?.title || 'Unknown';
+    }
+    
+    return ok({ followups: upcoming });
+  }
+  
+  // GET /api/marketplace/crm/templates - Get email templates
+  if (path === '/marketplace/crm/templates' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const templates = {
+      partnership_invitation: {
+        subject: 'Partnership Opportunity with Safar Curated',
+        body: 'Dear {businessName},\n\nWe discovered your business on Google and would love to feature you on Safar Curated...'
+      },
+      claim_listing: {
+        subject: 'Claim Your Listing on Safar Curated',
+        body: 'Hello {businessName},\n\nWe have created a listing for your business on Safar Curated...'
+      },
+      welcome_partner: {
+        subject: 'Welcome to Safar Curated!',
+        body: 'Dear Partner,\n\nWelcome to Safar Curated! We are excited to have you on board...'
+      }
+    };
+    
+    return ok({ templates });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });
