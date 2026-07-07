@@ -3319,6 +3319,72 @@ backend:
           
           NO CRITICAL ISSUES FOUND. ALL ENDPOINTS WORKING AS DESIGNED.
           MODULE 8 IS PRODUCTION-READY.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ MODULE 8 BACKEND RE-VERIFICATION COMPLETE - ALL TESTS PASSED (27/27 - 100% SUCCESS RATE)
+          
+          Test file: /app/module8_backend_test.py
+          Test date: 2026-07-07 (Re-verification run)
+          Super Admin: founder@safarcurated.com / SuperAdmin@2025
+          Test listing: l6 (existing approved listing)
+          Base URL: http://localhost:3000
+          
+          RE-VERIFICATION RESULTS:
+          ✅ Link Generation & Management: 5/5 PASSED
+          ✅ Public Token Resolve: 3/3 PASSED
+          ✅ Review Submit (Public): 5/5 PASSED
+          ✅ Claim Submit + Admin Actions: 5/5 PASSED
+          ✅ Publish / Archive: 2/2 PASSED
+          ✅ Revoke / Regenerate / Expiry: 3/3 PASSED
+          ✅ Invite Host: 1/1 PASSED
+          ✅ Regression Spot-Check: 3/3 PASSED
+          
+          TOTAL: 27/27 TESTS PASSED (100% SUCCESS RATE)
+          
+          DETAILED TEST RESULTS:
+          ✅ Test 1: POST /api/marketplace/crm/business/:id/generate-link (review) - PASS
+          ✅ Test 2: POST /api/marketplace/crm/business/:id/generate-link (presentation) - PASS
+          ✅ Test 3: GET /api/marketplace/crm/business/:id/links - PASS
+          ✅ Test 4: POST generate-link without auth returns 401 - PASS
+          ✅ Test 4b: POST generate-link with traveler auth returns 403 - PASS
+          ✅ Test 5: GET /api/public/token/<review_token> - PASS
+          ✅ Test 6: GET /api/public/token/<present_token> - PASS
+          ✅ Test 7: GET /api/public/token/bad-token returns 404 - PASS
+          ✅ Test 8: POST /api/public/review/<token>/submit - PASS (3 tasks created)
+          ✅ Test 9: POST review to presentation token returns 403 - PASS
+          ✅ Test 10: GET /api/marketplace/crm/business/:id/change-requests - PASS
+          ✅ Test 11: GET /api/marketplace/crm/business/:id/tasks - PASS (3 tasks found)
+          ✅ Test 12: POST /api/marketplace/crm/tasks/:id/status - PASS
+          ✅ Test 13: POST /api/public/claim/<token>/submit - PASS
+          ✅ Test 14: Claim validation - missing fields return 400 - PASS
+          ✅ Test 15: GET /api/marketplace/crm/claims - PASS
+          ✅ Test 16: POST /api/marketplace/crm/claims/:id/action (request_info) - PASS
+          ✅ Test 17: POST /api/marketplace/crm/claims/:id/action (approve) - PASS
+          ✅ Test 18: POST /api/marketplace/crm/business/:id/publish - PASS
+          ✅ Test 19: POST /api/marketplace/crm/business/:id/archive - PASS
+          ✅ Test 20: POST /api/marketplace/crm/business/:id/revoke-link - PASS
+          ✅ Test 21: POST /api/marketplace/crm/business/:id/regenerate-link - PASS
+          ✅ Test 22: GET /api/public/token/<expired_token> returns 410 - PASS
+          ✅ Test 23: POST /api/marketplace/crm/business/:id/invite-host - PASS
+          ✅ Test 24: Regression - GET /api/auth/me - PASS
+          ✅ Test 25: Regression - GET /api/listings - PASS (8 listings)
+          ✅ Test 26: Regression - GET /api/marketplace/crm/dashboard - PASS
+          
+          VERIFICATION CONFIRMED:
+          ✅ All 27 backend tests still passing after re-verification
+          ✅ No regressions detected
+          ✅ All Module 8 endpoints functioning correctly
+          ✅ Super Admin authentication working (founder@safarcurated.com)
+          ✅ Public endpoints accessible without auth
+          ✅ Token lifecycle (generate, resolve, revoke, regenerate, expiry) working
+          ✅ Review submission and task auto-creation working
+          ✅ Claim submission and approval workflow working
+          ✅ Publish/Archive actions working
+          ✅ MongoDB collections (mpTokens, mpClaims, mpChangeRequests, mpTasks) verified
+          ✅ Regression tests passed (auth, listings, CRM dashboard)
+          
+          NO FAILURES. MODULE 8 BACKEND IS STABLE AND PRODUCTION-READY.
 
 
 

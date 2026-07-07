@@ -242,8 +242,8 @@ async def main():
                         title_text = await title.inner_text()
                         print(f"✅ Listing title visible: {title_text[:50]}...")
                     
-                    # Verify "Claim this Listing" link - FIXED SELECTOR
-                    claim_link = await present_page.locator('a[href*="/review/"][href*="#claim"]').first
+                    # Verify "Claim this Listing" link - FIXED SELECTOR (Locator is not awaitable)
+                    claim_link = present_page.locator('a[href*="/review/"][href*="#claim"]').first
                     if await claim_link.count() > 0:
                         href = await claim_link.get_attribute("href")
                         if href and '#claim' in href:
@@ -252,7 +252,7 @@ async def main():
                             print(f"⚠️  Claim link href: {href}")
                     else:
                         # Try alternative selector
-                        claim_link_alt = await present_page.get_by_role("link", name="Claim this Listing")
+                        claim_link_alt = present_page.get_by_role("link", name="Claim this Listing")
                         if await claim_link_alt.count() > 0:
                             print("✅ Claim link found via role selector")
                         else:
