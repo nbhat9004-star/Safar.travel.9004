@@ -4134,6 +4134,220 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ followups: upcoming });
   }
   
+  // ========== COMMUNICATION TEMPLATES MANAGEMENT (MODULE 6) ==========
+  
+  // GET /api/marketplace/templates - List all templates with filters
+  if (path === '/marketplace/templates' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const search = url.searchParams.get('search') || '';
+    const category = url.searchParams.get('category') || '';
+    const type = url.searchParams.get('type') || '';
+    
+    const query = {};
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { subject: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (category) query.category = category;
+    if (type) query.type = type;
+    
+    const templates = await getCollection('mpTemplates');
+    const results = await templates.find(query).sort({ createdAt: -1 }).toArray();
+    
+    return ok({ templates: results });
+  }
+  
+  // GET /api/marketplace/templates/:id - Get single template
+  if (path.match(/^\/marketplace\/templates\/([^/]+)$/) && method === 'GET') {
+    const templateId = path.match(/^\/marketplace\/templates\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const templates = await getCollection('mpTemplates');
+    const template = await templates.findOne({ id: templateId });
+    
+    if (!template) return err('Template not found', 404);
+    
+    return ok({ template });
+  }
+  
+  // POST /api/marketplace/templates - Create template
+  if (path === '/marketplace/templates' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { name, category, type, subject, body, enabled } = await readBody(request);
+    
+    if (!name) return err('Template name is required');
+    if (!category) return err('Category is required');
+    if (!type) return err('Type is required (email or whatsapp)');
+    if (!body) return err('Template body is required');
+    if (type === 'email' && !subject) return err('Subject is required for email templates');
+    
+    const templates = await getCollection('mpTemplates');
+    const templateId = uuid();
+    
+    await templates.insertOne({
+      id: templateId,
+      name,
+      category,
+      type,
+      subject: subject || null,
+      body,
+      enabled: enabled !== false,
+      createdBy: me.id,
+      createdByName: me.name,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    await logMarketplaceAudit(me, 'Template Created', {
+      templateId,
+      name,
+      type
+    }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+    
+    return ok({ templateId, message: 'Template created successfully' });
+  }
+  
+  // PUT /api/marketplace/templates/:id - Update template
+  if (path.match(/^\/marketplace\/templates\/([^/]+)$/) && method === 'PUT') {
+    const templateId = path.match(/^\/marketplace\/templates\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const { name, category, subject, body, enabled } = await readBody(request);
+    
+    const templates = await getCollection('mpTemplates');
+    const existing = await templates.findOne({ id: templateId });
+    
+    if (!existing) return err('Template not found', 404);
+    
+    const updateData = {
+      updatedAt: new Date(),
+      updatedBy: me.id,
+      updatedByName: me.name
+    };
+    
+    if (name) updateData.name = name;
+    if (category) updateData.category = category;
+    if (subject !== undefined) updateData.subject = subject;
+    if (body) updateData.body = body;
+    if (enabled !== undefined) updateData.enabled = enabled;
+    
+    await templates.updateOne({ id: templateId }, { $set: updateData });
+    
+    await logMarketplaceAudit(me, 'Template Updated', {
+      templateId,
+      name: name || existing.name
+    }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+    
+    return ok({ message: 'Template updated successfully' });
+  }
+  
+  // DELETE /api/marketplace/templates/:id - Delete template
+  if (path.match(/^\/marketplace\/templates\/([^/]+)$/) && method === 'DELETE') {
+    const templateId = path.match(/^\/marketplace\/templates\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const templates = await getCollection('mpTemplates');
+    const template = await templates.findOne({ id: templateId });
+    
+    if (!template) return err('Template not found', 404);
+    
+    await templates.deleteOne({ id: templateId });
+    
+    await logMarketplaceAudit(me, 'Template Deleted', {
+      templateId,
+      name: template.name
+    }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+    
+    return ok({ message: 'Template deleted successfully' });
+  }
+  
+  // POST /api/marketplace/templates/:id/duplicate - Duplicate template
+  if (path.match(/^\/marketplace\/templates\/([^/]+)\/duplicate$/) && method === 'POST') {
+    const templateId = path.match(/^\/marketplace\/templates\/([^/]+)\/duplicate$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const templates = await getCollection('mpTemplates');
+    const original = await templates.findOne({ id: templateId });
+    
+    if (!original) return err('Template not found', 404);
+    
+    const newTemplateId = uuid();
+    const duplicate = {
+      ...original,
+      _id: undefined,
+      id: newTemplateId,
+      name: `${original.name} (Copy)`,
+      createdBy: me.id,
+      createdByName: me.name,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    await templates.insertOne(duplicate);
+    
+    await logMarketplaceAudit(me, 'Template Duplicated', {
+      originalId: templateId,
+      newId: newTemplateId,
+      name: duplicate.name
+    }, request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'));
+    
+    return ok({ templateId: newTemplateId, message: 'Template duplicated successfully' });
+  }
+  
+  // POST /api/marketplace/templates/:id/preview - Preview template with sample data
+  if (path.match(/^\/marketplace\/templates\/([^/]+)\/preview$/) && method === 'POST') {
+    const templateId = path.match(/^\/marketplace\/templates\/([^/]+)\/preview$/)[1];
+    const me = await getCurrentUser(request);
+    const g = requireSuperAdmin(me); if (!g.ok) return err(g.error, g.status);
+    
+    const templates = await getCollection('mpTemplates');
+    const template = await templates.findOne({ id: templateId });
+    
+    if (!template) return err('Template not found', 404);
+    
+    // Sample data for preview
+    const sampleData = {
+      host_name: 'Rahul Kumar',
+      business_name: 'Kashmir Paradise Hotel',
+      listing_title: 'Luxury Houseboat on Dal Lake',
+      booking_id: 'BK-2026-001',
+      customer_name: 'Priya Sharma',
+      city: 'Srinagar',
+      website_name: 'Safar Curated',
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString()
+    };
+    
+    // Replace variables in body
+    let previewBody = template.body;
+    let previewSubject = template.subject || '';
+    
+    Object.keys(sampleData).forEach(key => {
+      const regex = new RegExp(`{{${key}}}`, 'g');
+      previewBody = previewBody.replace(regex, sampleData[key]);
+      previewSubject = previewSubject.replace(regex, sampleData[key]);
+    });
+    
+    return ok({ 
+      preview: {
+        subject: previewSubject,
+        body: previewBody
+      },
+      sampleData
+    });
+  }
+  
+  // Legacy endpoint for backward compatibility
   // GET /api/marketplace/crm/templates - Get email templates
   if (path === '/marketplace/crm/templates' && method === 'GET') {
     const me = await getCurrentUser(request);

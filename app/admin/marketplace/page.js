@@ -110,6 +110,12 @@ function MarketplaceInner() {
                   Partnership CRM
                 </Button>
               </Link>
+              <Link href="/admin/marketplace/templates">
+                <Button variant="outline" className="rounded-full">
+                  <Activity className="size-4 mr-2" />
+                  Templates
+                </Button>
+              </Link>
               <Link href="/admin/marketplace/audit-logs">
                 <Button variant="outline" className="rounded-full">
                   <Activity className="size-4 mr-2" />
