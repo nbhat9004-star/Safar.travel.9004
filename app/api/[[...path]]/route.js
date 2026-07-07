@@ -3553,19 +3553,90 @@ Return ONLY the JSON, no other text.`;
           continue;
         }
         
-        // Create draft listing
+        // Create draft listing with AI-generated content
         const listingId = uuid();
         const now = new Date();
+        
+        // Parse address components
+        const addressParts = business.address ? business.address.split(',').map(p => p.trim()) : [];
+        const city = addressParts.length >= 2 ? addressParts[addressParts.length - 3] || addressParts[0] : '';
+        const state = addressParts.length >= 2 ? addressParts[addressParts.length - 2] : '';
+        const country = addressParts.length >= 1 ? addressParts[addressParts.length - 1] : '';
+        
+        // Generate AI content using Gemini (if EMERGENT_LLM_KEY is available)
+        let aiContent = {
+          seoTitle: business.name,
+          metaDescription: `${business.name} - ${business.address}`,
+          description: `${business.name} located at ${business.address}. Imported from Google Places.`,
+          shortDescription: business.name,
+          amenities: [],
+          suggestedTags: [],
+          slug: business.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+        };
+        
+        if (process.env.EMERGENT_LLM_KEY) {
+          try {
+            const prompt = `Generate SEO-optimized content for this business:
+Name: ${business.name}
+Address: ${business.address}
+Category: ${business.category}
+Rating: ${business.rating || 'N/A'}
+
+Generate a JSON response with:
+1. seoTitle (under 60 chars, include location)
+2. metaDescription (under 160 chars, SEO optimized)
+3. description (200-300 words, original, engaging, highlight features)
+4. shortDescription (1-2 sentences)
+5. amenities (array of 5-10 amenities this type of business likely offers)
+6. suggestedTags (array of 5-8 relevant tags)
+
+Return ONLY valid JSON, no markdown.`;
+            
+            const geminiResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + process.env.EMERGENT_LLM_KEY, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+              })
+            });
+            
+            if (geminiResponse.ok) {
+              const geminiData = await geminiResponse.json();
+              const generatedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+              
+              if (jsonMatch) {
+                const generated = JSON.parse(jsonMatch[0]);
+                aiContent = {
+                  seoTitle: generated.seoTitle || aiContent.seoTitle,
+                  metaDescription: generated.metaDescription || aiContent.metaDescription,
+                  description: generated.description || aiContent.description,
+                  shortDescription: generated.shortDescription || aiContent.shortDescription,
+                  amenities: Array.isArray(generated.amenities) ? generated.amenities : [],
+                  suggestedTags: Array.isArray(generated.suggestedTags) ? generated.suggestedTags : [],
+                  slug: aiContent.slug
+                };
+              }
+            }
+          } catch (aiError) {
+            console.error('AI content generation failed:', aiError);
+            // Continue with basic content if AI fails
+          }
+        }
         
         const listing = {
           id: listingId,
           title: business.name,
-          description: `${business.name} located at ${business.address}. Imported from Google Places.`,
+          description: aiContent.description,
+          shortDescription: aiContent.shortDescription,
           category: business.category === 'lodging' ? 'stay' : 
                    business.category === 'restaurant' || business.category === 'cafe' ? 'experience' :
                    business.category === 'tourist_attraction' ? 'tour' : 'experience',
           subcategory: business.category,
           location: business.address,
+          city: city,
+          state: state,
+          country: country,
           coordinates: business.coordinates,
           googlePlaceId: business.placeId,
           googleMapsUrl: business.googleMapsUrl,
@@ -3577,24 +3648,57 @@ Return ONLY the JSON, no other text.`;
           rating: business.rating,
           reviews: business.reviewCount,
           openingHours: business.openingHours,
+          businessStatus: business.businessStatus || 'OPERATIONAL',
           images: business.photos.map(p => p.url),
           price: 0,
-          amenities: [],
+          amenities: aiContent.amenities,
           services: [],
+          tags: aiContent.suggestedTags,
+          slug: aiContent.slug,
+          seo: {
+            title: aiContent.seoTitle,
+            description: aiContent.metaDescription,
+            keywords: aiContent.suggestedTags.join(', ')
+          },
           status: 'draft',
           featured: false,
           isPublic: false,
           isDraft: true,
+          aiEnhancementPending: true, // Flag for future AI enhancements
           importSource: 'google_places',
           hostId: null,
           hostName: 'Unclaimed',
           createdAt: now,
           updatedAt: now,
           importedBy: job.createdBy,
-          importJobId: jobId
+          importJobId: jobId,
+          importMetadata: {
+            importDate: now,
+            source: 'google_places',
+            originalData: {
+              placeId: business.placeId,
+              category: business.category,
+              rating: business.rating,
+              reviewCount: business.reviewCount
+            }
+          }
         };
         
         await listings.insertOne(listing);
+        
+        // Store import history
+        const importHistory = await getCollection('mpImportHistory');
+        await importHistory.insertOne({
+          id: uuid(),
+          listingId: listingId,
+          businessName: business.name,
+          googlePlaceId: business.placeId,
+          importDate: now,
+          importedBy: job.createdBy,
+          jobId: jobId,
+          source: 'google_places',
+          status: 'success'
+        });
         
         // Update job progress
         await jobs.updateOne({ id: jobId }, {
