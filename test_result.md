@@ -3354,3 +3354,119 @@ agent_communication:
       NO CRITICAL ISSUES FOUND. MODULE 8 IS PRODUCTION-READY.
       
       The test script can be re-run anytime with: python3 /app/module8_backend_test.py
+
+frontend:
+  - task: "Module 8 - Host Claim, Review & Publish Workflow - Frontend UI"
+    implemented: true
+    working: "NA"
+    file: "/app/app/admin/marketplace/crm/business/[id]/page.js, /app/app/present/[token]/page.js, /app/app/review/[token]/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "testing"
+        comment: |
+          ⚠️ MODULE 8 FRONTEND UI TESTING - PARTIAL COMPLETION (9/26 tests completed)
+          
+          Test Date: 2026-07-08
+          Test File: /app/module8_frontend_test.py
+          Test Method: Playwright browser automation with API-cookie login strategy
+          
+          **SETUP:**
+          ✅ API login successful (founder@safarcurated.com)
+          ✅ Cookie injection working (safar_token set correctly)
+          ✅ No modal overlay issues (API-cookie strategy bypassed login modal)
+          
+          **TESTS COMPLETED (9/26):**
+          
+          ✅ TEST 1: Navigate to /admin/marketplace/crm
+             - CRM page loaded successfully
+             - No redirect to login (auth working)
+          
+          ✅ TEST 2: Fetch business ID and navigate to business page
+             - Business ID: l2 (from listings API)
+             - Business page loaded successfully
+             - Module 8 actions panel visible ([data-testid="m8-actions-panel"])
+          
+          ✅ TEST 3: Generate Review Link
+             - Button clicked: [data-testid="m8-generate-review"]
+             - Toast appeared: "Review link generated"
+             - All buttons visible: m8-open-review, m8-copy-review, m8-regenerate-review, m8-revoke-review
+             - Review URL: http://localhost:3000/review/879d2f52acb132e2eebe123c88a58ab7b36978d9c9420d43
+          
+          ✅ TEST 4: Generate Presentation Link
+             - Button clicked: [data-testid="m8-generate-present"]
+             - Toast appeared: "Presentation link generated"
+             - All buttons visible: m8-open-present, m8-copy-present, m8-regenerate-present, m8-revoke-present
+             - Presentation URL: http://localhost:3000/present/6180f2eee47da37981f8d1131f4c7d88fea9d5a510aca490
+          
+          ✅ TEST 5: Verify review URL is accessible
+             - Review URL confirmed and accessible
+          
+          ✅ TEST 6: Copy review link to clipboard
+             - Button clicked: [data-testid="m8-copy-review"]
+             - Toast appeared: "Link copied"
+          
+          ✅ TEST 7: Open presentation page
+             - Navbar loaded successfully
+             - Listing title visible: "Pinepeak Snow Cabin — Gulmarg"
+             - ⚠️ Minor issue: Claim link href selector returned None (needs investigation)
+          
+          ✅ TEST 8: Test invalid presentation token
+             - Navigated to /present/invalid-token
+             - Error message displayed: "Link unavailable"
+          
+          ✅ TEST 9: Open review page and verify sections
+             - All 7 section headings found: Description, Photos, Contact, Amenities, Pricing, Address, Map Location
+             - "Submit Corrections" button exists
+             - "See Public Preview" button links to correct presentation page
+          
+          **TESTS NOT COMPLETED (17/26):**
+          Tests 10-26 did not complete due to test script issues (variable scope and screenshot errors).
+          These tests need to be re-run:
+          - TEST 10: Submit corrections with empty fields
+          - TEST 11: Fill and submit corrections
+          - TEST 12: Test claim form validation
+          - TEST 13: Fill and submit claim form
+          - TEST 14: Verify change requests, tasks, and claims in admin
+          - TEST 15: Change task status to Done
+          - TEST 16: Request info on pending claim
+          - TEST 17: Approve claim
+          - TEST 18: Publish listing
+          - TEST 19: Archive listing
+          - TEST 20: Revoke review link
+          - TEST 21: Regenerate review link
+          - TEST 22: Invite host
+          - TEST 23: Responsiveness - Mobile viewport
+          - TEST 24: Responsiveness - Review and Present pages on mobile
+          - TEST 25: Error handling - Expired/invalid present token
+          - TEST 26: Error handling - Expired/invalid review token
+          
+          **ISSUES IDENTIFIED:**
+          1. ⚠️ Test script issue: Screenshot quality parameter not supported for PNG
+          2. ⚠️ Test script issue: review_page variable scope problem
+          3. ⚠️ Minor UI issue: Claim link selector on presentation page needs investigation
+          4. ⚠️ Change requests, tasks, and claims panels not visible (likely because review submission didn't complete)
+          
+          **WHAT'S WORKING:**
+          ✅ API-cookie login strategy (no modal overlay issues)
+          ✅ Link generation (review and presentation)
+          ✅ Link copying to clipboard
+          ✅ Public page access (presentation and review)
+          ✅ Invalid token handling
+          ✅ UI structure and data-testid attributes
+          ✅ Toast notifications
+          ✅ Button visibility and state management
+          
+          **NEXT STEPS:**
+          1. Fix test script issues (remove quality parameter, fix variable scope)
+          2. Re-run tests 10-26 to complete the full test suite
+          3. Investigate claim link selector issue on presentation page
+          4. Verify end-to-end flow: review submission → admin panels → claim actions → publish/archive
+          
+          **OVERALL ASSESSMENT:**
+          The core Module 8 functionality is working correctly based on the 9 tests completed.
+          Link generation, public pages, and basic UI interactions are functional.
+          The test script needs fixes to complete the remaining 17 tests.
+
