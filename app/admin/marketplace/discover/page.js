@@ -383,64 +383,65 @@ function DiscoverInner() {
                           )}
                         </div>
                       
-                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                        {business.rating && (
-                          <div className="flex items-center gap-1">
-                            <Star className="size-4 fill-amber-400 text-amber-400" />
-                            <span className="font-medium">{business.rating}</span>
-                            <span>({business.reviewCount} reviews)</span>
-                          </div>
-                        )}
-                        <span className="px-2 py-1 rounded-full bg-secondary text-xs font-medium capitalize">
-                          {business.category.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 space-y-1 text-sm">
-                        <div className="flex items-start gap-2">
-                          <MapPin className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                          <span className="text-muted-foreground">{business.address}</span>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                          {business.rating && (
+                            <div className="flex items-center gap-1">
+                              <Star className="size-4 fill-amber-400 text-amber-400" />
+                              <span className="font-medium">{business.rating}</span>
+                              <span>({business.reviewCount} reviews)</span>
+                            </div>
+                          )}
+                          <span className="px-2 py-1 rounded-full bg-secondary text-xs font-medium capitalize">
+                            {business.category.replace(/_/g, ' ')}
+                          </span>
                         </div>
-                        
-                        {business.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="size-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">{business.phone}</span>
+
+                        <div className="mt-3 space-y-1 text-sm">
+                          <div className="flex items-start gap-2">
+                            <MapPin className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <span className="text-muted-foreground">{business.address}</span>
                           </div>
-                        )}
-                        
-                        {business.website && (
-                          <div className="flex items-center gap-2">
-                            <Globe className="size-4 text-muted-foreground" />
-                            <a
-                              href={business.website}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald2 hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {business.website}
-                            </a>
+                          
+                          {business.phone && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="size-4 text-muted-foreground" />
+                              <span className="text-muted-foreground">{business.phone}</span>
+                            </div>
+                          )}
+                          
+                          {business.website && (
+                            <div className="flex items-center gap-2">
+                              <Globe className="size-4 text-muted-foreground" />
+                              <a
+                                href={business.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-emerald2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {business.website}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+
+                        {business.photos && business.photos.length > 0 && (
+                          <div className="mt-3 flex gap-2 overflow-x-auto">
+                            {business.photos.slice(0, 3).map((photo, idx) => (
+                              <img
+                                key={idx}
+                                src={photo.url}
+                                alt={business.name}
+                                className="size-20 rounded-lg object-cover"
+                              />
+                            ))}
                           </div>
                         )}
                       </div>
-
-                      {business.photos && business.photos.length > 0 && (
-                        <div className="mt-3 flex gap-2 overflow-x-auto">
-                          {business.photos.slice(0, 3).map((photo, idx) => (
-                            <img
-                              key={idx}
-                              src={photo.url}
-                              alt={business.name}
-                              className="size-20 rounded-lg object-cover"
-                            />
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
