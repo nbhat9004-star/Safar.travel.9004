@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Check, CreditCard, Wallet, Calendar, Users, ShieldCheck, ChevronLeft, ChevronRight, PartyPopper, Mail, Download, Loader2, AlertTriangle } from 'lucide-react';
+import { Check, CreditCard, Wallet, Calendar, Users, ShieldCheck, ChevronLeft, ChevronRight, PartyPopper, Mail, Download, Loader2, AlertTriangle, Sparkles, Zap, Coins, Star, Percent } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -75,6 +75,17 @@ function BookingContent() {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [showVerificationError, setShowVerificationError] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
+  // Module 11 — dynamic revenue rules (booking fee + online-pay discount)
+  const [revenueCfg, setRevenueCfg] = useState(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/public/rewards-config');
+        const j = await r.json();
+        if (j?.ok) setRevenueCfg(j);
+      } catch {}
+    })();
+  }, []);
   const todayStr = ymdOffset(0);
 
   // Derived values from actual state
@@ -422,25 +433,123 @@ function BookingContent() {
               </div>
             )}
 
-            {step === 2 && (
-              <div>
-                <h2 className="font-display text-2xl font-bold">Choose how to pay</h2>
-                <div className="mt-5 grid md:grid-cols-2 gap-3">
-                  {[{k:'online',i:CreditCard,t:'Pay online now',d:'Card / UPI / Net banking · Instant confirm'},{k:'arrival',i:Wallet,t:'Pay on arrival',d:'Reserve free · Pay host on check-in'}].map((o)=>{const Ico=o.i;return(
-                    <button key={o.k} onClick={()=>setPay(o.k)} className={`text-left p-5 rounded-2xl border-2 transition ${pay===o.k ? 'border-emerald-600 bg-emerald-50/40' : 'border-border hover:border-charcoal/40'}`}>
-                      <Ico className="size-6 text-emerald2" /><div className="font-display font-bold mt-3">{o.t}</div><div className="text-xs text-muted-foreground mt-1">{o.d}</div>
-                    </button>
-                  );})}
-                </div>
-                {pay==='online' && (
-                  <div className="mt-6 grid sm:grid-cols-2 gap-3">
-                    <input placeholder="Card number" className="px-4 py-3 rounded-xl border text-sm sm:col-span-2" />
-                    <input placeholder="MM / YY" className="px-4 py-3 rounded-xl border text-sm" />
-                    <input placeholder="CVC" className="px-4 py-3 rounded-xl border text-sm" />
+            {step === 2 && (() => {
+              // Module 11 — dynamic payment options driven by revenue-settings
+              const bfCfg = revenueCfg?.bookingFee || { enabled: true, mode: 'flat', flat: 99, percent: 5 };
+              const opCfg = revenueCfg?.onlinePayDiscount || { enabled: true, percent: 3 };
+              const bookingFeeAmt = bfCfg.mode === 'percent'
+                ? Math.max(bfCfg.flat || 0, Math.round((total * (bfCfg.percent || 0)) / 100))
+                : (bfCfg.flat || 99);
+              const discountPct = opCfg.enabled ? (opCfg.percent || 0) : 0;
+              const onlineDiscount = Math.round((total * discountPct) / 100);
+              const onlineFinal = total - onlineDiscount;
+              const showOptionA = bfCfg.enabled !== false;
+              return (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="size-5 text-emerald2" />
+                    <h2 className="font-display text-2xl font-bold">Secure your reservation</h2>
                   </div>
-                )}
-              </div>
-            )}
+                  <p className="text-sm text-muted-foreground mt-1">Choose the option that works best for you.</p>
+
+                  <div className="mt-6 grid md:grid-cols-2 gap-4">
+                    {/* OPTION A — Pay Booking Fee */}
+                    {showOptionA && (
+                      <button
+                        type="button"
+                        onClick={() => setPay('bookingfee')}
+                        className={`text-left p-5 md:p-6 rounded-3xl border-2 transition relative touch-manipulation ${pay==='bookingfee' ? 'border-emerald-600 bg-emerald-50/50 shadow-md' : 'border-border hover:border-emerald-300 bg-white'}`}
+                      >
+                        <div className="absolute -top-3 left-4 flex flex-wrap gap-2">
+                          <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">Most Popular</span>
+                          <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-white border border-emerald-200 text-emerald2">
+                            <Zap className="size-2.5 inline mr-1" />Instant
+                          </span>
+                        </div>
+                        <div className={`size-11 rounded-xl grid place-items-center ${pay==='bookingfee'?'bg-emerald-600 text-white':'bg-emerald-50 text-emerald2'}`}>
+                          <Wallet className="size-5" />
+                        </div>
+                        <div className="font-display font-bold text-xl mt-4">Pay Booking Fee</div>
+                        <p className="text-xs text-muted-foreground mt-1">Reserve instantly with a small booking fee.</p>
+                        <div className="mt-4 rounded-xl bg-white border p-3">
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Booking fee today</div>
+                          <div className="font-display text-3xl font-bold text-emerald2 mt-0.5">₹{bookingFeeAmt.toLocaleString('en-IN')}</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">Balance ₹{(total - bookingFeeAmt).toLocaleString('en-IN')} due at check-in</div>
+                        </div>
+                        <ul className="mt-4 space-y-1.5 text-xs">
+                          {[
+                            'Booking confirmed immediately',
+                            'Booking fee adjusted in final payment',
+                            'Refundable per cancellation policy',
+                            'Earn Safar Credits',
+                          ].map((b) => (
+                            <li key={b} className="flex items-start gap-2"><Check className="size-3.5 text-emerald-600 mt-0.5 shrink-0" /><span>{b}</span></li>
+                          ))}
+                        </ul>
+                      </button>
+                    )}
+
+                    {/* OPTION B — Pay Full Online */}
+                    <button
+                      type="button"
+                      onClick={() => setPay('online')}
+                      className={`text-left p-5 md:p-6 rounded-3xl border-2 transition relative touch-manipulation ${pay==='online' ? 'border-emerald-600 bg-emerald-50/50 shadow-md' : 'border-border hover:border-emerald-300 bg-white'}`}
+                    >
+                      <div className="absolute -top-3 left-4 flex flex-wrap gap-2">
+                        {discountPct > 0 && (
+                          <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white">
+                            <Percent className="size-2.5 inline mr-1" />Save {discountPct}%
+                          </span>
+                        )}
+                        <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-white border border-amber-200 text-amber-700">
+                          <Coins className="size-2.5 inline mr-1" />Max Credits
+                        </span>
+                      </div>
+                      <div className={`size-11 rounded-xl grid place-items-center ${pay==='online'?'bg-emerald-600 text-white':'bg-emerald-50 text-emerald2'}`}>
+                        <CreditCard className="size-5" />
+                      </div>
+                      <div className="font-display font-bold text-xl mt-4">Pay Full Online</div>
+                      <p className="text-xs text-muted-foreground mt-1">Pay the complete booking amount today.</p>
+                      <div className="mt-4 rounded-xl bg-white border p-3 text-sm space-y-1">
+                        <div className="flex justify-between text-muted-foreground"><span>Accommodation</span><span>₹{total.toLocaleString('en-IN')}</span></div>
+                        {discountPct > 0 && (
+                          <div className="flex justify-between text-amber-700 font-semibold"><span>Online payment discount ({discountPct}%)</span><span>−₹{onlineDiscount.toLocaleString('en-IN')}</span></div>
+                        )}
+                        <div className="flex justify-between font-bold pt-1.5 border-t"><span>Final price</span><span className="text-emerald2 font-display text-lg">₹{onlineFinal.toLocaleString('en-IN')}</span></div>
+                      </div>
+                      <ul className="mt-4 space-y-1.5 text-xs">
+                        {[
+                          'Instant confirmation',
+                          discountPct > 0 ? `${discountPct}% online payment discount` : 'Preferred payment method',
+                          'Maximum Safar Credits earned',
+                          'Fastest refund processing',
+                        ].map((b) => (
+                          <li key={b} className="flex items-start gap-2"><Check className="size-3.5 text-emerald-600 mt-0.5 shrink-0" /><span>{b}</span></li>
+                        ))}
+                      </ul>
+                    </button>
+                  </div>
+
+                  {pay==='online' && (
+                    <div className="mt-6 grid sm:grid-cols-2 gap-3">
+                      <input placeholder="Card number" className="px-4 py-3 rounded-xl border text-sm sm:col-span-2 touch-manipulation" />
+                      <input placeholder="MM / YY" className="px-4 py-3 rounded-xl border text-sm touch-manipulation" />
+                      <input placeholder="CVC" className="px-4 py-3 rounded-xl border text-sm touch-manipulation" />
+                    </div>
+                  )}
+                  {pay==='bookingfee' && (
+                    <div className="mt-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">
+                      <Star className="size-4 mt-0.5 shrink-0" />
+                      <div>
+                        You'll pay <b>₹{bookingFeeAmt.toLocaleString('en-IN')}</b> today to lock in your reservation.
+                        The remaining <b>₹{(total - bookingFeeAmt).toLocaleString('en-IN')}</b> is due at check-in and adjustable towards
+                        your final invoice. Full refund per the cancellation policy.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {step === 3 && (
               <div>
@@ -450,7 +559,7 @@ function BookingContent() {
                   <div className="flex-1">
                     <div className="font-display font-semibold">{item.title}</div>
                     <div className="text-xs text-muted-foreground">{item.location}</div>
-                    <div className="text-xs mt-1">{fmt(checkIn)} → {fmt(checkOut)} · {guests} {guests === 1 ? 'guest' : 'guests'} · {pay==='online'?'Pay online':'Pay on arrival'}</div>
+                    <div className="text-xs mt-1">{fmt(checkIn)} → {fmt(checkOut)} · {guests} {guests === 1 ? 'guest' : 'guests'} · {pay==='online'?'Pay full online':'Pay booking fee'}</div>
                   </div>
                 </div>
                 <div className="mt-4 p-4 rounded-2xl border bg-secondary/40 text-sm space-y-2">

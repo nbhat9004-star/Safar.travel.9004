@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart, Sparkles } from 'lucide-react';
+import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart, Sparkles, Menu, Settings2, CreditCard, Gift, Ticket, Award, ChevronRight, LogOut, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -76,6 +76,9 @@ function AdminInner() {
   const [hostModal, setHostModal] = useState(null);
   const [safarTogetherEnabled, setSafarTogetherEnabled] = useState(false);
   const [safarPlans, setSafarPlans] = useState([]);
+  // Module 11 (mobile fix): controlled tab + mobile drawer
+  const [activeTab, setActiveTab] = useState('overview');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [safarRequests, setSafarRequests] = useState([]);
   const [safarReports, setSafarReports] = useState([]);
   const [safarStats, setSafarStats] = useState(null);
@@ -591,9 +594,121 @@ function AdminInner() {
           );})}
         </div>
 
+        {/* Mobile navigation trigger (below md) */}
+        <div className="md:hidden mt-6 flex items-center justify-between gap-3">
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open menu"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border bg-white dark:bg-neutral-900 hover:bg-secondary text-sm font-semibold flex-1 justify-center"
+          >
+            <Menu className="size-4" />
+            Menu · <span className="capitalize opacity-80">{activeTab}</span>
+          </button>
+        </div>
+
+        {/* Mobile drawer */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+            <button
+              aria-label="Close menu backdrop"
+              onClick={() => setMobileMenuOpen(false)}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            <div className="absolute top-0 left-0 h-full w-[86%] max-w-sm bg-white dark:bg-neutral-950 shadow-2xl overflow-y-auto animate-in slide-in-from-left duration-200">
+              <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white dark:bg-neutral-950 z-10">
+                <div>
+                  <div className="text-emerald2 text-[10px] uppercase tracking-[0.18em] font-bold">Super Admin</div>
+                  <div className="font-display text-lg font-bold">Menu</div>
+                </div>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  aria-label="Close menu"
+                  className="size-9 grid place-items-center rounded-full border hover:bg-secondary"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="p-3 space-y-1">
+                {[
+                  { section: 'Overview', items: [
+                    { label: 'Dashboard', tab: 'overview', icon: BarChart3 },
+                  ]},
+                  { section: 'Marketplace', items: [
+                    { label: 'Discover & Import', href: '/admin/marketplace/dashboard', icon: Search },
+                    { label: 'Marketplace CRM', href: '/admin/marketplace', icon: Users },
+                    { label: 'Templates', href: '/admin/marketplace/templates', icon: FileSpreadsheet },
+                  ]},
+                  { section: 'Revenue & Rewards', items: [
+                    { label: 'Payment Gateways', href: '/admin/settings/payment-gateways', icon: CreditCard },
+                    { label: 'Revenue Engine', href: '/admin/settings/revenue-engine', icon: Settings2 },
+                    { label: 'Promotions', href: '/admin/settings/revenue-engine?tab=promo', icon: Sparkles },
+                    { label: 'Coupons', href: '/admin/settings/revenue-engine?tab=coupons', icon: Ticket },
+                    { label: 'Rewards & Analytics', href: '/admin/settings/revenue-engine?tab=analytics', icon: Gift },
+                    { label: 'Wallet & Credits', href: '/admin/settings/revenue-engine?tab=rules', icon: Wallet },
+                    { label: 'Loyalty Program', href: '/admin/settings/revenue-engine?tab=rules', icon: Award },
+                    { label: 'Referral Program', href: '/admin/settings/revenue-engine?tab=rules', icon: Users },
+                  ]},
+                  { section: 'People', items: [
+                    { label: 'Users', tab: 'users', icon: Users },
+                    { label: 'Hosts', tab: 'hosts', icon: Home },
+                    { label: 'Travelers', tab: 'travelers', icon: Users },
+                    { label: 'Admins', tab: 'admins', icon: Shield },
+                  ]},
+                  { section: 'Operations', items: [
+                    { label: 'Bookings', tab: 'bookings', icon: Calendar },
+                    { label: 'Listings', tab: 'listings', icon: Home },
+                    { label: 'Reviews', tab: 'reviews', icon: Star },
+                    { label: 'Reports (Analytics)', tab: 'revenue', icon: BarChart3 },
+                    { label: 'Audit Logs', tab: 'activity', icon: FileSpreadsheet },
+                    { label: 'Announcements', tab: 'announcements', icon: Sparkles },
+                    { label: 'Support', tab: 'support', icon: ShieldAlert },
+                  ]},
+                  { section: 'Configuration', items: [
+                    { label: 'System Settings', tab: 'settings', icon: Settings2 },
+                    { label: '🤝 Safar Together', tab: 'safar-together', icon: Heart },
+                  ]},
+                ].map((group) => (
+                  <div key={group.section} className="pt-2">
+                    <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] font-bold text-muted-foreground">{group.section}</div>
+                    {group.items.map((it) => {
+                      const Ico = it.icon;
+                      const activeClass = it.tab === activeTab ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald2 font-semibold' : '';
+                      if (it.tab) {
+                        return (
+                          <button
+                            key={it.label}
+                            onClick={() => { setActiveTab(it.tab); setMobileMenuOpen(false); }}
+                            className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary dark:hover:bg-neutral-800 text-sm text-left touch-manipulation ${activeClass}`}
+                          >
+                            <Ico className="size-4 shrink-0" />
+                            <span className="flex-1">{it.label}</span>
+                            {it.tab === activeTab && <ChevronRight className="size-4" />}
+                          </button>
+                        );
+                      }
+                      return (
+                        <Link
+                          key={it.label}
+                          href={it.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-secondary dark:hover:bg-neutral-800 text-sm touch-manipulation"
+                        >
+                          <Ico className="size-4 shrink-0" />
+                          <span className="flex-1">{it.label}</span>
+                          <ArrowUpRight className="size-3.5 opacity-50" />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
-        <Tabs defaultValue="overview" className="mt-8">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-14 h-auto gap-1">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 md:mt-8">
+          <TabsList className="hidden md:grid w-full md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-14 h-auto gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="listings">Listings</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
