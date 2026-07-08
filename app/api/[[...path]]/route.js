@@ -1439,6 +1439,320 @@ async function route(request, { params }) {
     return ok({ transactions: formatted });
   }
 
+  // =====================================================================
+  // MODULE 10 — PAYMENT GATEWAY MANAGEMENT (Super Admin)
+  // Additive only. Reuses requireRole + getCurrentUser + getCollection.
+  // Provider-agnostic architecture; Razorpay is the first supported provider.
+  // =====================================================================
+
+  // ---- Local helpers (encryption, masking, audit, provider drivers) ----
+  const crypto = await import('crypto');
+
+  const _pgDeriveKey = () => {
+    const raw = process.env.PAYMENT_ENCRYPTION_KEY || process.env.JWT_SECRET || 'safar-pg-fallback-key-please-configure';
+    // 32-byte key via SHA-256
+    return crypto.createHash('sha256').update(String(raw)).digest();
+  };
+
+  const pgEncrypt = (plain) => {
+    if (plain === undefined || plain === null || plain === '') return null;
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', _pgDeriveKey(), iv);
+    const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    // format: v1:ivHex:tagHex:cipherHex
+    return `v1:${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
+  };
+
+  const pgDecrypt = (blob) => {
+    try {
+      if (!blob || typeof blob !== 'string' || !blob.startsWith('v1:')) return '';
+      const parts = blob.split(':');
+      if (parts.length !== 4) return '';
+      const [, ivHex, tagHex, encHex] = parts;
+      const iv = Buffer.from(ivHex, 'hex');
+      const tag = Buffer.from(tagHex, 'hex');
+      const enc = Buffer.from(encHex, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-gcm', _pgDeriveKey(), iv);
+      decipher.setAuthTag(tag);
+      const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
+      return dec.toString('utf8');
+    } catch (e) { console.error('pgDecrypt error', e); return ''; }
+  };
+
+  const pgMask = (plain, keep = 4) => {
+    if (!plain) return '';
+    const s = String(plain);
+    if (s.length <= keep + 2) return '••••';
+    return s.slice(0, keep) + '••••••••' + s.slice(-2);
+  };
+
+  const pgSanitize = (doc) => {
+    if (!doc) return null;
+    const { _id, encryptedKeySecret, encryptedWebhookSecret, ...rest } = doc;
+    // Decrypt purely to build the masked preview; NEVER return plaintext to client.
+    const secretPlain = encryptedKeySecret ? pgDecrypt(encryptedKeySecret) : '';
+    const webhookPlain = encryptedWebhookSecret ? pgDecrypt(encryptedWebhookSecret) : '';
+    return {
+      ...rest,
+      keySecretMasked: secretPlain ? pgMask(secretPlain) : '',
+      webhookSecretMasked: webhookPlain ? pgMask(webhookPlain) : '',
+      hasKeySecret: !!secretPlain,
+      hasWebhookSecret: !!webhookPlain,
+    };
+  };
+
+  const pgAudit = async (gatewayId, provider, action, actor, note) => {
+    try {
+      const col = await getCollection('paymentAudit');
+      await col.insertOne({
+        id: uuid(),
+        gatewayId: gatewayId || null,
+        provider: provider || null,
+        action, // 'created' | 'updated' | 'deleted' | 'enabled' | 'disabled' | 'test_connection' | 'credentials_changed'
+        actorId: actor?.id || null,
+        actorName: actor?.name || null,
+        actorEmail: actor?.email || null,
+        note: note || null,
+        timestamp: new Date(),
+      });
+    } catch (e) { console.error('pgAudit error', e); }
+  };
+
+  // Razorpay driver — verifies credentials without creating a payment.
+  const pgTestRazorpay = async ({ keyId, keySecret }) => {
+    if (!keyId || !keySecret) return { ok: false, status: 'not_configured', message: 'keyId and keySecret are required' };
+    try {
+      const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+      // Lightweight read-only call. Uses no funds and creates no records.
+      const res = await fetch('https://api.razorpay.com/v1/payments?count=1', {
+        method: 'GET',
+        headers: { 'Authorization': `Basic ${auth}` },
+      });
+      if (res.status === 200) return { ok: true, status: 'configured', message: 'Connection verified' };
+      if (res.status === 401) return { ok: false, status: 'invalid', message: 'Invalid Razorpay credentials' };
+      const body = await res.text().catch(() => '');
+      return { ok: false, status: 'invalid', message: `Razorpay returned ${res.status}${body ? ': ' + body.slice(0, 200) : ''}` };
+    } catch (e) {
+      return { ok: false, status: 'error', message: e?.message || 'Network error contacting Razorpay' };
+    }
+  };
+
+  const pgTestProvider = async (provider, creds) => {
+    switch ((provider || '').toLowerCase()) {
+      case 'razorpay': return pgTestRazorpay(creds);
+      // Stubs for future providers — return not_supported so admin can save creds
+      // but knows test-connection isn't wired yet. No code changes required to
+      // enable a new provider beyond adding a case here.
+      case 'stripe':
+      case 'paypal':
+      case 'phonepe':
+      case 'cashfree':
+      case 'ccavenue':
+      case 'manual_bank_transfer':
+        return { ok: false, status: 'not_supported', message: `Test connection for ${provider} is not yet implemented. Credentials saved.` };
+      default:
+        return { ok: false, status: 'unknown_provider', message: 'Unknown provider' };
+    }
+  };
+
+  const PG_ALLOWED_PROVIDERS = ['razorpay','stripe','paypal','phonepe','cashfree','ccavenue','manual_bank_transfer'];
+  const PG_ALLOWED_MODES = ['test','live'];
+  const PG_ALLOWED_REFUND_MODES = ['auto','manual','disabled'];
+
+  // ---- Endpoints ----
+
+  // GET /api/admin/payment-gateways — list (super_admin only)
+  if (path === '/admin/payment-gateways' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('paymentGateways');
+    const docs = await col.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    return ok({ gateways: docs.map(pgSanitize), providers: PG_ALLOWED_PROVIDERS });
+  }
+
+  // POST /api/admin/payment-gateways — create (super_admin only)
+  if (path === '/admin/payment-gateways' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    const provider = String(body.provider || '').toLowerCase();
+    if (!PG_ALLOWED_PROVIDERS.includes(provider)) return err('Unsupported provider');
+    const mode = PG_ALLOWED_MODES.includes(body.mode) ? body.mode : 'test';
+    const refundMode = PG_ALLOWED_REFUND_MODES.includes(body.refundMode) ? body.refundMode : 'manual';
+    const keyId = body.keyId ? String(body.keyId).trim() : '';
+    const keySecretPlain = body.keySecret ? String(body.keySecret) : '';
+    const webhookSecretPlain = body.webhookSecret ? String(body.webhookSecret) : '';
+    if (!keyId) return err('Key ID is required');
+    if (!keySecretPlain) return err('Key Secret is required');
+
+    const col = await getCollection('paymentGateways');
+    const now = new Date();
+    const doc = {
+      id: uuid(),
+      provider,
+      providerName: body.providerName || provider.charAt(0).toUpperCase() + provider.slice(1),
+      enabled: body.enabled === true,
+      mode,
+      keyId,
+      encryptedKeySecret: pgEncrypt(keySecretPlain),
+      encryptedWebhookSecret: webhookSecretPlain ? pgEncrypt(webhookSecretPlain) : null,
+      currency: body.currency || 'INR',
+      country: body.country || 'IN',
+      paymentTimeout: Number(body.paymentTimeout) > 0 ? Number(body.paymentTimeout) : 300, // seconds
+      autoCapture: body.autoCapture !== false,
+      refundMode,
+      status: 'not_configured', // becomes 'configured' after successful test-connection
+      lastTestedAt: null,
+      lastTestResult: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: me.id,
+      createdByName: me.name || me.email || 'super_admin',
+      updatedBy: me.id,
+      updatedByName: me.name || me.email || 'super_admin',
+    };
+    await col.insertOne(doc);
+    await pgAudit(doc.id, provider, 'created', me, `Provider ${provider} configured in ${mode} mode`);
+    return ok({ gateway: pgSanitize(doc) }, 201);
+  }
+
+  // GET /api/admin/payment-gateways/:id — single (super_admin only)
+  if (segments[0] === 'admin' && segments[1] === 'payment-gateways' && segments[2] && !segments[3] && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('paymentGateways');
+    const doc = await col.findOne({ id: segments[2] });
+    if (!doc) return err('Gateway not found', 404);
+    return ok({ gateway: pgSanitize(doc) });
+  }
+
+  // PUT /api/admin/payment-gateways/:id — update (super_admin only)
+  if (segments[0] === 'admin' && segments[1] === 'payment-gateways' && segments[2] && !segments[3] && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    const col = await getCollection('paymentGateways');
+    const doc = await col.findOne({ id: segments[2] });
+    if (!doc) return err('Gateway not found', 404);
+
+    const set = { updatedAt: new Date(), updatedBy: me.id, updatedByName: me.name || me.email || 'super_admin' };
+    let credentialsChanged = false;
+
+    if (body.providerName !== undefined) set.providerName = String(body.providerName);
+    if (body.enabled !== undefined) set.enabled = !!body.enabled;
+    if (body.mode !== undefined && PG_ALLOWED_MODES.includes(body.mode)) set.mode = body.mode;
+    if (body.currency !== undefined) set.currency = String(body.currency);
+    if (body.country !== undefined) set.country = String(body.country);
+    if (body.paymentTimeout !== undefined) {
+      const n = Number(body.paymentTimeout);
+      if (Number.isFinite(n) && n > 0) set.paymentTimeout = n;
+    }
+    if (body.autoCapture !== undefined) set.autoCapture = !!body.autoCapture;
+    if (body.refundMode !== undefined && PG_ALLOWED_REFUND_MODES.includes(body.refundMode)) set.refundMode = body.refundMode;
+    if (body.keyId !== undefined && String(body.keyId).trim()) { set.keyId = String(body.keyId).trim(); credentialsChanged = true; }
+    if (body.keySecret) { set.encryptedKeySecret = pgEncrypt(String(body.keySecret)); credentialsChanged = true; }
+    if (body.webhookSecret !== undefined) {
+      set.encryptedWebhookSecret = body.webhookSecret ? pgEncrypt(String(body.webhookSecret)) : null;
+      credentialsChanged = true;
+    }
+    // Invalidate status when creds change until re-tested
+    if (credentialsChanged) { set.status = 'not_configured'; set.lastTestedAt = null; set.lastTestResult = null; }
+
+    await col.updateOne({ id: segments[2] }, { $set: set });
+    await pgAudit(segments[2], doc.provider, credentialsChanged ? 'credentials_changed' : 'updated', me, null);
+    const fresh = await col.findOne({ id: segments[2] });
+    return ok({ gateway: pgSanitize(fresh) });
+  }
+
+  // DELETE /api/admin/payment-gateways/:id — delete (super_admin only)
+  if (segments[0] === 'admin' && segments[1] === 'payment-gateways' && segments[2] && !segments[3] && method === 'DELETE') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('paymentGateways');
+    const doc = await col.findOne({ id: segments[2] });
+    if (!doc) return err('Gateway not found', 404);
+    await col.deleteOne({ id: segments[2] });
+    await pgAudit(segments[2], doc.provider, 'deleted', me, `Provider ${doc.provider} configuration removed`);
+    return ok({ deleted: true });
+  }
+
+  // POST /api/admin/payment-gateways/:id/toggle — enable/disable (super_admin only)
+  if (segments[0] === 'admin' && segments[1] === 'payment-gateways' && segments[2] && segments[3] === 'toggle' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('paymentGateways');
+    const doc = await col.findOne({ id: segments[2] });
+    if (!doc) return err('Gateway not found', 404);
+    const body = await readBody(request);
+    const nextEnabled = typeof body.enabled === 'boolean' ? body.enabled : !doc.enabled;
+    await col.updateOne(
+      { id: segments[2] },
+      { $set: { enabled: nextEnabled, updatedAt: new Date(), updatedBy: me.id, updatedByName: me.name || me.email || 'super_admin' } }
+    );
+    await pgAudit(segments[2], doc.provider, nextEnabled ? 'enabled' : 'disabled', me, null);
+    const fresh = await col.findOne({ id: segments[2] });
+    return ok({ gateway: pgSanitize(fresh) });
+  }
+
+  // POST /api/admin/payment-gateways/:id/test-connection — verify creds only, NO charge (super_admin only)
+  if (segments[0] === 'admin' && segments[1] === 'payment-gateways' && segments[2] && segments[3] === 'test-connection' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('paymentGateways');
+    const doc = await col.findOne({ id: segments[2] });
+    if (!doc) return err('Gateway not found', 404);
+    const keySecret = doc.encryptedKeySecret ? pgDecrypt(doc.encryptedKeySecret) : '';
+    const result = await pgTestProvider(doc.provider, { keyId: doc.keyId, keySecret });
+    const now = new Date();
+    await col.updateOne(
+      { id: segments[2] },
+      { $set: {
+          status: result.ok ? 'configured' : (result.status || 'invalid'),
+          lastTestedAt: now,
+          lastTestResult: { ok: !!result.ok, status: result.status, message: result.message, at: now },
+          updatedAt: now,
+        }
+      }
+    );
+    await pgAudit(segments[2], doc.provider, 'test_connection', me, result.message);
+    const fresh = await col.findOne({ id: segments[2] });
+    return ok({ result, gateway: pgSanitize(fresh) });
+  }
+
+  // GET /api/admin/payment-gateways/:id/audit — history for one gateway (super_admin only)
+  if (segments[0] === 'admin' && segments[1] === 'payment-gateways' && segments[2] && segments[3] === 'audit' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('paymentAudit');
+    const events = await col.find({ gatewayId: segments[2] }, { projection: { _id: 0 } }).sort({ timestamp: -1 }).limit(100).toArray();
+    return ok({ events });
+  }
+
+  // GET /api/payments/active-gateway — READ-ONLY consumer endpoint for future
+  // booking/checkout flows. Returns the currently ENABLED gateway (public-safe
+  // fields only, NO secrets, NO keyId). Booking module can call this without
+  // any hardcoded provider details. Requires authentication.
+  if (path === '/payments/active-gateway' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const col = await getCollection('paymentGateways');
+    const doc = await col.findOne({ enabled: true, status: 'configured' }, { sort: { updatedAt: -1 } });
+    if (!doc) return ok({ gateway: null });
+    return ok({ gateway: {
+      id: doc.id,
+      provider: doc.provider,
+      providerName: doc.providerName,
+      mode: doc.mode,
+      currency: doc.currency,
+      country: doc.country,
+      paymentTimeout: doc.paymentTimeout,
+      autoCapture: doc.autoCapture,
+      // Public identifier — safe to expose (Razorpay keyId is intended for client-side use)
+      keyId: doc.keyId,
+    }});
+  }
+
   // ---------- CONTACT FORM ----------
   // POST /api/contact  (public endpoint for contact form submissions)
   if (path === '/contact' && method === 'POST') {
