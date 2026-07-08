@@ -212,26 +212,28 @@ async function route(request, { params }) {
     console.log('FROM_EMAIL configured:', process.env.FROM_EMAIL || 'NOT SET - using default');
     console.log('Calling sendVerificationEmail...');
     
-    // Send verification email (async with enhanced logging)
-    sendVerificationEmail(user, verificationLink)
-      .then((result) => {
-        console.log('=== EMAIL SEND RESULT ===');
-        console.log('Success:', result.success);
-        if (result.success) {
-          console.log('Email sent successfully! ID:', result.data?.id);
-          console.log('Recipient:', user.email);
-        } else {
-          console.error('❌ EMAIL SEND FAILED:', result.error);
-          console.error('Reason:', typeof result.error === 'object' ? JSON.stringify(result.error) : result.error);
-        }
-        console.log('=== EMAIL VERIFICATION FLOW END ===');
-      })
-      .catch((error) => {
-        console.error('=== EMAIL SEND EXCEPTION ===');
-        console.error('❌ Fatal error sending verification email:', error);
-        console.error('Error stack:', error.stack);
-        console.error('=== EMAIL VERIFICATION FLOW END ===');
-      });
+    // Send verification email — AWAITED so Vercel serverless doesn't drop the
+    // outgoing HTTP request to Resend before the response is returned.
+    // sendEmail() has internal try/catch and returns { success, error } without
+    // throwing, so this cannot fail the registration.
+    try {
+      const result = await sendVerificationEmail(user, verificationLink);
+      console.log('=== EMAIL SEND RESULT ===');
+      console.log('Success:', result.success);
+      if (result.success) {
+        console.log('Email sent successfully! ID:', result.data?.id);
+        console.log('Recipient:', user.email);
+      } else {
+        console.error('❌ EMAIL SEND FAILED:', result.error);
+        console.error('Reason:', typeof result.error === 'object' ? JSON.stringify(result.error) : result.error);
+      }
+      console.log('=== EMAIL VERIFICATION FLOW END ===');
+    } catch (error) {
+      console.error('=== EMAIL SEND EXCEPTION ===');
+      console.error('❌ Fatal error sending verification email:', error);
+      console.error('Error stack:', error?.stack);
+      console.error('=== EMAIL VERIFICATION FLOW END ===');
+    }
 
     const res = ok({ user: publicUser(user), token, message: 'Account created. Please check your email to verify your address.' });
     return setAuthCookie(res, token);
@@ -333,10 +335,12 @@ async function route(request, { params }) {
       }
     );
 
-    // Send welcome email after successful verification (async)
-    sendWelcomeEmail({ ...user, emailVerified: true }).catch((error) => {
+    // Send welcome email after successful verification — AWAITED
+    try {
+      await sendWelcomeEmail({ ...user, emailVerified: true });
+    } catch (error) {
       console.error('Failed to send welcome email:', error);
-    });
+    }
 
     return ok({ verified: true, message: 'Your email has been verified.' });
   }
@@ -360,9 +364,12 @@ async function route(request, { params }) {
       { $set: { verificationToken, verificationExpiry, updatedAt: new Date() } }
     );
 
-    sendVerificationEmail({ ...user, name: user.name }, buildVerificationLink(verificationToken)).catch((error) => {
+    // Send resend verification email — AWAITED
+    try {
+      await sendVerificationEmail({ ...user, name: user.name }, buildVerificationLink(verificationToken));
+    } catch (error) {
       console.error('Failed to resend verification email:', error);
-    });
+    }
 
     return ok(generic);
   }
@@ -403,11 +410,13 @@ async function route(request, { params }) {
       };
       await users.insertOne(user);
       
-      // Send welcome email if user has email (async, don't block)
+      // Send welcome email if user has email — AWAITED (Vercel serverless)
       if (user.email) {
-        sendWelcomeEmail(user).catch((error) => {
+        try {
+          await sendWelcomeEmail(user);
+        } catch (error) {
           console.error('Failed to send welcome email:', error);
-        });
+        }
       }
     }
     
@@ -450,10 +459,12 @@ async function route(request, { params }) {
       };
       await users.insertOne(user);
       
-      // Send welcome email (async, don't block)
-      sendWelcomeEmail(user).catch((error) => {
+      // Send welcome email — AWAITED (Vercel serverless)
+      try {
+        await sendWelcomeEmail(user);
+      } catch (error) {
         console.error('Failed to send welcome email:', error);
-      });
+      }
     }
     
     // Return JWT token (same as email/password flow)
@@ -1118,17 +1129,24 @@ async function route(request, { params }) {
     const traveler = await users.findOne({ id: me.id });
     const host = await users.findOne({ id: listing.hostId });
 
-    // Send booking confirmation emails (async, don't block response)
-    if (traveler) {
+    // Send booking confirmation emails — AWAITED so Vercel serverless doesn't
+    // drop the outgoing Resend HTTP request before returning the response.
+    // Uses Promise.allSettled so a failure of one email doesn't affect the other
+    // or the booking response.
+    const bookingEmailTasks = [];
+    if (traveler) bookingEmailTasks.push(
       sendBookingConfirmation(doc, traveler).catch((error) => {
         console.error('Failed to send booking confirmation to traveler:', error);
-      });
-    }
-    if (host) {
+        return { success: false, error };
+      })
+    );
+    if (host) bookingEmailTasks.push(
       sendBookingNotificationToHost(doc, host).catch((error) => {
         console.error('Failed to send booking notification to host:', error);
-      });
-    }
+        return { success: false, error };
+      })
+    );
+    if (bookingEmailTasks.length) await Promise.allSettled(bookingEmailTasks);
 
     // Module 9: log booking created event
     logBookingEvent(doc.bookingId, 'created', me, {
@@ -1198,35 +1216,45 @@ async function route(request, { params }) {
     const traveler = await users.findOne({ id: b.travelerId });
     const host = await users.findOne({ id: b.hostId });
     
+    // Send status-change emails — AWAITED (Promise.allSettled) so Vercel
+    // serverless doesn't drop the Resend HTTP calls before responding.
+    const statusEmailTasks = [];
     if (status === 'approved' && traveler) {
-      // Send approval email to traveler and invoice
-      sendBookingApprovedEmail(fresh, traveler).catch((error) => {
-        console.error('Failed to send booking approved email:', error);
-      });
-      
-      // Generate and send invoice
+      statusEmailTasks.push(
+        sendBookingApprovedEmail(fresh, traveler).catch((error) => {
+          console.error('Failed to send booking approved email:', error);
+          return { success: false, error };
+        })
+      );
       const invoiceId = `INV-${Date.now()}-${fresh.bookingId.slice(0, 8).toUpperCase()}`;
-      sendInvoiceEmail(fresh, traveler, invoiceId).catch((error) => {
-        console.error('Failed to send invoice email:', error);
-      });
+      statusEmailTasks.push(
+        sendInvoiceEmail(fresh, traveler, invoiceId).catch((error) => {
+          console.error('Failed to send invoice email:', error);
+          return { success: false, error };
+        })
+      );
     } else if (status === 'rejected' && traveler) {
-      // Send rejection email to traveler
-      sendBookingRejectedEmail(fresh, traveler, reason).catch((error) => {
-        console.error('Failed to send booking rejected email:', error);
-      });
+      statusEmailTasks.push(
+        sendBookingRejectedEmail(fresh, traveler, reason).catch((error) => {
+          console.error('Failed to send booking rejected email:', error);
+          return { success: false, error };
+        })
+      );
     } else if (status === 'cancelled') {
-      // Send cancellation emails to both parties
-      if (traveler) {
+      if (traveler) statusEmailTasks.push(
         sendBookingCancellationEmail(fresh, traveler, false).catch((error) => {
           console.error('Failed to send cancellation email to traveler:', error);
-        });
-      }
-      if (host) {
+          return { success: false, error };
+        })
+      );
+      if (host) statusEmailTasks.push(
         sendBookingCancellationEmail(fresh, host, true).catch((error) => {
           console.error('Failed to send cancellation email to host:', error);
-        });
-      }
+          return { success: false, error };
+        })
+      );
     }
+    if (statusEmailTasks.length) await Promise.allSettled(statusEmailTasks);
 
     // Module 9: log status-change event
     logBookingEvent(id, status, me, {
@@ -1451,9 +1479,12 @@ async function route(request, { params }) {
       message: submission.message,
     };
     
-    sendContactFormEmail(formData).catch((error) => {
+    // AWAITED so Vercel serverless doesn't drop the Resend HTTP call.
+    try {
+      await sendContactFormEmail(formData);
+    } catch (error) {
       console.error('Failed to send contact form notification:', error);
-    });
+    }
     
     const { _id, ...rest } = submission;
     return ok({ contact: rest, message: 'Your message has been sent successfully' }, 201);

@@ -3863,3 +3863,125 @@ frontend:
           
           Only 1 minor UI issue (horizontal scroll on admin page mobile view) which does not affect functionality.
 
+
+---
+
+## 🐛 Email Delivery Fix (main agent, 2026-07)
+
+backend:
+  - task: "Fix: Verification & Booking Confirmation emails not sent (fire-and-forget dropped by Vercel serverless)"
+    implemented: true
+    working: "NA"
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          BUG REPORT: New traveler verification emails NOT sent; booking confirmation emails NOT sent.
+
+          ROOT CAUSE (static code inspection):
+          Fire-and-forget email sends (`.then()/.catch()` without `await`) get dropped
+          by Vercel serverless functions before the outbound HTTPS request to Resend
+          completes. Once the response is returned, the lambda freezes/terminates and
+          the promise never resolves — Resend never receives the API call.
+
+          Evidence:
+          - POST /api/auth/register — sendVerificationEmail was called with .then().catch() (line 216, no await)
+          - POST /api/bookings      — sendBookingConfirmation + sendBookingNotificationToHost with .catch() only (lines 1123, 1128)
+          - PATCH /api/bookings/:id — sendBookingApprovedEmail / Rejected / Cancellation / Invoice all .catch() only (lines 1203-1225)
+          - POST /api/auth/verify-email          — sendWelcomeEmail fire-and-forget (line 337)
+          - POST /api/auth/resend-verification   — sendVerificationEmail fire-and-forget (line 363)
+          - POST /api/auth/verify-phone / verify-google — sendWelcomeEmail fire-and-forget (lines 408, 454)
+          - POST /api/contact  — sendContactFormEmail fire-and-forget (line 1454)
+
+          These match the user's report exactly. The endpoints that already used
+          `await` (POST /api/auth/forgot-password @ line 275, POST /api/bookings/:id/send-invoice @ line 1264)
+          were reported working in previous production tests — confirming the diagnosis.
+
+          FIX APPLIED:
+          Converted every fire-and-forget email send to an awaited call. Where multiple
+          emails are sent in the same handler, they are launched in parallel and awaited
+          together via `await Promise.allSettled([...])` so:
+            - One failing email doesn't abort the other
+            - Failures don't propagate to the API response (each promise has an inline
+              `.catch(err => ({ success: false, error }))` before being pushed into the array)
+            - The lambda stays alive until every Resend HTTPS request completes
+
+          Files modified:
+            /app/app/api/[[...path]]/route.js  (7 handlers converted to await)
+
+          Endpoints affected (all now await):
+            POST /api/auth/register              → sendVerificationEmail (awaited)
+            GET  /api/auth/verify-email          → sendWelcomeEmail       (awaited)
+            POST /api/auth/resend-verification   → sendVerificationEmail (awaited)
+            POST /api/auth/verify-phone          → sendWelcomeEmail       (awaited when email present)
+            POST /api/auth/verify-google         → sendWelcomeEmail       (awaited)
+            POST /api/bookings                   → sendBookingConfirmation + sendBookingNotificationToHost (Promise.allSettled)
+            PATCH /api/bookings/:id              → approved/rejected/cancelled + invoice emails (Promise.allSettled)
+            POST /api/contact                    → sendContactFormEmail (awaited)
+
+          NO CHANGES:
+            - No env variables changed
+            - No email templates changed
+            - No Resend SDK version change (v6.17.1)
+            - No collections, schemas, or contracts changed
+            - Password-reset and send-invoice paths already used await — untouched
+
+          Please verify:
+            1) POST /api/auth/register with a fresh email → 200 response WITHIN reasonable time,
+               DB has verificationToken + verificationExpiry, and the code path awaited the send
+               (no unhandled promise warning in logs, no early return before send completes).
+            2) POST /api/bookings by a verified traveler on an approved listing →
+               201 response returned only AFTER the email attempts complete.
+               Backend logs should show either "Email sent successfully!" (Resend ID) or
+               a clear failure log — NOT silence.
+            3) PATCH /api/bookings/:id with status=approved → 200 and the two emails
+               (approval + invoice) are awaited via Promise.allSettled.
+            4) Static regression: existing password-reset flow (already awaited) still works.
+
+          NOTE FOR TESTER:
+            - Locally there is no /app/.env with RESEND_API_KEY, so Resend calls will
+              return { success:false, error:'Email service not configured' } from
+              lib/email.js line 448. THIS IS EXPECTED locally. Please verify that
+              (a) the endpoint response STATUS/CODE is correct, and (b) the log shows
+              the send WAS attempted (not skipped). In production (Vercel) with the
+              RESEND_API_KEY configured, the awaited call will now actually reach Resend.
+
+test_plan:
+  current_focus:
+    - "Fix: Verification & Booking Confirmation emails not sent (fire-and-forget dropped by Vercel serverless)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Please run a FOCUSED backend test on the email-trigger endpoints to confirm the
+      fire-and-forget → awaited fix is correctly wired. Do NOT test end-to-end email
+      DELIVERY (Resend key is not configured locally).
+
+      Test scope:
+      1) POST /api/auth/register with a fresh email/password → assert 200, user.emailVerified=false,
+         DB has verificationToken + verificationExpiry, and the response is returned
+         AFTER sendVerificationEmail was invoked (not before). You can check backend
+         logs for "Calling sendVerificationEmail..." followed by "=== EMAIL SEND RESULT ===".
+      2) POST /api/auth/resend-verification { email } for unverified user → 200 generic response,
+         DB shows a NEW verificationToken.
+      3) GET /api/auth/verify-email?token=VALID → 200 { verified: true }; DB has
+         emailVerified=true and token unset. Backend log should show welcome-email attempt.
+      4) POST /api/bookings by a verified traveler on an approved listing → 201 with booking.
+         Backend log should show sendBookingConfirmation + sendBookingNotificationToHost
+         BOTH attempted (regardless of Resend key state) BEFORE the response returns.
+      5) PATCH /api/bookings/:id { status: 'approved' } by host → 200; logs should show
+         approval + invoice email attempts.
+      6) PATCH /api/bookings/:id { status: 'cancelled' } by traveler → 200; logs should
+         show both cancellation-email attempts (traveler + host).
+      7) Regression: POST /api/auth/forgot-password { email } → 200, DB has resetToken
+         (this endpoint was already awaited; verify no breakage).
+
+      Existing test file /app/email_verification_backend_test.py can be reused/adapted.
+      No need to run Playwright, load tests, or Module 8/9 regressions.
