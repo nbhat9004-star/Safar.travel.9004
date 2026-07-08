@@ -41,6 +41,12 @@ const emptyForm = {
   paymentTimeout: 300,
   autoCapture: true,
   refundMode: 'manual',
+  // Module 10.1 — commercial flags
+  bookingFeeEnabled: false,
+  bookingFeeAmount: 0,
+  onlinePaymentDiscount: 0,
+  enableWallet: false,
+  enableSafarCredits: false,
 };
 
 function StatusBadge({ status, enabled }) {
@@ -110,6 +116,11 @@ function PaymentGatewaysInner() {
       paymentTimeout: gw.paymentTimeout || 300,
       autoCapture: gw.autoCapture !== false,
       refundMode: gw.refundMode || 'manual',
+      bookingFeeEnabled: !!gw.bookingFeeEnabled,
+      bookingFeeAmount: Number(gw.bookingFeeAmount) || 0,
+      onlinePaymentDiscount: Number(gw.onlinePaymentDiscount) || 0,
+      enableWallet: !!gw.enableWallet,
+      enableSafarCredits: !!gw.enableSafarCredits,
     });
     setShowForm(true);
   };
@@ -291,6 +302,29 @@ function PaymentGatewaysInner() {
                         </div>
                         <div className="text-[10px] text-muted-foreground">by {gw.updatedByName || '—'}</div>
                       </div>
+                    </div>
+                    {/* Commercial flags summary */}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {gw.bookingFeeEnabled && (
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald2 border-emerald-200">
+                          Booking Fee{Number(gw.bookingFeeAmount) > 0 ? ` · ${gw.currency} ${gw.bookingFeeAmount}` : ''}
+                        </span>
+                      )}
+                      {Number(gw.onlinePaymentDiscount) > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-600 border-blue-200">
+                          Online Pay Discount · {gw.onlinePaymentDiscount}%
+                        </span>
+                      )}
+                      {gw.enableWallet && (
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border bg-secondary text-charcoal border-border">
+                          Wallet
+                        </span>
+                      )}
+                      {gw.enableSafarCredits && (
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full border bg-secondary text-charcoal border-border">
+                          Safar Credits
+                        </span>
+                      )}
                     </div>
                     {gw.lastTestResult && (
                       <div className={`mt-3 text-xs p-2.5 rounded-lg border ${gw.lastTestResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald2' : 'bg-rose-50 border-rose-200 text-rose-600'}`}>
@@ -488,6 +522,63 @@ function PaymentGatewaysInner() {
                   ))}
                 </div>
               </Field>
+            </div>
+
+            {/* Commercial flags — Module 10.1 */}
+            <div className="mt-8">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-emerald2 font-semibold mb-3">Commercial Options</div>
+              <div className="grid md:grid-cols-2 gap-5">
+                <Field label="Booking Fee">
+                  <label className="inline-flex items-center gap-2 mt-2 cursor-pointer">
+                    <input type="checkbox" checked={form.bookingFeeEnabled}
+                      onChange={(e) => setForm({ ...form, bookingFeeEnabled: e.target.checked })}
+                      className="size-4 accent-emerald-600" />
+                    <span className="text-sm text-muted-foreground">Charge a booking fee</span>
+                  </label>
+                </Field>
+
+                <Field label={`Booking Fee Amount (${form.currency})`}>
+                  <input
+                    type="number"
+                    disabled={!form.bookingFeeEnabled}
+                    value={form.bookingFeeAmount}
+                    onChange={(e) => setForm({ ...form, bookingFeeAmount: Number(e.target.value) })}
+                    min={0}
+                    step="1"
+                    className="w-full px-4 py-2.5 rounded-xl border bg-white text-sm disabled:bg-secondary/50 disabled:text-muted-foreground"
+                  />
+                </Field>
+
+                <Field label="Online Payment Discount (%)">
+                  <input
+                    type="number"
+                    value={form.onlinePaymentDiscount}
+                    onChange={(e) => setForm({ ...form, onlinePaymentDiscount: Number(e.target.value) })}
+                    min={0}
+                    max={100}
+                    step="0.5"
+                    className="w-full px-4 py-2.5 rounded-xl border bg-white text-sm"
+                  />
+                  <div className="text-[11px] text-muted-foreground mt-1">Discount applied when guest pays online. Set to 0 to disable.</div>
+                </Field>
+
+                <Field label="Wallet & Credits">
+                  <div className="space-y-2 mt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={form.enableWallet}
+                        onChange={(e) => setForm({ ...form, enableWallet: e.target.checked })}
+                        className="size-4 accent-emerald-600" />
+                      <span className="text-sm">Enable Wallet payments</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={form.enableSafarCredits}
+                        onChange={(e) => setForm({ ...form, enableSafarCredits: e.target.checked })}
+                        className="size-4 accent-emerald-600" />
+                      <span className="text-sm">Enable Safar Credits</span>
+                    </label>
+                  </div>
+                </Field>
+              </div>
             </div>
 
             <div className="mt-6 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-start gap-2">

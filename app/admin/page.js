@@ -1241,6 +1241,40 @@ function AdminInner() {
               <h2 className="font-display text-2xl font-bold">System Settings</h2>
               <p className="text-sm text-muted-foreground mt-1">Configure platform settings</p>
             </div>
+
+            {/* Advanced Settings — Super Admin only navigation */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <Link href="/admin/settings/payment-gateways"
+                className="group rounded-2xl border bg-white p-5 flex items-start gap-4 hover:border-emerald2 hover:shadow-md transition">
+                <div className="size-11 rounded-xl bg-emerald-50 grid place-items-center text-emerald2 shrink-0 group-hover:bg-emerald2 group-hover:text-white transition">
+                  <Wallet className="size-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-display text-lg font-bold flex items-center gap-2">
+                    Payment Gateways
+                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">Super Admin</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Configure Razorpay & other providers · encrypted secrets · test connection · audit
+                  </div>
+                </div>
+                <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-emerald2 transition" />
+              </Link>
+              <Link href="/admin/marketplace/settings"
+                className="group rounded-2xl border bg-white p-5 flex items-start gap-4 hover:border-emerald2 hover:shadow-md transition">
+                <div className="size-11 rounded-xl bg-emerald-50 grid place-items-center text-emerald2 shrink-0 group-hover:bg-emerald2 group-hover:text-white transition">
+                  <Shield className="size-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-display text-lg font-bold">Marketplace Integrations</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Google Places API & other 3rd-party integrations
+                  </div>
+                </div>
+                <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-emerald2 transition" />
+              </Link>
+            </div>
+
             {loading && <div className="py-12 grid place-items-center"><Loader2 className="size-6 animate-spin text-emerald2" /></div>}
             {!loading && (
               <form onSubmit={(e) => {

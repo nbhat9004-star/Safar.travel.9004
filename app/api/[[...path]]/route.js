@@ -1602,6 +1602,12 @@ async function route(request, { params }) {
       paymentTimeout: Number(body.paymentTimeout) > 0 ? Number(body.paymentTimeout) : 300, // seconds
       autoCapture: body.autoCapture !== false,
       refundMode,
+      // Module 10.1 — commercial flags (safe defaults)
+      bookingFeeEnabled: body.bookingFeeEnabled === true,
+      bookingFeeAmount: Number(body.bookingFeeAmount) >= 0 ? Number(body.bookingFeeAmount) : 0,
+      onlinePaymentDiscount: Number(body.onlinePaymentDiscount) >= 0 ? Number(body.onlinePaymentDiscount) : 0,
+      enableWallet: body.enableWallet === true,
+      enableSafarCredits: body.enableSafarCredits === true,
       status: 'not_configured', // becomes 'configured' after successful test-connection
       lastTestedAt: null,
       lastTestResult: null,
@@ -1650,6 +1656,18 @@ async function route(request, { params }) {
     }
     if (body.autoCapture !== undefined) set.autoCapture = !!body.autoCapture;
     if (body.refundMode !== undefined && PG_ALLOWED_REFUND_MODES.includes(body.refundMode)) set.refundMode = body.refundMode;
+    // Module 10.1 — commercial flags (Module 10 backend extension, additive)
+    if (body.bookingFeeEnabled !== undefined) set.bookingFeeEnabled = !!body.bookingFeeEnabled;
+    if (body.bookingFeeAmount !== undefined) {
+      const n = Number(body.bookingFeeAmount);
+      if (Number.isFinite(n) && n >= 0) set.bookingFeeAmount = n;
+    }
+    if (body.onlinePaymentDiscount !== undefined) {
+      const n = Number(body.onlinePaymentDiscount);
+      if (Number.isFinite(n) && n >= 0) set.onlinePaymentDiscount = n;
+    }
+    if (body.enableWallet !== undefined) set.enableWallet = !!body.enableWallet;
+    if (body.enableSafarCredits !== undefined) set.enableSafarCredits = !!body.enableSafarCredits;
     if (body.keyId !== undefined && String(body.keyId).trim()) { set.keyId = String(body.keyId).trim(); credentialsChanged = true; }
     if (body.keySecret) { set.encryptedKeySecret = pgEncrypt(String(body.keySecret)); credentialsChanged = true; }
     if (body.webhookSecret !== undefined) {
