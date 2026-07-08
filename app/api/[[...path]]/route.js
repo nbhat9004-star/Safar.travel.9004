@@ -18,6 +18,7 @@ import {
   sendInvoiceEmail,
   sendContactFormEmail,
   sendPasswordResetEmail,
+  sendEmail,
 } from '@/lib/email';
 import { verifyFirebaseToken } from '@/lib/firebase-admin';
 
@@ -1296,6 +1297,178 @@ async function route(request, { params }) {
       console.error('Failed to send invoice email:', error);
       return err('Failed to send invoice email', 500);
     }
+  }
+
+  // =====================================================================
+  // MODULE 11 (Messaging) — Host ↔ Guest booking-scoped conversations.
+  // Reuses:
+  //   - `notifications` collection + existing GET/PATCH/POST endpoints
+  //     (NotificationBell in Navbar polls /api/notifications every 30s and
+  //      surfaces our new "New message" notifications automatically)
+  //   - `bookings` permission model (traveler owner / host owner / admin)
+  //   - `users` collection for actor identity + recipient email lookup
+  //   - `sendEmail` from /app/lib/email.js for outbound email notifications
+  // Adds only two collections: `bookingMessages` + optional `bookingConversations`.
+  // =====================================================================
+
+  const mkMessageNotif = async (recipientId, actor, booking, preview) => {
+    if (!recipientId || recipientId === actor.id) return;
+    try {
+      const notifications = await getCollection('notifications');
+      await notifications.insertOne({
+        id: uuid(),
+        userId: recipientId,
+        type: 'booking_message',
+        title: `New message from ${actor.name || actor.email}`,
+        body: preview.length > 140 ? preview.slice(0, 137) + '...' : preview,
+        link: `/dashboard/traveler/bookings/${booking.bookingId}`,
+        meta: { bookingId: booking.bookingId, listingTitle: booking.listingTitle, actorId: actor.id, actorName: actor.name },
+        read: false,
+        createdAt: new Date(),
+      });
+    } catch (e) { console.error('mkMessageNotif error', e); }
+  };
+
+  // POST /api/bookings/:id/messages — send a message (traveler / host / admin)
+  if (segments[0] === 'bookings' && segments[1] && segments[2] === 'messages' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const id = segments[1];
+    const bookings = await getCollection('bookings');
+    const b = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    if (!b) return err('Booking not found', 404);
+    if (me.role !== 'admin' && me.role !== 'super_admin' && me.id !== b.travelerId && me.id !== b.hostId) {
+      return err('Forbidden', 403);
+    }
+    const body = await readBody(request);
+    const text = String(body.text || body.message || '').trim();
+    if (!text) return err('Message text is required');
+    if (text.length > 4000) return err('Message too long (max 4000 chars)');
+
+    const msg = {
+      id: uuid(),
+      bookingId: id,
+      senderId: me.id,
+      senderName: me.name || me.email,
+      senderRole: me.role,
+      // Denormalize participants for cheap indexed lookups later
+      participantIds: [b.travelerId, b.hostId].filter(Boolean),
+      text,
+      createdAt: new Date(),
+      readBy: [me.id], // sender counts as read
+    };
+
+    const msgs = await getCollection('bookingMessages');
+    await msgs.insertOne(msg);
+
+    // Upsert lightweight conversation doc for fast list rendering.
+    const convos = await getCollection('bookingConversations');
+    await convos.updateOne(
+      { bookingId: id },
+      { $set: {
+          bookingId: id,
+          participantIds: msg.participantIds,
+          travelerId: b.travelerId,
+          hostId: b.hostId,
+          listingId: b.listingId,
+          listingTitle: b.listingTitle,
+          listingImage: b.listingImage,
+          lastMessageAt: msg.createdAt,
+          lastMessagePreview: text.slice(0, 200),
+          lastSenderId: me.id,
+          lastSenderName: msg.senderName,
+        },
+        $setOnInsert: { id: uuid(), createdAt: new Date() },
+        $inc: { messageCount: 1 },
+      },
+      { upsert: true }
+    );
+
+    // In-app notifications for the *other* party (traveler ↔ host).
+    // Admin messaging notifies both parties. Every sender's own device is skipped.
+    const users = await getCollection('users');
+    const notifyIds = new Set();
+    if (me.id !== b.travelerId) notifyIds.add(b.travelerId);
+    if (me.id !== b.hostId) notifyIds.add(b.hostId);
+    // Also notify any admins who are actively watching (best-effort broadcast)
+    const admins = await users.find({ role: { $in: ['admin','super_admin'] } }, { projection: { id: 1 } }).toArray();
+    admins.forEach(a => { if (a.id !== me.id) notifyIds.add(a.id); });
+
+    await Promise.all([...notifyIds].map(rid => mkMessageNotif(rid, me, b, text)));
+
+    // Email notification for traveler ↔ host (skip admins to avoid noise).
+    // AWAITED (Vercel serverless email fix pattern established earlier).
+    const emailRecipients = [];
+    if (me.id !== b.travelerId && b.travelerId) emailRecipients.push({ userId: b.travelerId });
+    if (me.id !== b.hostId && b.hostId) emailRecipients.push({ userId: b.hostId });
+    const recipientUsers = await Promise.all(
+      emailRecipients.map(r => users.findOne({ id: r.userId }, { projection: { email: 1, name: 1 } }))
+    );
+    const emailTasks = recipientUsers.filter(Boolean).filter(u => u.email).map(u => {
+      const subject = `New message about ${b.listingTitle || 'your booking'}`;
+      const html = `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#1c1917">
+          <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#059669;font-weight:700">Safar · New Message</div>
+          <h1 style="font-size:24px;margin:8px 0 4px 0">${msg.senderName} sent you a message</h1>
+          <div style="font-size:13px;color:#6b7280">About: ${b.listingTitle || 'Booking ' + id}</div>
+          <div style="margin:24px 0;padding:20px;background:#f8fafc;border-left:4px solid #10b981;border-radius:8px;font-size:15px;line-height:1.6;white-space:pre-wrap">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+          <a href="${process.env.NEXT_PUBLIC_BASE_URL || ''}/dashboard/traveler/bookings/${id}"
+             style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:9999px;font-weight:600;text-decoration:none">Reply on Safar</a>
+          <div style="margin-top:32px;font-size:12px;color:#9ca3af">You're receiving this because you're a participant on booking #${id.slice(0,8)}.</div>
+        </div>`;
+      return sendEmail({ to: u.email, subject, html }).catch(e => ({ success: false, error: e }));
+    });
+    if (emailTasks.length) await Promise.allSettled(emailTasks);
+
+    return ok({ message: msg }, 201);
+  }
+
+  // GET /api/bookings/:id/messages — thread history + auto-mark-read for viewer
+  if (segments[0] === 'bookings' && segments[1] && segments[2] === 'messages' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const id = segments[1];
+    const bookings = await getCollection('bookings');
+    const b = await bookings.findOne({ bookingId: id }, { projection: { _id: 0, travelerId: 1, hostId: 1, listingTitle: 1, listingImage: 1, listingId: 1 } });
+    if (!b) return err('Booking not found', 404);
+    if (me.role !== 'admin' && me.role !== 'super_admin' && me.id !== b.travelerId && me.id !== b.hostId) {
+      return err('Forbidden', 403);
+    }
+    const msgs = await getCollection('bookingMessages');
+    const list = await msgs.find({ bookingId: id }, { projection: { _id: 0 } }).sort({ createdAt: 1 }).limit(500).toArray();
+
+    // Mark viewer as reader on any messages they haven't marked (fire-and-forget-safe: no email cost)
+    const unreadIds = list.filter(m => !(m.readBy || []).includes(me.id)).map(m => m.id);
+    if (unreadIds.length) {
+      await msgs.updateMany({ id: { $in: unreadIds } }, { $addToSet: { readBy: me.id } });
+    }
+    // Clear any "booking_message" in-app notifications targeting this user for this booking
+    const notifications = await getCollection('notifications');
+    await notifications.updateMany(
+      { userId: me.id, type: 'booking_message', 'meta.bookingId': id, read: false },
+      { $set: { read: true, readAt: new Date() } }
+    );
+
+    return ok({
+      messages: list,
+      booking: { bookingId: id, listingTitle: b.listingTitle, listingImage: b.listingImage, listingId: b.listingId, travelerId: b.travelerId, hostId: b.hostId },
+      viewerId: me.id,
+    });
+  }
+
+  // GET /api/me/conversations — my booking threads (traveler + host)
+  if (path === '/me/conversations' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const convos = await getCollection('bookingConversations');
+    const list = await convos.find({ participantIds: me.id }, { projection: { _id: 0 } }).sort({ lastMessageAt: -1 }).limit(100).toArray();
+    // Compute per-thread unread for viewer
+    const msgs = await getCollection('bookingMessages');
+    const withUnread = await Promise.all(list.map(async (c) => {
+      const unread = await msgs.countDocuments({ bookingId: c.bookingId, readBy: { $ne: me.id } });
+      return { ...c, unreadCount: unread };
+    }));
+    return ok({ conversations: withUnread });
   }
 
   // Module 9: GET /api/bookings/:id/timeline (booking audit history)

@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import {
   Calendar, Loader2, X, Phone, ArrowLeft, Clock, User, Shield,
   CheckCircle2, XCircle, RotateCcw, Mail, FileText, Sparkles, MapPin,
+  MessageCircle, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
@@ -278,11 +279,137 @@ function BookingDetailInner() {
                 </ol>
               )}
             </div>
+
+            {/* MODULE 11 (Messaging) — Booking conversation thread */}
+            <BookingMessages bookingId={booking.bookingId} />
           </>
         )}
       </div>
       <Footer />
     </main>
+  );
+}
+
+// MODULE 11 (Messaging) — reusable conversation panel scoped to one booking.
+// Works for traveler / host / admin (same permission model as the parent page).
+// Polls every 15s for new messages; auto-marks-read on view; auto-clears in-app
+// notifications for this booking on the server side (see GET messages endpoint).
+function BookingMessages({ bookingId }) {
+  const [state, setState] = useState({ loading: true, messages: [], viewerId: null, error: null });
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const load = async () => {
+    try {
+      const r = await fetch(`/api/bookings/${bookingId}/messages`, { credentials: 'include' });
+      const d = await r.json();
+      if (d.ok) setState({ loading: false, messages: d.messages || [], viewerId: d.viewerId, error: null });
+      else setState((s) => ({ ...s, loading: false, error: d.error || 'Failed to load messages' }));
+    } catch (e) { setState((s) => ({ ...s, loading: false, error: 'Failed to load messages' })); }
+  };
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 15000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
+
+  const send = async (e) => {
+    e?.preventDefault?.();
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setSending(true);
+    try {
+      const r = await fetch(`/api/bookings/${bookingId}/messages`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        setText('');
+        setState((s) => ({ ...s, messages: [...s.messages, d.message] }));
+      } else {
+        toast.error(d.error || 'Failed to send');
+      }
+    } catch (e) { toast.error('Failed to send'); }
+    setSending(false);
+  };
+
+  return (
+    <div className="rounded-3xl border bg-white p-6 md:p-8 shadow-sm mt-6">
+      <div className="flex items-center gap-2 mb-4">
+        <MessageCircle className="size-5 text-emerald2" />
+        <h2 className="font-display text-2xl font-bold">Messages</h2>
+        <span className="ml-2 text-xs text-muted-foreground">{state.messages.length} in this thread</span>
+      </div>
+
+      {state.loading && (
+        <div className="py-8 grid place-items-center">
+          <Loader2 className="size-6 animate-spin text-emerald2" />
+        </div>
+      )}
+
+      {!state.loading && state.error && (
+        <div className="text-sm text-rose-600 py-4">{state.error}</div>
+      )}
+
+      {!state.loading && !state.error && (
+        <>
+          <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1 pb-2">
+            {state.messages.length === 0 && (
+              <div className="text-center py-10 text-sm text-muted-foreground">
+                No messages yet — start the conversation about your stay below.
+              </div>
+            )}
+            {state.messages.map((m) => {
+              const mine = m.senderId === state.viewerId;
+              return (
+                <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${mine ? 'bg-emerald2 text-white rounded-br-sm' : 'bg-secondary rounded-bl-sm'}`}>
+                    {!mine && (
+                      <div className="text-[10px] uppercase tracking-wider font-bold opacity-70 mb-0.5">
+                        {m.senderName || 'Unknown'}
+                        {m.senderRole && m.senderRole !== 'traveler' && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-white/60 text-charcoal font-semibold">{m.senderRole}</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="text-sm whitespace-pre-wrap break-words">{m.text}</div>
+                    <div className={`text-[10px] mt-1 ${mine ? 'text-white/70' : 'text-muted-foreground'}`}>
+                      {new Date(m.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <form onSubmit={send} className="mt-4 pt-4 border-t flex items-end gap-2">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="Type your message..."
+              rows={2}
+              maxLength={4000}
+              className="flex-1 px-4 py-2.5 rounded-2xl border bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald2/40"
+            />
+            <Button
+              type="submit"
+              disabled={sending || !text.trim()}
+              className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold shrink-0"
+            >
+              {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              <span className="hidden sm:inline ml-2">Send</span>
+            </Button>
+          </form>
+          <div className="text-[11px] text-muted-foreground mt-2">
+            Both parties (and Safar admins) receive an email + in-app notification when you send.
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
