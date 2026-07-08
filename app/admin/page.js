@@ -1244,6 +1244,22 @@ function AdminInner() {
 
             {/* Advanced Settings — Super Admin only navigation */}
             <div className="grid md:grid-cols-2 gap-4">
+              <Link href="/admin/settings/revenue-engine"
+                className="group rounded-2xl border bg-white p-5 flex items-start gap-4 hover:border-emerald2 hover:shadow-md transition">
+                <div className="size-11 rounded-xl bg-emerald-50 grid place-items-center text-emerald2 shrink-0 group-hover:bg-emerald2 group-hover:text-white transition">
+                  <Sparkles className="size-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-display text-lg font-bold flex items-center gap-2">
+                    Revenue Engine
+                    <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">Super Admin</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Booking fees · Wallet · Credits · Referrals · Loyalty · Promotions · Coupons · Cashback · Tax · Refunds · Analytics
+                  </div>
+                </div>
+                <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-emerald2 transition" />
+              </Link>
               <Link href="/admin/settings/payment-gateways"
                 className="group rounded-2xl border bg-white p-5 flex items-start gap-4 hover:border-emerald2 hover:shadow-md transition">
                 <div className="size-11 rounded-xl bg-emerald-50 grid place-items-center text-emerald2 shrink-0 group-hover:bg-emerald2 group-hover:text-white transition">

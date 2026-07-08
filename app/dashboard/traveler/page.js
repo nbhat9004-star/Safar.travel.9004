@@ -76,6 +76,9 @@ function TravelerDashboardInner() {
               <Link href="/dashboard/traveler/bookings"><Calendar className="size-4 mr-2" /> My Bookings</Link>
             </Button>
             <Button asChild variant="outline" className="rounded-full font-semibold">
+              <Link href="/dashboard/traveler/rewards"><Wallet className="size-4 mr-2" /> My Rewards</Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-full font-semibold">
               <Link href="/dashboard/traveler/wishlist"><Heart className="size-4 mr-2" /> My Wishlist</Link>
             </Button>
             <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold">

@@ -1771,6 +1771,361 @@ async function route(request, { params }) {
     }});
   }
 
+  // =====================================================================
+  // MODULE 11 — SAFAR REVENUE, LOYALTY & REWARDS ENGINE
+  // Additive only. Reuses: getCollection, getCurrentUser, requireRole,
+  // pgSanitize (M10), uuid, ok/err, crypto (already imported for M10).
+  // =====================================================================
+
+  const REVENUE_DEFAULTS = {
+    id: 'default',
+    bookingFee: { enabled: false, mode: 'percent', percent: 5, flat: 0, minAmount: 0, maxAmount: 500, currency: 'INR' },
+    onlinePayDiscount: { enabled: true, percent: 3 },
+    wallet: { enabled: true, minRedeem: 100, maxUsagePctPerBooking: 100 },
+    credits: { enabled: true, signupBonus: 100, referralAward: 100, expiryDays: 365, minRedeem: 50 },
+    referral: { enabled: true, referrerReward: 200, refereeReward: 100, rewardType: 'credits', codePrefix: 'SAFAR' },
+    loyalty: { enabled: true, tiers: [
+      { name: 'Bronze', min: 0, creditPct: 5, benefits: ['5% credits back on bookings','Basic support'] },
+      { name: 'Silver', min: 5000, creditPct: 8, benefits: ['8% credits back','Priority support','Early access to promotions'] },
+      { name: 'Gold', min: 20000, creditPct: 12, benefits: ['12% credits back','Free room upgrades (subject to availability)','Late checkout'] },
+      { name: 'Platinum', min: 50000, creditPct: 15, benefits: ['15% credits back','Personal concierge','Complimentary amenities','Guaranteed upgrades'] },
+    ] },
+    cashback: { enabled: true, defaultPct: 2, walletMode: true, minBookingAmount: 1000 },
+    membership: { enabled: false, tiers: [
+      { name: 'Free', pricePerMonth: 0, benefits: ['Basic access'] },
+      { name: 'Premium', pricePerMonth: 299, benefits: ['5% extra credits','Priority support'] },
+      { name: 'Business', pricePerMonth: 999, benefits: ['10% extra credits','GST invoicing','Bulk bookings'] },
+      { name: 'VIP', pricePerMonth: 2999, benefits: ['15% extra credits','Dedicated concierge','Free cancellation'] },
+    ] },
+    commission: { hostCommissionPct: 15, categoryOverrides: [] },
+    refund: { autoApprove: false, refundWindowDays: 7, cancellationFeePct: 10 },
+    tax: { gstEnabled: true, gstPct: 18, taxInclusive: false },
+    publicDisplay: { showRewards: true, showReferral: true, showPromotions: true, showCashback: true, showLoyalty: true },
+    createdAt: new Date(), updatedAt: new Date(),
+  };
+
+  const revenueGetSettings = async () => {
+    const col = await getCollection('revenueSettings');
+    let doc = await col.findOne({ id: 'default' }, { projection: { _id: 0 } });
+    if (!doc) {
+      doc = { ...REVENUE_DEFAULTS };
+      await col.insertOne({ ...doc });
+    }
+    return doc;
+  };
+
+  const genReferralCode = (prefix = 'SAFAR') => `${prefix}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+  const ensureUserRewards = async (u) => {
+    if (!u) return u;
+    const users = await getCollection('users');
+    const patch = {};
+    if (!u.referralCode) patch.referralCode = genReferralCode();
+    if (u.walletBalance === undefined) patch.walletBalance = 0;
+    if (u.safarCredits === undefined) patch.safarCredits = 0;
+    if (u.creditsEarned === undefined) patch.creditsEarned = 0;
+    if (u.creditsRedeemed === undefined) patch.creditsRedeemed = 0;
+    if (u.loyaltyPoints === undefined) patch.loyaltyPoints = 0;
+    if (u.loyaltyTier === undefined) patch.loyaltyTier = 'Bronze';
+    if (u.totalSavings === undefined) patch.totalSavings = 0;
+    if (Object.keys(patch).length) await users.updateOne({ id: u.id }, { $set: patch });
+    return { ...u, ...patch };
+  };
+
+  const computeLoyaltyTier = (points, tiers) => {
+    const sorted = [...tiers].sort((a, b) => b.min - a.min);
+    for (const t of sorted) if (points >= t.min) return t;
+    return tiers[0];
+  };
+
+  // ---- ADMIN: Revenue Settings ----
+  if (path === '/admin/revenue-settings' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    return ok({ settings: await revenueGetSettings() });
+  }
+  if (path === '/admin/revenue-settings' && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'super_admin'); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    const existing = await revenueGetSettings();
+    const merged = { ...existing, ...body, id: 'default', updatedAt: new Date(), updatedBy: me.id, updatedByName: me.name || me.email };
+    const col = await getCollection('revenueSettings');
+    await col.updateOne({ id: 'default' }, { $set: merged }, { upsert: true });
+    return ok({ settings: merged });
+  }
+
+  // ---- ADMIN: Promotions CRUD ----
+  if (path === '/admin/promotions' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('promotions');
+    const list = await col.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    return ok({ promotions: list });
+  }
+  if (path === '/admin/promotions' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    const doc = {
+      id: uuid(),
+      title: String(b.title || '').trim(),
+      description: b.description || '',
+      badge: b.badge || 'Limited Offer',
+      category: b.category || 'general',
+      audience: b.audience || 'traveler',
+      discountType: b.discountType || 'percent',
+      discountValue: Number(b.discountValue) || 0,
+      startsAt: b.startsAt ? new Date(b.startsAt) : new Date(),
+      endsAt: b.endsAt ? new Date(b.endsAt) : null,
+      imageUrl: b.imageUrl || '',
+      ctaText: b.ctaText || 'Explore',
+      ctaHref: b.ctaHref || '/explore',
+      active: b.active !== false,
+      createdAt: new Date(), updatedAt: new Date(),
+      createdBy: me.id, createdByName: me.name || me.email,
+    };
+    if (!doc.title) return err('title required');
+    const col = await getCollection('promotions');
+    await col.insertOne(doc);
+    return ok({ promotion: doc }, 201);
+  }
+  if (segments[0]==='admin' && segments[1]==='promotions' && segments[2] && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    const set = { updatedAt: new Date(), updatedBy: me.id };
+    ['title','description','badge','category','audience','discountType','imageUrl','ctaText','ctaHref'].forEach(k => { if (b[k]!==undefined) set[k] = b[k]; });
+    if (b.discountValue!==undefined) set.discountValue = Number(b.discountValue);
+    if (b.active!==undefined) set.active = !!b.active;
+    if (b.startsAt) set.startsAt = new Date(b.startsAt);
+    if (b.endsAt) set.endsAt = new Date(b.endsAt);
+    const col = await getCollection('promotions');
+    const r = await col.updateOne({ id: segments[2] }, { $set: set });
+    if (!r.matchedCount) return err('not found', 404);
+    return ok({ promotion: await col.findOne({ id: segments[2] }, { projection: { _id: 0 } }) });
+  }
+  if (segments[0]==='admin' && segments[1]==='promotions' && segments[2] && method === 'DELETE') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('promotions');
+    await col.deleteOne({ id: segments[2] });
+    return ok({ deleted: true });
+  }
+
+  // ---- ADMIN: Coupons CRUD ----
+  if (path === '/admin/coupons' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('coupons');
+    const list = await col.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    return ok({ coupons: list });
+  }
+  if (path === '/admin/coupons' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    const code = String(b.code || '').trim().toUpperCase();
+    if (!code) return err('code required');
+    const col = await getCollection('coupons');
+    if (await col.findOne({ code })) return err('coupon code already exists', 409);
+    const doc = {
+      id: uuid(), code,
+      title: b.title || code,
+      description: b.description || '',
+      discountType: b.discountType || 'percent',
+      discountValue: Number(b.discountValue) || 0,
+      minBooking: Number(b.minBooking) || 0,
+      maxDiscount: Number(b.maxDiscount) || 0,
+      categories: Array.isArray(b.categories) ? b.categories : [],
+      usageLimit: Number(b.usageLimit) || 0,
+      usedCount: 0,
+      perUserLimit: Number(b.perUserLimit) || 1,
+      expiresAt: b.expiresAt ? new Date(b.expiresAt) : null,
+      isPublic: b.isPublic !== false,
+      active: b.active !== false,
+      createdAt: new Date(), updatedAt: new Date(),
+      createdBy: me.id, createdByName: me.name || me.email,
+    };
+    await col.insertOne(doc);
+    return ok({ coupon: doc }, 201);
+  }
+  if (segments[0]==='admin' && segments[1]==='coupons' && segments[2] && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    const set = { updatedAt: new Date() };
+    ['title','description','discountType'].forEach(k => { if (b[k]!==undefined) set[k]=b[k]; });
+    ['discountValue','minBooking','maxDiscount','usageLimit','perUserLimit'].forEach(k => { if (b[k]!==undefined) set[k]=Number(b[k])||0; });
+    if (Array.isArray(b.categories)) set.categories = b.categories;
+    if (b.active!==undefined) set.active = !!b.active;
+    if (b.isPublic!==undefined) set.isPublic = !!b.isPublic;
+    if (b.expiresAt) set.expiresAt = new Date(b.expiresAt);
+    const col = await getCollection('coupons');
+    const r = await col.updateOne({ id: segments[2] }, { $set: set });
+    if (!r.matchedCount) return err('not found', 404);
+    return ok({ coupon: await col.findOne({ id: segments[2] }, { projection: { _id: 0 } }) });
+  }
+  if (segments[0]==='admin' && segments[1]==='coupons' && segments[2] && method === 'DELETE') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('coupons');
+    await col.deleteOne({ id: segments[2] });
+    return ok({ deleted: true });
+  }
+
+  // ---- ADMIN: Revenue Analytics (composite, best-effort aggregations) ----
+  if (path === '/admin/revenue-analytics' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin','super_admin']); if (!g.ok) return err(g.error, g.status);
+    const [bookingsCol, walletTx, creditTx, couponUses, cashbackCol, users, promotions, coupons] = await Promise.all([
+      getCollection('bookings'), getCollection('walletTransactions'), getCollection('creditTransactions'),
+      getCollection('couponUses'), getCollection('cashbackLedger'), getCollection('users'),
+      getCollection('promotions'), getCollection('coupons'),
+    ]);
+    const [totalBookings, totalRevenueAgg, walletIssuedAgg, creditsIssuedAgg, creditsRedeemedAgg, couponUsesCount, cashbackAgg, promoCount, couponCount, allUsers] = await Promise.all([
+      bookingsCol.countDocuments({}),
+      bookingsCol.aggregate([{ $match: { status: { $in: ['approved','cancelled'] } } }, { $group: { _id: null, total: { $sum: '$totalPrice' } } }]).toArray().catch(() => []),
+      walletTx.aggregate([{ $match: { type: 'credit' } }, { $group: { _id: null, total: { $sum: '$amount' } } }]).toArray().catch(() => []),
+      creditTx.aggregate([{ $match: { type: 'earn' } }, { $group: { _id: null, total: { $sum: '$amount' } } }]).toArray().catch(() => []),
+      creditTx.aggregate([{ $match: { type: 'redeem' } }, { $group: { _id: null, total: { $sum: '$amount' } } }]).toArray().catch(() => []),
+      couponUses.countDocuments({}).catch(() => 0),
+      cashbackCol.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]).toArray().catch(() => []),
+      promotions.countDocuments({ active: true }),
+      coupons.countDocuments({ active: true }),
+      users.find({ role: 'traveler' }, { projection: { loyaltyTier: 1, walletBalance: 1, safarCredits: 1 } }).toArray(),
+    ]);
+    const loyaltyDist = allUsers.reduce((acc, u) => { const t = u.loyaltyTier || 'Bronze'; acc[t] = (acc[t]||0)+1; return acc; }, {});
+    const totalWalletBalance = allUsers.reduce((s,u) => s+(u.walletBalance||0), 0);
+    const totalCreditsBalance = allUsers.reduce((s,u) => s+(u.safarCredits||0), 0);
+    return ok({
+      analytics: {
+        totalBookings,
+        totalRevenue: totalRevenueAgg[0]?.total || 0,
+        walletIssued: walletIssuedAgg[0]?.total || 0,
+        walletOutstanding: totalWalletBalance,
+        creditsIssued: creditsIssuedAgg[0]?.total || 0,
+        creditsRedeemed: creditsRedeemedAgg[0]?.total || 0,
+        creditsOutstanding: totalCreditsBalance,
+        couponUses: couponUsesCount,
+        cashbackIssued: cashbackAgg[0]?.total || 0,
+        activePromotions: promoCount,
+        activeCoupons: couponCount,
+        loyaltyDistribution: loyaltyDist,
+        travelerCount: allUsers.length,
+      }
+    });
+  }
+
+  // ---- TRAVELER: composite rewards data ----
+  if (path === '/me/rewards' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const settings = await revenueGetSettings();
+    const fresh = await ensureUserRewards(me);
+    const [walletTx, creditTx, referrals, referralsAsReferee, activePromos, myCouponUses, cashback] = await Promise.all([
+      (await getCollection('walletTransactions')).find({ userId: fresh.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(50).toArray(),
+      (await getCollection('creditTransactions')).find({ userId: fresh.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(50).toArray(),
+      (await getCollection('referrals')).find({ referrerId: fresh.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(100).toArray(),
+      (await getCollection('referrals')).findOne({ refereeId: fresh.id }, { projection: { _id: 0 } }),
+      (await getCollection('promotions')).find({ active: true }, { projection: { _id: 0 } }).limit(20).toArray(),
+      (await getCollection('couponUses')).find({ userId: fresh.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(50).toArray(),
+      (await getCollection('cashbackLedger')).find({ userId: fresh.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(50).toArray(),
+    ]);
+    const currentTier = computeLoyaltyTier(fresh.loyaltyPoints || 0, settings.loyalty.tiers);
+    const nextTier = settings.loyalty.tiers.find(t => t.min > (fresh.loyaltyPoints || 0)) || null;
+    const savings = {
+      couponSavings: myCouponUses.reduce((s, u) => s + (u.discountAmount || 0), 0),
+      cashbackEarned: cashback.reduce((s, c) => s + (c.amount || 0), 0),
+      referralEarnings: referrals.filter(r => r.rewardCredited).reduce((s, r) => s + (r.rewardAmount || 0), 0),
+      walletSavings: walletTx.filter(t => t.type === 'debit' && t.source === 'booking').reduce((s, t) => s + (t.amount || 0), 0),
+      onlinePayDiscountSaved: fresh.onlinePayDiscountSaved || 0,
+      lifetimeSavings: fresh.totalSavings || 0,
+    };
+    savings.total = (savings.couponSavings || 0) + (savings.cashbackEarned || 0) + (savings.referralEarnings || 0) + (savings.walletSavings || 0) + (savings.onlinePayDiscountSaved || 0);
+
+    return ok({
+      user: {
+        id: fresh.id, name: fresh.name, email: fresh.email,
+        walletBalance: fresh.walletBalance || 0,
+        safarCredits: fresh.safarCredits || 0,
+        creditsEarned: fresh.creditsEarned || 0,
+        creditsRedeemed: fresh.creditsRedeemed || 0,
+        loyaltyPoints: fresh.loyaltyPoints || 0,
+        loyaltyTier: currentTier?.name || 'Bronze',
+        referralCode: fresh.referralCode,
+      },
+      currentTier,
+      nextTier,
+      referral: {
+        code: fresh.referralCode,
+        link: `${process.env.NEXT_PUBLIC_BASE_URL || ''}/auth/signup?ref=${encodeURIComponent(fresh.referralCode || '')}`,
+        successfulReferrals: referrals.filter(r => r.rewardCredited).length,
+        pendingReferrals: referrals.filter(r => !r.rewardCredited).length,
+        totalRewards: referrals.filter(r => r.rewardCredited).reduce((s, r) => s + (r.rewardAmount || 0), 0),
+        referrals,
+        referredBy: referralsAsReferee || null,
+        config: settings.referral,
+      },
+      wallet: { balance: fresh.walletBalance || 0, transactions: walletTx, config: settings.wallet },
+      credits: {
+        balance: fresh.safarCredits || 0, earned: fresh.creditsEarned || 0, redeemed: fresh.creditsRedeemed || 0,
+        transactions: creditTx, config: settings.credits,
+        expiring: creditTx.filter(t => t.type === 'earn' && t.expiresAt && new Date(t.expiresAt) < new Date(Date.now() + 30*24*60*60*1000)).reduce((s,t)=>s+(t.amount||0),0),
+      },
+      coupons: myCouponUses,
+      cashback: { entries: cashback, total: savings.cashbackEarned, config: settings.cashback },
+      loyalty: { config: settings.loyalty, currentTier, nextTier, points: fresh.loyaltyPoints || 0 },
+      savings,
+      promotions: activePromos,
+      membership: { config: settings.membership, currentPlan: 'Free' },
+      publicDisplay: settings.publicDisplay,
+    });
+  }
+
+  // ---- TRAVELER: manual referral code regeneration ----
+  if (path === '/me/referral/regenerate' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const users = await getCollection('users');
+    const settings = await revenueGetSettings();
+    const code = genReferralCode(settings.referral?.codePrefix || 'SAFAR');
+    await users.updateOne({ id: me.id }, { $set: { referralCode: code } });
+    return ok({ referralCode: code });
+  }
+
+  // ---- PUBLIC: promotions + rewards config for landing pages (no auth) ----
+  if (path === '/public/promotions' && method === 'GET') {
+    const col = await getCollection('promotions');
+    const now = new Date();
+    const list = await col.find({
+      active: true,
+      $or: [ { endsAt: null }, { endsAt: { $gte: now } } ]
+    }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(20).toArray();
+    return ok({ promotions: list });
+  }
+  if (path === '/public/rewards-config' && method === 'GET') {
+    const s = await revenueGetSettings();
+    return ok({
+      publicDisplay: s.publicDisplay,
+      referral: { enabled: s.referral.enabled, referrerReward: s.referral.referrerReward, refereeReward: s.referral.refereeReward, rewardType: s.referral.rewardType },
+      loyalty: { enabled: s.loyalty.enabled, tiers: s.loyalty.tiers.map(t => ({ name: t.name, min: t.min, benefits: t.benefits })) },
+      credits: { enabled: s.credits.enabled, signupBonus: s.credits.signupBonus },
+      cashback: { enabled: s.cashback.enabled, defaultPct: s.cashback.defaultPct },
+      onlinePayDiscount: s.onlinePayDiscount,
+      bookingFee: { enabled: s.bookingFee.enabled, mode: s.bookingFee.mode, percent: s.bookingFee.percent, flat: s.bookingFee.flat },
+    });
+  }
+  if (path === '/public/coupons' && method === 'GET') {
+    const col = await getCollection('coupons');
+    const now = new Date();
+    const list = await col.find({
+      active: true, isPublic: true,
+      $or: [ { expiresAt: null }, { expiresAt: { $gte: now } } ],
+    }, { projection: { _id: 0, code:1, title:1, description:1, discountType:1, discountValue:1, minBooking:1, maxDiscount:1, expiresAt:1 } }).sort({ createdAt: -1 }).limit(20).toArray();
+    return ok({ coupons: list });
+  }
+
   // ---------- CONTACT FORM ----------
   // POST /api/contact  (public endpoint for contact form submissions)
   if (path === '/contact' && method === 'POST') {
