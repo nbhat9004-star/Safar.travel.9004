@@ -11,7 +11,7 @@ import sys
 import os
 
 # Get base URL from environment
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://host-claim-review.preview.emergentagent.com')
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://github-sync-134.preview.emergentagent.com')
 API_URL = f"{BASE_URL}/api"
 
 # Test counters
