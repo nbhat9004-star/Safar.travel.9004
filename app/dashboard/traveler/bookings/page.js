@@ -268,6 +268,14 @@ function MyBookingsInner() {
                           variant="outline"
                           className="rounded-full"
                         >
+                          <Link href={`/dashboard/traveler/bookings/${b.bookingId}`}>View Details</Link>
+                        </Button>
+                        <Button 
+                          asChild 
+                          size="sm" 
+                          variant="outline"
+                          className="rounded-full"
+                        >
                           <Link href={`/property/${b.listingId}`}>View Property</Link>
                         </Button>
                         {b.hostPhone && (

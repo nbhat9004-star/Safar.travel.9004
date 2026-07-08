@@ -29,6 +29,26 @@ const err = (message, status = 400) => json({ ok: false, error: message }, statu
 const isEmail = (e) => typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const readBody = async (request) => { try { return await request.json(); } catch { return {}; } };
 
+// Module 9: Booking Timeline / Audit Log
+// Writes an event to the bookingTimeline collection. Silent on failure so the
+// primary booking write is never blocked by an audit-log error.
+async function logBookingEvent(bookingId, action, actor, details) {
+  try {
+    if (!bookingId || !action) return;
+    const tl = await getCollection('bookingTimeline');
+    await tl.insertOne({
+      id: uuid(),
+      bookingId,
+      action, // e.g. 'created', 'approved', 'rejected', 'cancelled', 'refunded', 'status_changed'
+      actorId: actor?.id || null,
+      actorName: actor?.name || (actor?.role === 'system' ? 'System' : 'Unknown'),
+      actorRole: actor?.role || null,
+      details: details || {},
+      timestamp: new Date(),
+    });
+  } catch (e) { console.error('booking timeline log error', e); }
+}
+
 // Activity Logging Helper
 async function logActivity(admin, action, details, ipAddress = null) {
   try {
@@ -1110,6 +1130,18 @@ async function route(request, { params }) {
       });
     }
 
+    // Module 9: log booking created event
+    logBookingEvent(doc.bookingId, 'created', me, {
+      listingId: doc.listingId,
+      listingTitle: doc.listingTitle,
+      checkInDate: doc.checkInDate,
+      checkOutDate: doc.checkOutDate,
+      guests: doc.guests,
+      nights: doc.nights,
+      totalPrice: doc.totalPrice,
+      inventoryTypeName: doc.inventoryTypeName,
+    }).catch(() => {});
+
     const { _id, ...rest } = doc;
     return ok({ booking: rest }, 201);
   }
@@ -1195,7 +1227,14 @@ async function route(request, { params }) {
         });
       }
     }
-    
+
+    // Module 9: log status-change event
+    logBookingEvent(id, status, me, {
+      previousStatus: b.status,
+      reason: reason || null,
+      listingTitle: b.listingTitle,
+    }).catch(() => {});
+
     return ok({ booking: fresh });
   }
 
@@ -1223,11 +1262,47 @@ async function route(request, { params }) {
     
     try {
       await sendInvoiceEmail(booking, traveler, invoiceId);
+      logBookingEvent(id, 'invoice_sent', me, { invoiceId, to: traveler.email }).catch(() => {});
       return ok({ message: 'Invoice email sent successfully', invoiceId });
     } catch (error) {
       console.error('Failed to send invoice email:', error);
       return err('Failed to send invoice email', 500);
     }
+  }
+
+  // Module 9: GET /api/bookings/:id/timeline (booking audit history)
+  // Placed BEFORE GET /api/bookings/:id so it matches first.
+  if (segments[0] === 'bookings' && segments[1] && segments[2] === 'timeline' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const id = segments[1];
+    const bookings = await getCollection('bookings');
+    const b = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    if (!b) return err('Booking not found', 404);
+    // Permission: traveler owner, host owner, or admin
+    if (me.role !== 'admin' && me.id !== b.travelerId && me.id !== b.hostId) {
+      return err('Forbidden', 403);
+    }
+    const tl = await getCollection('bookingTimeline');
+    const events = await tl.find({ bookingId: id }, { projection: { _id: 0 } })
+      .sort({ timestamp: 1 })
+      .toArray();
+    return ok({ bookingId: id, events });
+  }
+
+  // Module 9: GET /api/bookings/:id (single booking with permission check)
+  if (segments[0] === 'bookings' && segments[1] && !segments[2] && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const id = segments[1];
+    const bookings = await getCollection('bookings');
+    const b = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    if (!b) return err('Booking not found', 404);
+    // Permission: traveler owner, host owner, or admin
+    if (me.role !== 'admin' && me.id !== b.travelerId && me.id !== b.hostId) {
+      return err('Forbidden', 403);
+    }
+    return ok({ booking: b });
   }
 
   // ---------- ADMIN BOOKING MANAGEMENT ----------
@@ -1251,6 +1326,11 @@ async function route(request, { params }) {
     }
     
     const fresh = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    logBookingEvent(id, 'cancelled', { ...me, role: 'admin' }, {
+      by: 'admin',
+      previousStatus: booking.status,
+      listingTitle: booking.listingTitle,
+    }).catch(() => {});
     return ok({ booking: fresh });
   }
 
@@ -1264,6 +1344,10 @@ async function route(request, { params }) {
     if (!booking) return err('Booking not found', 404);
     await bookings.updateOne({ bookingId: id }, { $set: { refunded: true, updatedAt: new Date() } });
     const fresh = await bookings.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    logBookingEvent(id, 'refunded', { ...me, role: 'admin' }, {
+      amount: booking.totalPrice || 0,
+      listingTitle: booking.listingTitle,
+    }).catch(() => {});
     return ok({ booking: fresh });
   }
 
