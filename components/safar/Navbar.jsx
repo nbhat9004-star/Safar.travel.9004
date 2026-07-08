@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
@@ -20,16 +20,36 @@ export default function Navbar({ transparent = false }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  // Module 11A — "More" dropdown (desktop)
+  const [showMore, setShowMore] = useState(false);
+  
+  // Module 11A — informational + placeholder links shared by desktop dropdown and mobile drawer
+  const MORE_LINKS = [
+    { label: 'About Safar', href: '/about' },
+    { label: 'Contact Us', href: '/contact' },
+    { label: 'Help Center', href: '/help' },
+    { label: 'Cancellation Policy', href: '/cancellation-policy' },
+    { label: 'Refund Policy', href: '/refund-policy' },
+    { label: 'Privacy Policy', href: '/privacy-policy' },
+    { label: 'Terms & Conditions', href: '/terms' },
+    { label: 'Trust & Safety', href: '/trust-safety' },
+    { label: 'Community Guidelines', href: '/community-guidelines' },
+    { label: 'Blog', href: '/blog', soon: true },
+    { label: 'Careers', href: '/careers', soon: true },
+  ];
   
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     
-    // Close notifications on outside click
+    // Close notifications / more menu on outside click
     const handleClick = (e) => {
       if (showNotifications && !e.target.closest('.notification-dropdown')) {
         setShowNotifications(false);
+      }
+      if (showMore && !e.target.closest('.more-dropdown')) {
+        setShowMore(false);
       }
     };
     document.addEventListener('click', handleClick);
@@ -38,7 +58,7 @@ export default function Navbar({ transparent = false }) {
       window.removeEventListener('scroll', onScroll);
       document.removeEventListener('click', handleClick);
     };
-  }, [showNotifications]);
+  }, [showNotifications, showMore]);
   
   useEffect(() => {
     fetch('/api/settings/safar-together').then(r => r.json()).then(d => setSafarTogetherEnabled(d.enabled));
@@ -134,6 +154,41 @@ export default function Navbar({ transparent = false }) {
               {n.label}
             </Link>
           ))}
+          {/* Module 11A — More menu (informational + policy links) */}
+          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
+            <div className="relative more-dropdown">
+              <button
+                type="button"
+                onClick={() => setShowMore((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={showMore}
+                className={`inline-flex items-center gap-1 px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
+              >
+                More
+                <ChevronDown className={`size-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
+              </button>
+              {showMore && (
+                <div role="menu" className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl border shadow-xl z-50 overflow-hidden">
+                  <div className="p-2 max-h-[70vh] overflow-y-auto">
+                    {MORE_LINKS.map((it) => (
+                      <Link
+                        key={it.href}
+                        href={it.soon ? '#' : it.href}
+                        onClick={(e) => {
+                          if (it.soon) e.preventDefault();
+                          setShowMore(false);
+                        }}
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition ${it.soon ? 'text-muted-foreground cursor-not-allowed' : 'text-charcoal hover:bg-secondary'}`}
+                      >
+                        <span>{it.label}</span>
+                        {it.soon && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -313,6 +368,26 @@ export default function Navbar({ transparent = false }) {
                       </div>
                     </>
                   )}
+
+                  {/* MODULE 11A — MORE Section (informational pages) */}
+                  <div className="h-px bg-border mb-4" />
+                  <div className="mb-4">
+                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">More</div>
+                    {MORE_LINKS.map((it) => (
+                      <Link
+                        key={it.href}
+                        href={it.soon ? '#' : it.href}
+                        onClick={(e) => {
+                          if (it.soon) e.preventDefault();
+                          else setOpen(false);
+                        }}
+                        className={`flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition ${it.soon ? 'text-muted-foreground' : ''}`}
+                      >
+                        <span>{it.label}</span>
+                        {it.soon && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
+                      </Link>
+                    ))}
+                  </div>
 
                   {/* ADMINISTRATION Section - Only for admins */}
                   {(user?.role === 'admin' || user?.role === 'super_admin') && (

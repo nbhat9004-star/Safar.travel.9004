@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight, Loader2, AlertTriangle, Trash2, Check } from 'lucide-react';
+import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight, Loader2, AlertTriangle, Trash2, Check, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -279,9 +279,10 @@ function HostDashboardInner() {
         </div>
 
         <Tabs defaultValue="dashboard" className="mt-8">
-          <TabsList className="grid w-full max-w-2xl grid-cols-3">
+          <TabsList className="grid w-full max-w-3xl grid-cols-2 sm:grid-cols-4 h-auto">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="ai-growth">📈 AI Growth Center</TabsTrigger>
+            <TabsTrigger value="ai-growth">📈 AI Growth</TabsTrigger>
+            <TabsTrigger value="resources">📚 Resources</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           
@@ -541,6 +542,42 @@ function HostDashboardInner() {
             </div>
           </TabsContent>
           
+          <TabsContent value="resources" className="space-y-6">
+            {/* MODULE 11A — Host Resources (moved out of public footer) */}
+            <div>
+              <h2 className="font-display text-2xl md:text-3xl font-bold flex items-center gap-2">
+                <BookOpen className="size-6 text-emerald2" /> Host Resources
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">Everything you need to build a successful listing and delight guests.</p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                { title: 'Listing Guide',       href: '/host-guide',      emoji: '📘', desc: 'Craft compelling listings that convert browsers into bookings.', ready: true },
+                { title: 'Host Tips',           href: '/host-tips',       emoji: '💡', desc: 'Field-tested tips from top-performing Safar hosts.', ready: true },
+                { title: 'Best Practices',      href: '/host-best-practices', emoji: '⭐', desc: 'Operational standards that keep ratings above 4.9.', ready: true },
+                { title: 'Photography Guide',   href: '#',               emoji: '📸', desc: 'Lighting, angles, and staging tricks. Guide launching soon.', ready: false },
+                { title: 'Pricing Tips',        href: '/host-pricing-tips', emoji: '💰', desc: 'Seasonal pricing, dynamic rates, and cancellation strategy.', ready: true },
+                { title: 'Host Support',        href: '/contact',        emoji: '🎧', desc: 'Talk to a real human on the Safar host team.', ready: true },
+                { title: 'FAQs',                href: '/host-faqs',      emoji: '❓', desc: 'Answers to the most common host questions.', ready: true },
+              ].map((r) => (
+                <Link
+                  key={r.title}
+                  href={r.ready ? r.href : '#'}
+                  onClick={(e) => { if (!r.ready) e.preventDefault(); }}
+                  className={`group rounded-3xl border bg-white p-5 hover:border-emerald2 hover:shadow-md transition ${!r.ready ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  <div className="text-3xl">{r.emoji}</div>
+                  <div className="font-display text-lg font-bold mt-3 group-hover:text-emerald2 flex items-center gap-2">
+                    {r.title}
+                    {!r.ready && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-2">{r.desc}</div>
+                  {r.ready && <div className="text-xs font-semibold text-emerald2 mt-3">Read more →</div>}
+                </Link>
+              ))}
+            </div>
+          </TabsContent>
+
           <TabsContent value="settings" className="space-y-6">
             <ProfileSettings user={user} onUpdate={load} />
           </TabsContent>
