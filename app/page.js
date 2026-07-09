@@ -3,7 +3,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/safar/Navbar';
@@ -70,6 +70,14 @@ function ymdOffset(days) {
 }
 
 function App() {
+  return (
+    <Suspense fallback={null}>
+      <AppInner />
+    </Suspense>
+  );
+}
+
+function AppInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const previewId = searchParams?.get('preview');
