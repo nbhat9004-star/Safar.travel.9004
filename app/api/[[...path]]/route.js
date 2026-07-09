@@ -8625,6 +8625,427 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ suggestions, occupancyPct: +occ.toFixed(1) });
   }
 
+  // ============================================================================
+  // MODULE 17 — Communication, Support & Customer Success
+  // ============================================================================
+
+  // ---- USER SUPPORT TICKETS ----
+
+  // POST /api/support/tickets — any authenticated user creates a ticket
+  if (path === '/support/tickets' && method === 'POST') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    const b = await readBody(request);
+    if (!b.subject || !b.message) return err('subject and message are required');
+    const validCat = ['booking', 'payment', 'wallet', 'refund', 'host', 'traveler', 'listing', 'technical', 'general'];
+    const validPri = ['low', 'medium', 'high', 'urgent'];
+    const tickets = await getCollection('supportTickets');
+    const ticket = {
+      id: uuid(),
+      ticketNumber: `TKT${Date.now().toString().slice(-8)}`,
+      userId: me.id, userName: me.name || me.email, userEmail: me.email, userRole: me.role,
+      subject: String(b.subject).slice(0, 200),
+      category: validCat.includes(b.category) ? b.category : 'general',
+      priority: validPri.includes(b.priority) ? b.priority : 'medium',
+      status: 'open',
+      bookingId: b.bookingId || null,
+      listingId: b.listingId || null,
+      attachments: Array.isArray(b.attachments) ? b.attachments.slice(0, 5) : [],
+      assignedTo: null, assignedToName: null,
+      internalNotes: [],
+      conversation: [{
+        from: 'user', message: String(b.message).slice(0, 5000), timestamp: new Date(),
+        userId: me.id, userName: me.name,
+        attachments: b.attachments || [],
+      }],
+      createdAt: new Date(), updatedAt: new Date(),
+      firstResponseAt: null, resolvedAt: null,
+      ratingResolution: null, ratingSupport: null,
+    };
+    await tickets.insertOne(ticket);
+    m12LogFinanceAudit(me, 'support_ticket_created', { ticketId: ticket.id, category: ticket.category, priority: ticket.priority }).catch(() => {});
+    // Notify all admins
+    try {
+      const admins = await (await getCollection('users')).find({ role: { $in: ['admin', 'super_admin'] } }, { projection: { id: 1, _id: 0 } }).toArray();
+      admins.forEach((a) => mkNotif({ userId: a.id, type: 'support_ticket_created', category: 'support', title: `New ${ticket.priority} ticket · ${ticket.ticketNumber}`, body: ticket.subject, link: `/admin/support?ticket=${ticket.id}`, meta: { ticketId: ticket.id } }).catch(() => {}));
+    } catch {}
+    return ok({ ticket }, 201);
+  }
+
+  // GET /api/support/tickets — list mine (or all if admin)
+  if (path === '/support/tickets' && method === 'GET') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status');
+    const isAdmin = ['admin', 'super_admin'].includes(me.role);
+    const q = isAdmin ? {} : { userId: me.id };
+    if (status) q.status = status;
+    const list = await (await getCollection('supportTickets')).find(q, { projection: { _id: 0, internalNotes: 0 } }).sort({ updatedAt: -1 }).limit(200).toArray();
+    return ok({ tickets: list });
+  }
+
+  // GET /api/support/tickets/:id
+  {
+    const m = path.match(/^\/support\/tickets\/([^/]+)$/);
+    if (m && method === 'GET') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const tickets = await getCollection('supportTickets');
+      const rec = await tickets.findOne({ id: m[1] }, { projection: { _id: 0 } });
+      if (!rec) return err('Ticket not found', 404);
+      const isAdmin = ['admin', 'super_admin'].includes(me.role);
+      if (!isAdmin && rec.userId !== me.id) return err('Forbidden', 403);
+      // Strip internal notes from user view
+      if (!isAdmin) delete rec.internalNotes;
+      return ok({ ticket: rec });
+    }
+  }
+
+  // POST /api/support/tickets/:id/reply — user OR admin reply
+  {
+    const m = path.match(/^\/support\/tickets\/([^/]+)\/reply$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const tickets = await getCollection('supportTickets');
+      const rec = await tickets.findOne({ id: m[1] });
+      if (!rec) return err('Ticket not found', 404);
+      const isAdmin = ['admin', 'super_admin'].includes(me.role);
+      if (!isAdmin && rec.userId !== me.id) return err('Forbidden', 403);
+      const { message, attachments } = await readBody(request);
+      if (!message) return err('message required');
+      const entry = {
+        from: isAdmin ? 'admin' : 'user',
+        message: String(message).slice(0, 5000),
+        timestamp: new Date(),
+        userId: me.id, userName: me.name, adminId: isAdmin ? me.id : undefined, adminName: isAdmin ? me.name : undefined,
+        attachments: Array.isArray(attachments) ? attachments.slice(0, 5) : [],
+      };
+      const set = { updatedAt: new Date() };
+      if (isAdmin && !rec.firstResponseAt) set.firstResponseAt = new Date();
+      if (isAdmin && rec.status === 'open') set.status = 'in_progress';
+      if (!isAdmin && rec.status === 'waiting') set.status = 'in_progress';
+      await tickets.updateOne({ id: m[1] }, { $push: { conversation: entry }, $set: set });
+      // Notify counterparty
+      if (isAdmin) {
+        mkNotif({ userId: rec.userId, type: 'support_reply', category: 'support', title: `Reply on ${rec.ticketNumber}`, body: String(message).slice(0, 140), link: `/dashboard/traveler/support?ticket=${m[1]}`, meta: { ticketId: m[1] } }).catch(() => {});
+      } else if (rec.assignedTo) {
+        mkNotif({ userId: rec.assignedTo, type: 'support_reply', category: 'support', title: `User replied to ${rec.ticketNumber}`, body: String(message).slice(0, 140), link: `/admin/support?ticket=${m[1]}`, meta: { ticketId: m[1] } }).catch(() => {});
+      }
+      return ok({ replied: true });
+    }
+  }
+
+  // POST /api/support/tickets/:id/status — user close, admin resolve/close/reopen
+  {
+    const m = path.match(/^\/support\/tickets\/([^/]+)\/status$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const tickets = await getCollection('supportTickets');
+      const rec = await tickets.findOne({ id: m[1] });
+      if (!rec) return err('Ticket not found', 404);
+      const isAdmin = ['admin', 'super_admin'].includes(me.role);
+      if (!isAdmin && rec.userId !== me.id) return err('Forbidden', 403);
+      const { status, reason } = await readBody(request);
+      const allowed = ['open', 'in_progress', 'waiting', 'resolved', 'closed'];
+      if (!allowed.includes(status)) return err('Invalid status');
+      const set = { status, updatedAt: new Date() };
+      if (status === 'resolved') set.resolvedAt = new Date();
+      if (reason) set.statusReason = reason;
+      await tickets.updateOne({ id: m[1] }, { $set: set });
+      m12LogFinanceAudit(me, 'support_ticket_status_changed', { ticketId: m[1], previous: rec.status, new: status }).catch(() => {});
+      if (status === 'resolved') {
+        mkNotif({ userId: rec.userId, type: 'support_resolved', category: 'support', title: `${rec.ticketNumber} resolved`, body: 'Please rate your experience', link: `/dashboard/traveler/support?ticket=${m[1]}` }).catch(() => {});
+      }
+      return ok({ status });
+    }
+  }
+
+  // POST /api/support/tickets/:id/rate — user rates resolution
+  {
+    const m = path.match(/^\/support\/tickets\/([^/]+)\/rate$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const tickets = await getCollection('supportTickets');
+      const rec = await tickets.findOne({ id: m[1] });
+      if (!rec) return err('Ticket not found', 404);
+      if (rec.userId !== me.id) return err('Forbidden', 403);
+      const { resolution, support, comment } = await readBody(request);
+      await tickets.updateOne({ id: m[1] }, { $set: {
+        ratingResolution: Number(resolution) || null,
+        ratingSupport: Number(support) || null,
+        ratingComment: (comment || '').slice(0, 500),
+        ratedAt: new Date(),
+        updatedAt: new Date(),
+      } });
+      return ok({ rated: true });
+    }
+  }
+
+  // ---- ADMIN CRM enhancements ----
+
+  // POST /api/admin/tickets/:id/assign
+  {
+    const m = path.match(/^\/admin\/tickets\/([^/]+)\/assign$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+      const { assigneeId } = await readBody(request);
+      const users = await getCollection('users');
+      const assignee = assigneeId ? await users.findOne({ id: assigneeId }, { projection: { _id: 0, id: 1, name: 1 } }) : null;
+      await (await getCollection('supportTickets')).updateOne({ id: m[1] }, { $set: { assignedTo: assignee?.id || null, assignedToName: assignee?.name || null, updatedAt: new Date() } });
+      m12LogFinanceAudit(me, 'support_ticket_assigned', { ticketId: m[1], assigneeId: assignee?.id, assigneeName: assignee?.name }).catch(() => {});
+      return ok({ assigned: true });
+    }
+  }
+
+  // POST /api/admin/tickets/:id/note — internal note
+  {
+    const m = path.match(/^\/admin\/tickets\/([^/]+)\/note$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+      const { note } = await readBody(request);
+      if (!note) return err('note required');
+      const entry = { id: uuid(), note: String(note).slice(0, 2000), adminId: me.id, adminName: me.name || me.email, createdAt: new Date() };
+      await (await getCollection('supportTickets')).updateOne({ id: m[1] }, { $push: { internalNotes: entry }, $set: { updatedAt: new Date() } });
+      return ok({ note: entry });
+    }
+  }
+
+  // POST /api/admin/tickets/merge  { primaryId, mergeIds: [] }
+  if (path === '/admin/tickets/merge' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const { primaryId, mergeIds } = await readBody(request);
+    if (!primaryId || !Array.isArray(mergeIds) || mergeIds.length === 0) return err('primaryId and mergeIds required');
+    const tickets = await getCollection('supportTickets');
+    const primary = await tickets.findOne({ id: primaryId });
+    if (!primary) return err('Primary ticket not found', 404);
+    const merged = await tickets.find({ id: { $in: mergeIds } }).toArray();
+    const allConv = [...(primary.conversation || [])];
+    merged.forEach((t) => (t.conversation || []).forEach((c) => allConv.push({ ...c, mergedFrom: t.ticketNumber })));
+    await tickets.updateOne({ id: primaryId }, { $set: { conversation: allConv.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)), updatedAt: new Date() } });
+    await tickets.updateMany({ id: { $in: mergeIds } }, { $set: { status: 'merged', mergedInto: primaryId, updatedAt: new Date() } });
+    m12LogFinanceAudit(me, 'support_tickets_merged', { primaryId, mergeIds }).catch(() => {});
+    return ok({ merged: mergeIds.length });
+  }
+
+  // GET /api/admin/support/stats
+  if (path === '/admin/support/stats' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const tickets = await (await getCollection('supportTickets')).find({}, { projection: { _id: 0 } }).toArray();
+    const byStatus = {}, byCategory = {}, byPriority = {};
+    let totalRespMs = 0, respCount = 0, totalResMs = 0, resCount = 0;
+    let ratingSum = 0, ratingCount = 0;
+    tickets.forEach((t) => {
+      byStatus[t.status] = (byStatus[t.status] || 0) + 1;
+      byCategory[t.category] = (byCategory[t.category] || 0) + 1;
+      byPriority[t.priority] = (byPriority[t.priority] || 0) + 1;
+      if (t.firstResponseAt) { totalRespMs += new Date(t.firstResponseAt).getTime() - new Date(t.createdAt).getTime(); respCount += 1; }
+      if (t.resolvedAt) { totalResMs += new Date(t.resolvedAt).getTime() - new Date(t.createdAt).getTime(); resCount += 1; }
+      if (t.ratingSupport) { ratingSum += t.ratingSupport; ratingCount += 1; }
+    });
+    return ok({
+      total: tickets.length, byStatus, byCategory, byPriority,
+      avgResponseTimeMin: respCount ? Math.round(totalRespMs / respCount / 60000) : 0,
+      avgResolutionTimeHr: resCount ? +(totalResMs / resCount / 3600000).toFixed(1) : 0,
+      avgSupportRating: ratingCount ? +(ratingSum / ratingCount).toFixed(2) : 0,
+      totalRated: ratingCount,
+    });
+  }
+
+  // ---- KNOWLEDGE BASE ----
+
+  // GET /api/kb/articles  (public — published only)
+  if (path === '/kb/articles' && method === 'GET') {
+    const url = new URL(request.url);
+    const cat = url.searchParams.get('category');
+    const q = url.searchParams.get('q');
+    const audience = url.searchParams.get('audience'); // host|traveler|admin
+    const filter = { status: 'published' };
+    if (cat) filter.category = cat;
+    if (audience) filter.audience = { $in: [audience, 'all'] };
+    let list = await (await getCollection('kbArticles')).find(filter, { projection: { _id: 0, body: 0 } }).sort({ updatedAt: -1 }).limit(200).toArray();
+    if (q) {
+      const needle = q.toLowerCase();
+      list = list.filter((a) => (a.title || '').toLowerCase().includes(needle) || (a.excerpt || '').toLowerCase().includes(needle) || (a.tags || []).some((t) => t.toLowerCase().includes(needle)));
+    }
+    return ok({ articles: list });
+  }
+
+  // GET /api/kb/articles/:slug (public)
+  {
+    const m = path.match(/^\/kb\/articles\/([^/]+)$/);
+    if (m && method === 'GET') {
+      const col = await getCollection('kbArticles');
+      const doc = await col.findOne({ slug: m[1], status: 'published' }, { projection: { _id: 0 } });
+      if (!doc) return err('Article not found', 404);
+      // Increment views (best-effort)
+      col.updateOne({ id: doc.id }, { $inc: { views: 1 }, $set: { lastViewedAt: new Date() } }).catch(() => {});
+      return ok({ article: { ...doc, views: (doc.views || 0) + 1 } });
+    }
+  }
+
+  // GET/POST /api/admin/kb/articles
+  if (path === '/admin/kb/articles' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const list = await (await getCollection('kbArticles')).find({}, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).limit(500).toArray();
+    return ok({ articles: list });
+  }
+  if (path === '/admin/kb/articles' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    if (!b.title || !b.body) return err('title and body required');
+    const slug = (b.slug || String(b.title)).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100) + '-' + uuid().slice(0, 6);
+    const doc = {
+      id: uuid(), slug,
+      title: String(b.title).slice(0, 200),
+      body: String(b.body),
+      excerpt: String(b.excerpt || b.body).slice(0, 300),
+      category: b.category || 'general', // article, faq, guide, policy, host_guide, traveler_guide
+      audience: b.audience || 'all',      // all, traveler, host, admin
+      tags: Array.isArray(b.tags) ? b.tags.slice(0, 20) : [],
+      images: Array.isArray(b.images) ? b.images.slice(0, 20) : [],
+      videos: Array.isArray(b.videos) ? b.videos.slice(0, 10) : [],
+      status: b.status === 'published' ? 'published' : 'draft',
+      author: { id: me.id, name: me.name || me.email },
+      views: 0,
+      createdAt: new Date(), updatedAt: new Date(),
+    };
+    await (await getCollection('kbArticles')).insertOne(doc);
+    m12LogFinanceAudit(me, 'kb_article_created', { id: doc.id, slug, title: doc.title }).catch(() => {});
+    return ok({ article: doc }, 201);
+  }
+  {
+    const m = path.match(/^\/admin\/kb\/articles\/([^/]+)$/);
+    if (m) {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+      const col = await getCollection('kbArticles');
+      if (method === 'PUT') {
+        const b = await readBody(request);
+        const patch = { updatedAt: new Date() };
+        ['title', 'body', 'excerpt', 'category', 'audience', 'tags', 'images', 'videos', 'status'].forEach((k) => {
+          if (b[k] !== undefined) patch[k] = b[k];
+        });
+        await col.updateOne({ id: m[1] }, { $set: patch });
+        m12LogFinanceAudit(me, 'kb_article_updated', { id: m[1], patch }).catch(() => {});
+        const fresh = await col.findOne({ id: m[1] }, { projection: { _id: 0 } });
+        return ok({ article: fresh });
+      }
+      if (method === 'DELETE') {
+        await col.deleteOne({ id: m[1] });
+        m12LogFinanceAudit(me, 'kb_article_deleted', { id: m[1] }).catch(() => {});
+        return ok({ deleted: true });
+      }
+    }
+  }
+
+  // ---- FEEDBACK ----
+
+  // POST /api/feedback
+  if (path === '/feedback' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const b = await readBody(request);
+    if (!b.message) return err('message required');
+    const doc = {
+      id: uuid(),
+      type: ['bug', 'feature', 'suggestion', 'other'].includes(b.type) ? b.type : 'suggestion',
+      subject: String(b.subject || '').slice(0, 200),
+      message: String(b.message).slice(0, 4000),
+      email: b.email || me?.email || null,
+      userId: me?.id || null, userName: me?.name || null,
+      status: 'open',
+      createdAt: new Date(),
+    };
+    await (await getCollection('feedback')).insertOne(doc);
+    return ok({ feedback: doc }, 201);
+  }
+  // GET /api/admin/feedback
+  if (path === '/admin/feedback' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const list = await (await getCollection('feedback')).find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(500).toArray();
+    return ok({ feedback: list });
+  }
+
+  // ---- NOTIFICATION PREFERENCES ----
+
+  // GET/PUT /api/me/notification-preferences
+  if (path === '/me/notification-preferences' && method === 'GET') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    const doc = await (await getCollection('notificationPreferences')).findOne({ userId: me.id }, { projection: { _id: 0 } });
+    return ok({ preferences: doc || {
+      userId: me.id,
+      mutedCategories: [],
+      channels: { inapp: true, email: true, push: false },
+    } });
+  }
+  if (path === '/me/notification-preferences' && method === 'PUT') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    const b = await readBody(request);
+    const patch = {
+      userId: me.id,
+      mutedCategories: Array.isArray(b.mutedCategories) ? b.mutedCategories : [],
+      channels: {
+        inapp: b.channels?.inapp !== false,
+        email: b.channels?.email !== false,
+        push: !!b.channels?.push,
+      },
+      updatedAt: new Date(),
+    };
+    await (await getCollection('notificationPreferences')).updateOne({ userId: me.id }, { $set: patch }, { upsert: true });
+    return ok({ preferences: patch });
+  }
+
+  // ---- CHAT ENHANCEMENTS (Module 17) ----
+
+  // POST /api/messages/:id/reaction { emoji }
+  {
+    const m = path.match(/^\/messages\/([^/]+)\/reaction$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const { emoji } = await readBody(request);
+      if (!emoji) return err('emoji required');
+      const col = await getCollection('bookingMessages');
+      const msg = await col.findOne({ id: m[1] });
+      if (!msg) return err('Message not found', 404);
+      if (!(msg.participantIds || []).includes(me.id)) return err('Forbidden', 403);
+      // Toggle reaction
+      const reactions = msg.reactions || [];
+      const existing = reactions.find((r) => r.userId === me.id && r.emoji === emoji);
+      let next;
+      if (existing) next = reactions.filter((r) => !(r.userId === me.id && r.emoji === emoji));
+      else next = [...reactions, { userId: me.id, userName: me.name, emoji, createdAt: new Date() }];
+      await col.updateOne({ id: m[1] }, { $set: { reactions: next } });
+      return ok({ reactions: next });
+    }
+  }
+
+  // DELETE /api/messages/:id?scope=me|everyone
+  {
+    const m = path.match(/^\/messages\/([^/]+)$/);
+    if (m && method === 'DELETE') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const url = new URL(request.url);
+      const scope = url.searchParams.get('scope') || 'me';
+      const col = await getCollection('bookingMessages');
+      const msg = await col.findOne({ id: m[1] });
+      if (!msg) return err('Message not found', 404);
+      if (!(msg.participantIds || []).includes(me.id)) return err('Forbidden', 403);
+      if (scope === 'everyone') {
+        if (msg.senderId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Only sender can delete for everyone', 403);
+        const mins = (Date.now() - new Date(msg.createdAt).getTime()) / 60000;
+        if (mins > 60 && !['admin', 'super_admin'].includes(me.role)) return err('Delete-for-everyone window (60 min) has expired', 403);
+        await col.updateOne({ id: m[1] }, { $set: { text: '', imageUrl: null, attachmentType: null, deletedForEveryone: true, deletedAt: new Date() } });
+      } else {
+        await col.updateOne({ id: m[1] }, { $addToSet: { deletedFor: me.id } });
+      }
+      return ok({ deleted: true, scope });
+    }
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

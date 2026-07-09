@@ -665,6 +665,8 @@ function AdminInner() {
                     { label: 'Reports (Analytics)', tab: 'revenue', icon: BarChart3 },
                     { label: 'Audit Logs', tab: 'activity', icon: FileSpreadsheet },
                     { label: 'Communication Center', href: '/admin/communication', icon: Sparkles },
+                    { label: 'Support Center', href: '/admin/support', icon: ShieldAlert },
+                    { label: 'Knowledge Base', href: '/admin/knowledge-base', icon: FileSpreadsheet },
                     { label: 'Announcements', tab: 'announcements', icon: Sparkles },
                     { label: 'Support', tab: 'support', icon: ShieldAlert },
                   ]},
