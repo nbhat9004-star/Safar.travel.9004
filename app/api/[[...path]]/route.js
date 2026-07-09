@@ -8128,6 +8128,503 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ settings: merged });
   }
 
+  // ============================================================================
+  // MODULE 16 — Dynamic Pricing, Availability & Inventory Engine
+  // ============================================================================
+  // Collections used (all created lazily):
+  //   listingPricingRules      { id, listingId, name, type, active, priority, adjustment: {mode:'percent'|'fixed', value}, conditions: {days:[], dateFrom, dateTo, minNights, maxNights, minAdvanceDays, maxAdvanceDays, occupancyGte, occupancyLte}, createdAt }
+  //   listingBlackouts         { id, listingId, from, to, reason, note }
+  //   waitlist                 { id, listingId, userId, userName, checkInDate, checkOutDate, guests, status, createdAt }
+  //   holidayCalendar          { id, date, name, region, multiplier }
+  //   pricingSettings          { id:'default', maxDiscountPct, maxIncreasePct, minBookingFee, maxBookingFee, dynamicEnabled, waitlistEnabled, demandMultiplier, festivalMultiplier, aiSuggestionsEnabled, ruleStackMode }
+
+  const M16_DEFAULTS = {
+    id: 'default',
+    maxDiscountPct: 50,
+    maxIncreasePct: 100,
+    minBookingFee: 0,
+    maxBookingFee: 500,
+    dynamicEnabled: true,
+    waitlistEnabled: true,
+    demandMultiplier: 1.15,
+    festivalMultiplier: 1.25,
+    aiSuggestionsEnabled: true,
+    ruleStackMode: 'combined', // 'combined' | 'highest'
+  };
+
+  const m16GetSettings = async () => {
+    const col = await getCollection('pricingSettings');
+    let doc = await col.findOne({ id: 'default' }, { projection: { _id: 0 } });
+    if (!doc) { doc = { ...M16_DEFAULTS, createdAt: new Date(), updatedAt: new Date() }; try { await col.insertOne({ ...doc }); } catch {} }
+    return { ...M16_DEFAULTS, ...doc };
+  };
+
+  // Utility: for a given check-in/out, and a listing, compute the effective price
+  // by applying active pricing rules + blackouts.
+  const m16IsWeekend = (d) => { const n = new Date(d).getDay(); return n === 0 || n === 5 || n === 6; };
+  const m16ApplyRules = (basePrice, checkIn, checkOut, listing, rules, settings, occupancy = 0) => {
+    const nights = Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
+    const advanceDays = Math.max(0, Math.round((new Date(checkIn) - new Date()) / 86400000));
+    const applied = [];
+    let total = 0;
+    // Compute per-night, then apply per-night rules and daily adjustments
+    for (let i = 0; i < nights; i++) {
+      const d = new Date(checkIn); d.setDate(d.getDate() + i);
+      let nightly = basePrice;
+      let adjPct = 0, adjFixed = 0;
+      let ruleHits = [];
+      for (const r of rules) {
+        if (!r.active) continue;
+        const c = r.conditions || {};
+        if (Array.isArray(c.days) && c.days.length && !c.days.includes(d.getDay())) continue;
+        if (c.dateFrom && new Date(c.dateFrom) > d) continue;
+        if (c.dateTo && new Date(c.dateTo) < d) continue;
+        if (c.minNights && nights < c.minNights) continue;
+        if (c.maxNights && nights > c.maxNights) continue;
+        if (c.minAdvanceDays != null && advanceDays < c.minAdvanceDays) continue;
+        if (c.maxAdvanceDays != null && advanceDays > c.maxAdvanceDays) continue;
+        if (c.weekendOnly && !m16IsWeekend(d)) continue;
+        if (c.occupancyGte != null && occupancy < c.occupancyGte) continue;
+        if (c.occupancyLte != null && occupancy > c.occupancyLte) continue;
+        // Apply
+        if (r.adjustment?.mode === 'percent') adjPct += Number(r.adjustment.value) || 0;
+        else if (r.adjustment?.mode === 'fixed') adjFixed += Number(r.adjustment.value) || 0;
+        ruleHits.push({ id: r.id, name: r.name });
+      }
+      // Clamp with global caps
+      adjPct = Math.max(-Math.abs(settings.maxDiscountPct), Math.min(settings.maxIncreasePct, adjPct));
+      nightly = Math.max(0, Math.round(nightly * (1 + adjPct / 100) + adjFixed));
+      total += nightly;
+      if (ruleHits.length) applied.push({ date: d.toISOString().slice(0, 10), rules: ruleHits, nightly, adjPct, adjFixed });
+    }
+    const baseTotal = basePrice * nights;
+    const discount = Math.max(0, baseTotal - total);
+    const surcharge = Math.max(0, total - baseTotal);
+    return { total, nights, basePrice, baseTotal, discount, surcharge, applied };
+  };
+
+  const m16LoadRules = async (listingId) => {
+    const col = await getCollection('listingPricingRules');
+    return await col.find({ listingId }, { projection: { _id: 0 } }).sort({ priority: 1, createdAt: 1 }).toArray();
+  };
+
+  const m16LoadBlackouts = async (listingId) => {
+    const col = await getCollection('listingBlackouts');
+    return await col.find({ listingId }, { projection: { _id: 0 } }).toArray();
+  };
+
+  const m16IsBlackedOut = (d, blackouts) => {
+    const t = new Date(d).setHours(0, 0, 0, 0);
+    return blackouts.some((b) => t >= new Date(b.from).setHours(0, 0, 0, 0) && t <= new Date(b.to).setHours(0, 0, 0, 0));
+  };
+
+  // -------- PUBLIC: price calculator --------
+
+  // GET /api/listings/:id/price?checkInDate=&checkOutDate=&inventoryTypeId=
+  {
+    const m = path.match(/^\/listings\/([^/]+)\/price$/);
+    if (m && method === 'GET') {
+      const url = new URL(request.url);
+      const checkIn = url.searchParams.get('checkInDate');
+      const checkOut = url.searchParams.get('checkOutDate');
+      const invTypeId = url.searchParams.get('inventoryTypeId');
+      if (!checkIn || !checkOut) return err('checkInDate and checkOutDate required');
+      const listings = await getCollection('listings');
+      const listing = await listings.findOne({ id: m[1] }, { projection: { _id: 0 } });
+      if (!listing) return err('Listing not found', 404);
+      let basePrice = Number(listing.price) || 0;
+      if (invTypeId && listing.inventoryTypes) {
+        const t = listing.inventoryTypes.find((x) => x.id === invTypeId);
+        if (t) basePrice = Number(t.price) || basePrice;
+      }
+      const [rules, blackouts, settings] = await Promise.all([m16LoadRules(m[1]), m16LoadBlackouts(m[1]), m16GetSettings()]);
+      // Reject if any date is blacked out
+      const nights = Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
+      for (let i = 0; i < nights; i++) {
+        const d = new Date(checkIn); d.setDate(d.getDate() + i);
+        if (m16IsBlackedOut(d, blackouts)) return err('Selected dates include blocked/unavailable days', 400);
+      }
+      // Approximate occupancy for this listing
+      const bookings = await (await getCollection('bookings')).countDocuments({ listingId: m[1], status: 'approved' });
+      const invSum = (listing.inventoryTypes || []).reduce((s, t) => s + (Number(t.available) || 0) + (Number(t.booked) || 0), Number(listing.totalInventory) || 1);
+      const occupancy = invSum ? Math.min(100, (bookings / invSum) * 100) : 0;
+      const result = m16ApplyRules(basePrice, checkIn, checkOut, listing, rules, settings, occupancy);
+      return ok({ ...result, currency: 'INR', occupancy: +occupancy.toFixed(1), rulesConsidered: rules.length });
+    }
+  }
+
+  // GET /api/listings/:id/calendar?month=YYYY-MM  (public availability calendar with per-day price + status)
+  {
+    const m = path.match(/^\/listings\/([^/]+)\/calendar$/);
+    if (m && method === 'GET') {
+      const url = new URL(request.url);
+      const monthStr = url.searchParams.get('month'); // e.g. 2025-07
+      const now = new Date();
+      const [y, mo] = (monthStr || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`).split('-').map(Number);
+      const startD = new Date(y, (mo || 1) - 1, 1);
+      const endD = new Date(y, mo, 0); // last day of month
+      const listings = await getCollection('listings');
+      const listing = await listings.findOne({ id: m[1] }, { projection: { _id: 0 } });
+      if (!listing) return err('Listing not found', 404);
+      const [rules, blackouts, settings, bookings] = await Promise.all([
+        m16LoadRules(m[1]),
+        m16LoadBlackouts(m[1]),
+        m16GetSettings(),
+        (await getCollection('bookings')).find({ listingId: m[1], status: { $in: ['approved', 'pending'] }, checkOutDate: { $gte: startD }, checkInDate: { $lte: endD } }, { projection: { _id: 0, checkInDate: 1, checkOutDate: 1, inventoryTypeId: 1 } }).toArray(),
+      ]);
+      const invSum = (listing.inventoryTypes || []).reduce((s, t) => s + (Number(t.available) || 0) + (Number(t.booked) || 0), Number(listing.totalInventory) || 1);
+      const basePrice = Number(listing.price) || 0;
+      const days = [];
+      for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().slice(0, 10);
+        const dayEnd = new Date(d); dayEnd.setDate(dayEnd.getDate() + 1);
+        const bookedOnDay = bookings.filter((b) => new Date(b.checkInDate) < dayEnd && new Date(b.checkOutDate) > d).length;
+        const isBlackout = m16IsBlackedOut(d, blackouts);
+        let status = 'available';
+        if (isBlackout) status = 'blocked';
+        else if (bookedOnDay >= invSum) status = 'soldout';
+        else if (invSum > 1 && bookedOnDay >= Math.max(1, Math.floor(invSum * 0.8))) status = 'limited';
+        // Per-day price
+        const nextDay = new Date(d); nextDay.setDate(nextDay.getDate() + 1);
+        const priceInfo = m16ApplyRules(basePrice, d.toISOString(), nextDay.toISOString(), listing, rules, settings, invSum ? (bookedOnDay / invSum) * 100 : 0);
+        days.push({ date: dateStr, status, price: priceInfo.total, booked: bookedOnDay, capacity: invSum, applied: priceInfo.applied[0]?.rules || [] });
+      }
+      return ok({ month: `${y}-${String(mo).padStart(2, '0')}`, days, capacity: invSum, blackouts, rules });
+    }
+  }
+
+  // -------- HOST: pricing rules --------
+
+  // GET /api/host/listings/:id/rules
+  // POST /api/host/listings/:id/rules
+  {
+    const mList = path.match(/^\/host\/listings\/([^/]+)\/rules$/);
+    if (mList) {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const listing = await (await getCollection('listings')).findOne({ id: mList[1] });
+      if (!listing) return err('Listing not found', 404);
+      const isOwnerOrAdmin = listing.hostId === me.id || ['admin', 'super_admin'].includes(me.role);
+      if (!isOwnerOrAdmin) return err('Forbidden', 403);
+      const col = await getCollection('listingPricingRules');
+      if (method === 'GET') {
+        const rules = await col.find({ listingId: mList[1] }, { projection: { _id: 0 } }).sort({ priority: 1, createdAt: 1 }).toArray();
+        return ok({ rules });
+      }
+      if (method === 'POST') {
+        const b = await readBody(request);
+        const settings = await m16GetSettings();
+        const rule = {
+          id: uuid(),
+          listingId: mList[1],
+          hostId: listing.hostId,
+          name: String(b.name || 'Custom rule').slice(0, 80),
+          type: b.type || 'custom', // weekend, season, holiday, last_minute, advance, long_stay, custom
+          active: b.active !== false,
+          priority: Number(b.priority) || 100,
+          adjustment: {
+            mode: b.adjustment?.mode === 'fixed' ? 'fixed' : 'percent',
+            value: Math.max(-settings.maxDiscountPct, Math.min(settings.maxIncreasePct, Number(b.adjustment?.value) || 0)),
+          },
+          conditions: b.conditions || {},
+          createdAt: new Date(), updatedAt: new Date(),
+        };
+        await col.insertOne(rule);
+        m12LogFinanceAudit(me, 'pricing_rule_created', { listingId: mList[1], ruleId: rule.id, rule }).catch(() => {});
+        return ok({ rule }, 201);
+      }
+    }
+  }
+  // PUT/DELETE /api/host/listings/:id/rules/:ruleId
+  {
+    const mR = path.match(/^\/host\/listings\/([^/]+)\/rules\/([^/]+)$/);
+    if (mR) {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const listing = await (await getCollection('listings')).findOne({ id: mR[1] });
+      if (!listing) return err('Listing not found', 404);
+      if (listing.hostId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+      const col = await getCollection('listingPricingRules');
+      if (method === 'PUT') {
+        const b = await readBody(request);
+        const settings = await m16GetSettings();
+        const patch = { updatedAt: new Date() };
+        if (b.name !== undefined) patch.name = String(b.name).slice(0, 80);
+        if (b.active !== undefined) patch.active = !!b.active;
+        if (b.priority !== undefined) patch.priority = Number(b.priority);
+        if (b.type !== undefined) patch.type = b.type;
+        if (b.conditions !== undefined) patch.conditions = b.conditions;
+        if (b.adjustment !== undefined) patch.adjustment = {
+          mode: b.adjustment.mode === 'fixed' ? 'fixed' : 'percent',
+          value: Math.max(-settings.maxDiscountPct, Math.min(settings.maxIncreasePct, Number(b.adjustment.value) || 0)),
+        };
+        await col.updateOne({ id: mR[2], listingId: mR[1] }, { $set: patch });
+        m12LogFinanceAudit(me, 'pricing_rule_updated', { listingId: mR[1], ruleId: mR[2], patch }).catch(() => {});
+        const fresh = await col.findOne({ id: mR[2] }, { projection: { _id: 0 } });
+        return ok({ rule: fresh });
+      }
+      if (method === 'DELETE') {
+        await col.deleteOne({ id: mR[2], listingId: mR[1] });
+        m12LogFinanceAudit(me, 'pricing_rule_deleted', { listingId: mR[1], ruleId: mR[2] }).catch(() => {});
+        return ok({ deleted: true });
+      }
+    }
+  }
+
+  // -------- HOST: blackouts --------
+  {
+    const mB = path.match(/^\/host\/listings\/([^/]+)\/blackouts$/);
+    if (mB) {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const listing = await (await getCollection('listings')).findOne({ id: mB[1] });
+      if (!listing) return err('Listing not found', 404);
+      if (listing.hostId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+      const col = await getCollection('listingBlackouts');
+      if (method === 'GET') {
+        const list = await col.find({ listingId: mB[1] }, { projection: { _id: 0 } }).sort({ from: 1 }).toArray();
+        return ok({ blackouts: list });
+      }
+      if (method === 'POST') {
+        const b = await readBody(request);
+        if (!b.from || !b.to) return err('from and to required');
+        const bl = {
+          id: uuid(), listingId: mB[1], hostId: listing.hostId,
+          from: new Date(b.from), to: new Date(b.to),
+          reason: b.reason || 'blocked', note: (b.note || '').slice(0, 500),
+          createdAt: new Date(),
+        };
+        await col.insertOne(bl);
+        m12LogFinanceAudit(me, 'blackout_added', { listingId: mB[1], blackoutId: bl.id, from: bl.from, to: bl.to, reason: bl.reason }).catch(() => {});
+        return ok({ blackout: bl }, 201);
+      }
+    }
+    const mBD = path.match(/^\/host\/listings\/([^/]+)\/blackouts\/([^/]+)$/);
+    if (mBD && method === 'DELETE') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const listing = await (await getCollection('listings')).findOne({ id: mBD[1] });
+      if (!listing) return err('Listing not found', 404);
+      if (listing.hostId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+      const col = await getCollection('listingBlackouts');
+      await col.deleteOne({ id: mBD[2], listingId: mBD[1] });
+      m12LogFinanceAudit(me, 'blackout_removed', { listingId: mBD[1], blackoutId: mBD[2] }).catch(() => {});
+      return ok({ deleted: true });
+    }
+  }
+
+  // -------- HOST: bulk inventory update --------
+  // POST /api/host/listings/:id/inventory-bulk  { typeId, delta, absolute }
+  {
+    const mI = path.match(/^\/host\/listings\/([^/]+)\/inventory-bulk$/);
+    if (mI && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const listing = await (await getCollection('listings')).findOne({ id: mI[1] });
+      if (!listing) return err('Listing not found', 404);
+      if (listing.hostId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+      const b = await readBody(request);
+      const listings = await getCollection('listings');
+      let updated;
+      if (b.typeId) {
+        // Update specific inventory type
+        const type = (listing.inventoryTypes || []).find((t) => t.id === b.typeId);
+        if (!type) return err('Inventory type not found', 404);
+        const current = Number(type.available) || 0;
+        let next = b.absolute != null ? Number(b.absolute) : current + Number(b.delta || 0);
+        next = Math.max(0, next); // prevent negative
+        await listings.updateOne({ id: mI[1], 'inventoryTypes.id': b.typeId }, { $set: { 'inventoryTypes.$.available': next, 'inventoryTypes.$.updatedAt': new Date() } });
+        updated = { typeId: b.typeId, previous: current, next };
+      } else {
+        const current = Number(listing.totalInventory) || 0;
+        let next = b.absolute != null ? Number(b.absolute) : current + Number(b.delta || 0);
+        next = Math.max(0, next);
+        await listings.updateOne({ id: mI[1] }, { $set: { totalInventory: next, updatedAt: new Date() } });
+        updated = { previous: current, next };
+      }
+      m12LogFinanceAudit(me, 'inventory_bulk_updated', { listingId: mI[1], ...updated }).catch(() => {});
+      return ok({ updated });
+    }
+  }
+
+  // -------- WAITLIST --------
+  // POST /api/listings/:id/waitlist
+  {
+    const mW = path.match(/^\/listings\/([^/]+)\/waitlist$/);
+    if (mW && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const settings = await m16GetSettings();
+      if (!settings.waitlistEnabled) return err('Waitlist not enabled', 400);
+      const b = await readBody(request);
+      const col = await getCollection('waitlist');
+      const existing = await col.findOne({ listingId: mW[1], userId: me.id, status: 'waiting' });
+      if (existing) return err('You are already on the waitlist for this listing');
+      const entry = {
+        id: uuid(),
+        listingId: mW[1],
+        userId: me.id, userName: me.name || me.email,
+        checkInDate: b.checkInDate ? new Date(b.checkInDate) : null,
+        checkOutDate: b.checkOutDate ? new Date(b.checkOutDate) : null,
+        guests: Number(b.guests) || 1,
+        status: 'waiting',
+        expiresAt: new Date(Date.now() + 30 * 86400000),
+        createdAt: new Date(),
+      };
+      await col.insertOne(entry);
+      // Notify host
+      const listing = await (await getCollection('listings')).findOne({ id: mW[1] }, { projection: { hostId: 1, title: 1, _id: 0 } });
+      if (listing?.hostId) mkNotif({ userId: listing.hostId, type: 'waitlist_joined', category: 'booking', title: 'A traveler joined the waitlist', body: `${me.name} for ${listing.title}`, link: `/dashboard/host/inventory?listing=${mW[1]}`, meta: { listingId: mW[1] } }).catch(() => {});
+      return ok({ entry }, 201);
+    }
+  }
+  // GET /api/host/listings/:id/waitlist
+  {
+    const mW = path.match(/^\/host\/listings\/([^/]+)\/waitlist$/);
+    if (mW && method === 'GET') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const listing = await (await getCollection('listings')).findOne({ id: mW[1] });
+      if (!listing) return err('Listing not found', 404);
+      if (listing.hostId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+      const list = await (await getCollection('waitlist')).find({ listingId: mW[1] }, { projection: { _id: 0 } }).sort({ createdAt: 1 }).toArray();
+      return ok({ waitlist: list });
+    }
+  }
+  // POST /api/host/waitlist/:id/action { action: approve|reject }
+  {
+    const mA = path.match(/^\/host\/waitlist\/([^/]+)\/action$/);
+    if (mA && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const { action } = await readBody(request);
+      const col = await getCollection('waitlist');
+      const rec = await col.findOne({ id: mA[1] });
+      if (!rec) return err('Waitlist entry not found', 404);
+      const listing = await (await getCollection('listings')).findOne({ id: rec.listingId });
+      if (!listing) return err('Listing not found', 404);
+      if (listing.hostId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+      const status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : null;
+      if (!status) return err('Invalid action');
+      await col.updateOne({ id: mA[1] }, { $set: { status, processedAt: new Date(), processedBy: me.id } });
+      mkNotif({ userId: rec.userId, type: `waitlist_${status}`, category: 'booking', title: status === 'approved' ? 'Waitlist approved!' : 'Waitlist entry closed', body: `${listing.title} — ${status === 'approved' ? 'You may now book. Spot available!' : 'Unfortunately no spot opened up.'}`, link: `/listing/${rec.listingId}` }).catch(() => {});
+      return ok({ updated: true });
+    }
+  }
+
+  // -------- ADMIN: pricing settings + holidays --------
+  if (path === '/admin/pricing-settings' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    return ok({ settings: await m16GetSettings() });
+  }
+  if (path === '/admin/pricing-settings' && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    const existing = await m16GetSettings();
+    const merged = { ...existing, ...body, id: 'default', updatedAt: new Date(), updatedBy: me.id };
+    const col = await getCollection('pricingSettings');
+    await col.updateOne({ id: 'default' }, { $set: merged }, { upsert: true });
+    m12LogFinanceAudit(me, 'pricing_settings_updated', { previous: existing, new: merged }).catch(() => {});
+    return ok({ settings: merged });
+  }
+
+  // GET/POST /api/admin/holidays
+  if (path === '/admin/holidays' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('holidayCalendar');
+    const list = await col.find({}, { projection: { _id: 0 } }).sort({ date: 1 }).toArray();
+    return ok({ holidays: list });
+  }
+  if (path === '/admin/holidays' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    if (!body.date || !body.name) return err('date and name required');
+    const doc = { id: uuid(), date: new Date(body.date), name: String(body.name).slice(0, 100), region: body.region || 'IN', multiplier: Number(body.multiplier) || 1.25, createdAt: new Date() };
+    await (await getCollection('holidayCalendar')).insertOne(doc);
+    m12LogFinanceAudit(me, 'holiday_added', doc).catch(() => {});
+    return ok({ holiday: doc }, 201);
+  }
+  {
+    const mH = path.match(/^\/admin\/holidays\/([^/]+)$/);
+    if (mH && method === 'DELETE') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+      await (await getCollection('holidayCalendar')).deleteOne({ id: mH[1] });
+      m12LogFinanceAudit(me, 'holiday_removed', { id: mH[1] }).catch(() => {});
+      return ok({ deleted: true });
+    }
+  }
+
+  // GET /api/admin/pricing/occupancy — occupancy across all listings
+  if (path === '/admin/pricing/occupancy' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const [listings, bookings] = await Promise.all([
+      (await getCollection('listings')).find({}, { projection: { _id: 0, id: 1, title: 1, hostId: 1, price: 1, inventoryTypes: 1, totalInventory: 1, category: 1 } }).toArray(),
+      (await getCollection('bookings')).find({ status: 'approved' }, { projection: { _id: 0, listingId: 1, totalPrice: 1, checkInDate: 1, checkOutDate: 1 } }).toArray(),
+    ]);
+    const bookingsByListing = {};
+    bookings.forEach((b) => { if (!b.listingId) return; bookingsByListing[b.listingId] = bookingsByListing[b.listingId] || []; bookingsByListing[b.listingId].push(b); });
+    const rows = listings.map((l) => {
+      const bl = bookingsByListing[l.id] || [];
+      const inv = (l.inventoryTypes || []).reduce((s, t) => s + (Number(t.available) || 0) + (Number(t.booked) || 0), Number(l.totalInventory) || 1);
+      const roomNights = bl.reduce((s, b) => s + Math.max(1, Math.round((new Date(b.checkOutDate) - new Date(b.checkInDate)) / 86400000)), 0);
+      const revenue = bl.reduce((s, b) => s + (Number(b.totalPrice) || 0), 0);
+      // Occupancy over trailing 30 days
+      const capacity30 = inv * 30;
+      const nowMinus30 = Date.now() - 30 * 86400000;
+      const trailingNights = bl.filter((b) => new Date(b.checkOutDate).getTime() > nowMinus30).reduce((s, b) => s + Math.max(1, Math.round((new Date(b.checkOutDate) - new Date(b.checkInDate)) / 86400000)), 0);
+      const occupancyPct = capacity30 ? (trailingNights / capacity30) * 100 : 0;
+      const adr = roomNights ? Math.round(revenue / roomNights) : 0;
+      return {
+        listingId: l.id, title: l.title, category: l.category, hostId: l.hostId,
+        capacity: inv, bookings: bl.length, roomNights, revenue,
+        occupancyPct: +occupancyPct.toFixed(1),
+        adr, // Average Daily Rate
+        revPar: inv ? +(revenue / (inv * 30)).toFixed(0) : 0, // Revenue per available room (30d)
+      };
+    });
+    const sorted = rows.sort((a, b) => b.occupancyPct - a.occupancyPct);
+    return ok({ listings: sorted, mostOccupied: sorted.slice(0, 10), lowestOccupied: [...sorted].sort((a, b) => a.occupancyPct - b.occupancyPct).slice(0, 10) });
+  }
+
+  // GET /api/admin/pricing/waitlists
+  if (path === '/admin/pricing/waitlists' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const list = await (await getCollection('waitlist')).find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
+    return ok({ waitlist: list });
+  }
+
+  // GET /api/host/listings — quick list for the host inventory picker
+  if (path === '/host/listings' && method === 'GET') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    const listings = await (await getCollection('listings')).find({ hostId: me.id }, { projection: { _id: 0, id: 1, title: 1, category: 1, price: 1, images: 1, status: 1, inventoryTypes: 1, totalInventory: 1 } }).toArray();
+    return ok({ listings });
+  }
+
+  // GET /api/ai/pricing-suggestions?listingId=  — heuristic (no LLM call)
+  if (path === '/ai/pricing-suggestions' && method === 'GET') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    const url = new URL(request.url);
+    const listingId = url.searchParams.get('listingId');
+    if (!listingId) return err('listingId required');
+    const listing = await (await getCollection('listings')).findOne({ id: listingId });
+    if (!listing) return err('Listing not found', 404);
+    if (listing.hostId !== me.id && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+    const settings = await m16GetSettings();
+    if (!settings.aiSuggestionsEnabled) return ok({ suggestions: [] });
+    const bookings = await (await getCollection('bookings')).find({ listingId, status: 'approved' }).toArray();
+    const inv = (listing.inventoryTypes || []).reduce((s, t) => s + (Number(t.available) || 0) + (Number(t.booked) || 0), Number(listing.totalInventory) || 1);
+    const nowMinus30 = Date.now() - 30 * 86400000;
+    const trailingNights = bookings.filter((b) => new Date(b.checkOutDate).getTime() > nowMinus30).reduce((s, b) => s + Math.max(1, Math.round((new Date(b.checkOutDate) - new Date(b.checkInDate)) / 86400000)), 0);
+    const occ = inv ? (trailingNights / (inv * 30)) * 100 : 0;
+    const suggestions = [];
+    if (occ < 30) suggestions.push({ title: 'Occupancy too low', body: 'Occupancy is under 30% in the last 30 days. Consider a limited-time discount of 10–15% to attract bookings.', suggestedAdjPct: -12, type: 'occupancy_low' });
+    if (occ > 80) suggestions.push({ title: 'High demand', body: 'Occupancy above 80% — you can safely raise weekend prices by 10–15%.', suggestedAdjPct: 12, type: 'demand_high' });
+    suggestions.push({ title: 'Weekend Premium', body: 'Fri–Sun typically see higher demand. Try +10% weekend uplift.', suggestedAdjPct: 10, type: 'weekend' });
+    // Holidays in next 60 days
+    const holidays = await (await getCollection('holidayCalendar')).find({ date: { $gte: new Date(), $lte: new Date(Date.now() + 60 * 86400000) } }).toArray();
+    if (holidays.length) suggestions.push({ title: 'Festival surge', body: `Upcoming: ${holidays.slice(0, 3).map((h) => h.name).join(', ')}. Recommended +25% for these dates.`, suggestedAdjPct: 25, type: 'holiday' });
+    return ok({ suggestions, occupancyPct: +occ.toFixed(1) });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

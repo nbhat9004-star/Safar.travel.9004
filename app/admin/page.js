@@ -640,6 +640,7 @@ function AdminInner() {
                   ]},
                   { section: 'Revenue & Rewards', items: [
                     { label: 'Finance Center', href: '/admin/finance', icon: BadgeIndianRupee },
+                    { label: 'Dynamic Pricing', href: '/admin/pricing', icon: TrendingUp },
                     { label: 'Payment Gateways', href: '/admin/settings/payment-gateways', icon: CreditCard },
                     { label: 'Revenue Engine', href: '/admin/settings/revenue-engine', icon: Settings2 },
                     { label: 'Promotions', href: '/admin/settings/revenue-engine?tab=promo', icon: Sparkles },
