@@ -6996,6 +6996,537 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ users: list });
   }
 
+  // ============================================================================
+  // MODULE 14 — Analytics & Business Intelligence
+  // ============================================================================
+  // Everything is computed on-demand via lightweight aggregations. No writes.
+  // Reuses existing collections; no schema changes.
+
+  const m14ResolveRange = (rangeKey, from, to) => {
+    const now = new Date();
+    const end = new Date(now);
+    let start = new Date(now);
+    switch (rangeKey) {
+      case 'today':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case '7d':
+        start = new Date(now); start.setDate(start.getDate() - 7);
+        break;
+      case '30d':
+        start = new Date(now); start.setDate(start.getDate() - 30);
+        break;
+      case 'month':
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'last_month':
+        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        end.setTime(new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999).getTime());
+        break;
+      case 'year':
+        start = new Date(now.getFullYear(), 0, 1);
+        break;
+      case 'custom':
+        if (from) start = new Date(from);
+        if (to) end.setTime(new Date(to).getTime());
+        break;
+      default:
+        start = new Date(now); start.setDate(start.getDate() - 30);
+    }
+    return { start, end };
+  };
+
+  const m14DayBucket = (d) => {
+    const x = new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const m14MonthBucket = (d) => {
+    const x = new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const m14WeekBucket = (d) => {
+    const x = new Date(d);
+    // ISO week YYYY-Www
+    const dt = new Date(Date.UTC(x.getFullYear(), x.getMonth(), x.getDate()));
+    const day = dt.getUTCDay() || 7;
+    dt.setUTCDate(dt.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((dt - yearStart) / 86400000) + 1) / 7);
+    return `${dt.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  };
+
+  const m14CategoryOf = (b, listingMap) => {
+    const l = listingMap.get(b.listingId);
+    const cat = (l?.category || b.category || '').toLowerCase();
+    const sub = (l?.subcategory || '').toLowerCase();
+    if (cat === 'stay') {
+      if (sub === 'houseboat') return 'houseboats';
+      if (['home', 'homestay', 'cottage'].includes(sub)) return 'homestays';
+      return 'hotels';
+    }
+    if (cat === 'tour') return 'tours';
+    if (cat === 'experience') return 'activities';
+    if (cat === 'transport') return sub === 'bike' ? 'bike_rentals' : 'car_rentals';
+    return 'other';
+  };
+
+  const m14PaymentBucket = (b) => {
+    const t = String(b.paymentType || b.paymentMode || '').toLowerCase();
+    if (t.includes('full')) return 'full';
+    if (t.includes('fee') || t.includes('deposit') || t.includes('booking_fee')) return 'booking_fee';
+    if (t.includes('cash')) return 'cash';
+    if (t.includes('wallet')) return 'wallet';
+    if (b.paymentGateway || b.paymentStatus === 'paid' || t) return 'online';
+    return 'unspecified';
+  };
+
+  // GET /api/admin/analytics/overview
+  if (path === '/admin/analytics/overview' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const rangeKey = url.searchParams.get('range') || '30d';
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    const fCat = (url.searchParams.get('category') || '').toLowerCase();
+    const fDistrict = (url.searchParams.get('district') || '').toLowerCase();
+    const fStatus = url.searchParams.get('status');
+    const fPayment = (url.searchParams.get('paymentType') || '').toLowerCase();
+    const fHost = url.searchParams.get('hostId');
+    const fTraveler = url.searchParams.get('travelerId');
+
+    const { start, end } = m14ResolveRange(rangeKey, from, to);
+
+    // Pull collections (parallel)
+    const [
+      bookingsC, listingsC, usersC, walletC, creditC, couponUseC, promoC, couponC,
+      referralsC, hostEarningsC, hostPayoutsC, reviewsC, wishlistsC, safarPlansC,
+    ] = await Promise.all([
+      getCollection('bookings'), getCollection('listings'), getCollection('users'),
+      getCollection('walletTransactions'), getCollection('creditTransactions'),
+      getCollection('couponUses'), getCollection('promotions'), getCollection('coupons'),
+      getCollection('referrals'), getCollection('hostEarnings'), getCollection('hostPayouts'),
+      getCollection('reviews'), getCollection('wishlists'), getCollection('safarTogetherPlans'),
+    ]);
+
+    // Build listing map (used for category/district)
+    const listingsAll = await listingsC.find({}, { projection: { _id: 0, id: 1, title: 1, category: 1, subcategory: 1, district: 1, city: 1, hostId: 1, status: 1, createdAt: 1, images: 1, price: 1 } }).toArray();
+    const listingMap = new Map(listingsAll.map((l) => [l.id, l]));
+
+    // Load bookings within range + all-time bookings for lifetime KPIs
+    const rangeQ = { createdAt: { $gte: start, $lte: end } };
+    if (fStatus) rangeQ.status = fStatus;
+    if (fHost) rangeQ.hostId = fHost;
+    if (fTraveler) rangeQ.travelerId = fTraveler;
+
+    let bookingsRange = await bookingsC.find(rangeQ, { projection: { _id: 0 } }).toArray();
+    // Category / district filters applied via listingMap (post-filter)
+    if (fCat || fDistrict) {
+      bookingsRange = bookingsRange.filter((b) => {
+        const l = listingMap.get(b.listingId);
+        if (fCat && m14CategoryOf(b, listingMap) !== fCat) return false;
+        if (fDistrict && (String(l?.district || l?.city || '').toLowerCase() !== fDistrict)) return false;
+        return true;
+      });
+    }
+    if (fPayment) {
+      bookingsRange = bookingsRange.filter((b) => m14PaymentBucket(b) === fPayment);
+    }
+    const bookingsAll = await bookingsC.find({}, { projection: { _id: 0 } }).toArray();
+
+    const sum = (arr, fn) => arr.reduce((s, r) => s + (Number(fn(r)) || 0), 0);
+    const bAmt = (b) => Number(b.totalPrice || b.amount || 0);
+
+    // -------- Executive KPIs --------
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+    const kpi = {
+      totalRevenueLifetime: sum(bookingsAll.filter((b) => b.status !== 'cancelled' && b.status !== 'rejected'), bAmt),
+      totalRevenueRange: sum(bookingsRange.filter((b) => b.status !== 'cancelled' && b.status !== 'rejected'), bAmt),
+      monthlyRevenue: sum(bookingsAll.filter((b) => new Date(b.createdAt) >= monthStart && b.status !== 'cancelled' && b.status !== 'rejected'), bAmt),
+      dailyRevenue: sum(bookingsAll.filter((b) => new Date(b.createdAt) >= todayStart && b.status !== 'cancelled' && b.status !== 'rejected'), bAmt),
+      totalBookingsRange: bookingsRange.length,
+      totalBookingsLifetime: bookingsAll.length,
+      activeBookings: bookingsAll.filter((b) => b.status === 'approved' || b.status === 'pending').length,
+      completedBookings: bookingsAll.filter((b) => b.status === 'approved').length,
+      cancelledBookings: bookingsAll.filter((b) => b.status === 'cancelled').length,
+      rejectedBookings: bookingsAll.filter((b) => b.status === 'rejected').length,
+      refundAmount: sum(bookingsAll.filter((b) => b.refunded), bAmt),
+    };
+    kpi.averageBookingValue = kpi.totalBookingsRange > 0 ? Math.round(kpi.totalRevenueRange / kpi.totalBookingsRange) : 0;
+
+    // Users
+    const [travelerCount, hostCount] = await Promise.all([
+      usersC.countDocuments({ role: { $in: ['traveler', 'user', null] } }),
+      usersC.countDocuments({ role: 'host' }),
+    ]);
+    kpi.totalTravelers = travelerCount;
+    kpi.totalHosts = hostCount;
+    kpi.activeListings = listingsAll.filter((l) => l.status === 'active' || l.status === 'approved' || !l.status).length;
+    kpi.pendingListings = listingsAll.filter((l) => l.status === 'pending' || l.status === 'draft').length;
+
+    // Wallet + credits + referrals
+    const walletTx = await walletC.find({}, { projection: { _id: 0 } }).toArray();
+    const creditTx = await creditC.find({}, { projection: { _id: 0 } }).toArray();
+    const referralsAll = await referralsC.find({}, { projection: { _id: 0 } }).toArray();
+    kpi.walletBalance = sum(walletTx, (t) => (t.type === 'credit' ? t.amount : -t.amount));
+    kpi.creditsIssued = sum(creditTx.filter((t) => t.type === 'credit'), (t) => t.amount);
+    kpi.creditsRedeemed = sum(creditTx.filter((t) => t.type === 'debit'), (t) => t.amount);
+    kpi.referralRewardsIssued = sum(referralsAll.filter((r) => r.rewarded || r.status === 'rewarded'), (r) => r.rewardAmount || 0);
+
+    // Commission earned
+    const earningsAll = await hostEarningsC.find({}, { projection: { _id: 0 } }).toArray();
+    kpi.platformCommission = sum(earningsAll.filter((e) => e.status !== 'refunded'), (e) => e.commissionAmount);
+
+    // -------- Revenue series (by day / week / month) --------
+    const daySeries = {}, weekSeries = {}, monthSeries = {};
+    for (const b of bookingsRange) {
+      const revenue = (b.status === 'cancelled' || b.status === 'rejected') ? 0 : bAmt(b);
+      const d = m14DayBucket(b.createdAt), w = m14WeekBucket(b.createdAt), m = m14MonthBucket(b.createdAt);
+      daySeries[d] = (daySeries[d] || 0) + revenue;
+      weekSeries[w] = (weekSeries[w] || 0) + revenue;
+      monthSeries[m] = (monthSeries[m] || 0) + revenue;
+    }
+    const toSeries = (obj) => Object.keys(obj).sort().map((k) => ({ bucket: k, value: obj[k] }));
+
+    // Category breakdown
+    const categoryBreakdown = {};
+    for (const b of bookingsRange) {
+      const k = m14CategoryOf(b, listingMap);
+      const paid = (b.status !== 'cancelled' && b.status !== 'rejected');
+      const entry = categoryBreakdown[k] || { category: k, gross: 0, net: 0, commission: 0, bookings: 0 };
+      const gross = paid ? bAmt(b) : 0;
+      entry.bookings += 1;
+      entry.gross += gross;
+      // Approx commission using default 15% if no earning found
+      const e = earningsAll.find((x) => x.bookingId === b.bookingId);
+      entry.commission += e ? (e.commissionAmount || 0) : Math.round(gross * 0.15);
+      entry.net += gross - (e ? (e.commissionAmount || 0) : Math.round(gross * 0.15));
+      categoryBreakdown[k] = entry;
+    }
+
+    // Discounts / wallet / refunds within range
+    const walletUsage = sum(walletTx.filter((t) => t.type === 'debit' && new Date(t.createdAt) >= start && new Date(t.createdAt) <= end && (t.reason === 'booking' || t.category === 'booking' || t.bookingId)), (t) => t.amount);
+    const refundsInRange = sum(bookingsRange.filter((b) => b.refunded), bAmt);
+    const discountsInRange = sum(bookingsRange, (b) => Number(b.discount || b.couponDiscount || 0));
+
+    // -------- Booking analytics --------
+    const totalR = bookingsRange.length || 1;
+    const confirmedR = bookingsRange.filter((b) => b.status === 'approved').length;
+    const cancelledR = bookingsRange.filter((b) => b.status === 'cancelled').length;
+    const paymentDist = { full: 0, booking_fee: 0, online: 0, wallet: 0, cash: 0, unspecified: 0 };
+    let avgStayDays = 0, stayCount = 0;
+    for (const b of bookingsRange) {
+      paymentDist[m14PaymentBucket(b)] = (paymentDist[m14PaymentBucket(b)] || 0) + 1;
+      if (b.checkInDate && b.checkOutDate) {
+        const d1 = new Date(b.checkInDate), d2 = new Date(b.checkOutDate);
+        const diff = Math.round((d2 - d1) / 86400000);
+        if (diff > 0) { avgStayDays += diff; stayCount += 1; }
+      }
+    }
+    const bookingAnalytics = {
+      trendDaily: toSeries(daySeries),
+      confirmationRate: (confirmedR / totalR) * 100,
+      cancellationRate: (cancelledR / totalR) * 100,
+      averageBookingValue: kpi.averageBookingValue,
+      averageStayDays: stayCount ? +(avgStayDays / stayCount).toFixed(1) : 0,
+      paymentDistribution: paymentDist,
+      onlinePaymentPct: (paymentDist.online + paymentDist.full) / totalR * 100,
+      bookingFeePct: paymentDist.booking_fee / totalR * 100,
+      fullPaymentPct: paymentDist.full / totalR * 100,
+    };
+
+    // -------- Traveler analytics --------
+    const travelersInRange = new Set(bookingsRange.map((b) => b.travelerId).filter(Boolean));
+    const bookingsByTraveler = {};
+    for (const b of bookingsAll) {
+      if (!b.travelerId) continue;
+      bookingsByTraveler[b.travelerId] = (bookingsByTraveler[b.travelerId] || 0) + 1;
+    }
+    const repeatTravelers = Object.values(bookingsByTraveler).filter((c) => c > 1).length;
+    const totalUniq = Object.keys(bookingsByTraveler).length || 1;
+    const newUsers = await usersC.countDocuments({ createdAt: { $gte: start, $lte: end } });
+    // top travelers
+    const spendByTraveler = {};
+    for (const b of bookingsAll.filter((x) => x.status !== 'cancelled' && x.status !== 'rejected')) {
+      if (!b.travelerId) continue;
+      spendByTraveler[b.travelerId] = (spendByTraveler[b.travelerId] || 0) + bAmt(b);
+    }
+    const topTravelerIds = Object.entries(spendByTraveler).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const topTravelerUsers = await usersC.find({ id: { $in: topTravelerIds.map((x) => x[0]) } }, { projection: { _id: 0, id: 1, name: 1, email: 1 } }).toArray();
+    const topTravelers = topTravelerIds.map(([id, amt]) => {
+      const u = topTravelerUsers.find((x) => x.id === id);
+      return { id, name: u?.name || 'Unknown', email: u?.email || '', spend: amt, bookings: bookingsByTraveler[id] || 0 };
+    });
+    // favourite destinations
+    const cityCount = {};
+    for (const b of bookingsAll) {
+      const l = listingMap.get(b.listingId);
+      const key = String(l?.district || l?.city || 'Unknown');
+      cityCount[key] = (cityCount[key] || 0) + 1;
+    }
+    const favoriteDestinations = Object.entries(cityCount).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count }));
+    const totalCreditsRedeemedRange = sum(creditTx.filter((t) => t.type === 'debit' && new Date(t.createdAt) >= start && new Date(t.createdAt) <= end), (t) => t.amount);
+    const travelerAnalytics = {
+      newUsers,
+      returningUsers: repeatTravelers,
+      repeatBookingRate: (repeatTravelers / totalUniq) * 100,
+      walletUsage,
+      creditsRedeemed: totalCreditsRedeemedRange,
+      referralParticipation: referralsAll.length,
+      favoriteDestinations,
+      averageSpending: totalUniq ? Math.round(Object.values(spendByTraveler).reduce((s, v) => s + v, 0) / totalUniq) : 0,
+      topTravelers,
+      activeTravelersInRange: travelersInRange.size,
+    };
+
+    // -------- Host analytics --------
+    const earnByHost = {};
+    for (const e of earningsAll) {
+      if (!e.hostId) continue;
+      earnByHost[e.hostId] = (earnByHost[e.hostId] || { net: 0, bookings: 0 });
+      earnByHost[e.hostId].net += Number(e.netEarnings || 0);
+      earnByHost[e.hostId].bookings += 1;
+    }
+    const topHostIds = Object.entries(earnByHost).sort((a, b) => b[1].net - a[1].net).slice(0, 10).map((x) => x[0]);
+    const topHostUsers = await usersC.find({ id: { $in: topHostIds } }, { projection: { _id: 0, id: 1, name: 1, email: 1 } }).toArray();
+    const topEarningHosts = topHostIds.map((id) => {
+      const u = topHostUsers.find((x) => x.id === id);
+      return { id, name: u?.name || 'Unknown', email: u?.email || '', net: earnByHost[id].net, bookings: earnByHost[id].bookings };
+    });
+    // Highest rated hosts
+    const reviewsAll = await reviewsC.find({}, { projection: { _id: 0 } }).toArray();
+    const ratingByHost = {};
+    for (const r of reviewsAll) {
+      const l = listingMap.get(r.listingId); if (!l?.hostId) continue;
+      ratingByHost[l.hostId] = ratingByHost[l.hostId] || { sum: 0, count: 0 };
+      ratingByHost[l.hostId].sum += Number(r.rating || 0);
+      ratingByHost[l.hostId].count += 1;
+    }
+    const ratedHostIds = Object.keys(ratingByHost);
+    const ratedHostUsers = await usersC.find({ id: { $in: ratedHostIds } }, { projection: { _id: 0, id: 1, name: 1 } }).toArray();
+    const highestRatedHosts = ratedHostIds
+      .map((id) => ({ id, name: ratedHostUsers.find((x) => x.id === id)?.name || 'Unknown', avgRating: ratingByHost[id].sum / ratingByHost[id].count, reviews: ratingByHost[id].count }))
+      .filter((x) => x.reviews >= 1)
+      .sort((a, b) => b.avgRating - a.avgRating)
+      .slice(0, 10);
+    // Response rate: proportion of bookings not stuck in pending > 24h
+    const respByHost = {};
+    for (const b of bookingsAll) {
+      if (!b.hostId) continue;
+      respByHost[b.hostId] = respByHost[b.hostId] || { total: 0, responded: 0 };
+      respByHost[b.hostId].total += 1;
+      if (b.status !== 'pending') respByHost[b.hostId].responded += 1;
+    }
+    const avgResponseRate = Object.values(respByHost).length ? Object.values(respByHost).reduce((s, r) => s + (r.responded / r.total), 0) / Object.values(respByHost).length * 100 : 0;
+    // Cancellation rate per host (host-initiated approx)
+    const hostCancelRate = Object.values(respByHost).length ? bookingsAll.filter((b) => b.status === 'rejected').length / (bookingsAll.length || 1) * 100 : 0;
+    const payoutsAll = await hostPayoutsC.find({}, { projection: { _id: 0 } }).toArray();
+    const hostAnalytics = {
+      topEarningHosts,
+      highestRatedHosts,
+      averageResponseRate: +avgResponseRate.toFixed(1),
+      hostRejectionRate: +hostCancelRate.toFixed(1),
+      pendingPayouts: sum(payoutsAll.filter((p) => p.status === 'pending' || p.status === 'hold'), (p) => p.amount),
+      paidPayouts: sum(payoutsAll.filter((p) => p.status === 'paid'), (p) => p.amount),
+      averageHostEarnings: Object.keys(earnByHost).length ? Math.round(Object.values(earnByHost).reduce((s, v) => s + v.net, 0) / Object.keys(earnByHost).length) : 0,
+    };
+
+    // -------- Listing analytics --------
+    const bookingsByListing = {};
+    for (const b of bookingsAll) {
+      if (!b.listingId) continue;
+      bookingsByListing[b.listingId] = (bookingsByListing[b.listingId] || 0) + 1;
+    }
+    const viewsByListing = {}; // Approximated via wishlist counts (real 'views' collection not present)
+    const wishlists = await wishlistsC.find({}, { projection: { _id: 0, listingId: 1 } }).toArray();
+    for (const w of wishlists) {
+      if (!w.listingId) continue;
+      viewsByListing[w.listingId] = (viewsByListing[w.listingId] || 0) + 1;
+    }
+    const listingList = listingsAll.map((l) => ({
+      id: l.id, title: l.title,
+      category: l.category, subcategory: l.subcategory, district: l.district || l.city,
+      views: viewsByListing[l.id] || 0,
+      bookings: bookingsByListing[l.id] || 0,
+      conversion: (viewsByListing[l.id] || 0) > 0 ? ((bookingsByListing[l.id] || 0) / viewsByListing[l.id]) * 100 : 0,
+      createdAt: l.createdAt,
+      status: l.status,
+    }));
+    const mostViewed = [...listingList].sort((a, b) => b.views - a.views).slice(0, 10);
+    const mostBooked = [...listingList].sort((a, b) => b.bookings - a.bookings).slice(0, 10);
+    const highestConversion = [...listingList].filter((l) => l.views >= 3).sort((a, b) => b.conversion - a.conversion).slice(0, 10);
+    const noBookings = listingList.filter((l) => l.bookings === 0).slice(0, 20);
+    const recent = [...listingList].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10);
+    // Category / district performance
+    const catPerf = {}, distPerf = {};
+    for (const b of bookingsAll.filter((x) => x.status !== 'cancelled' && x.status !== 'rejected')) {
+      const key = m14CategoryOf(b, listingMap);
+      catPerf[key] = catPerf[key] || { category: key, revenue: 0, bookings: 0 };
+      catPerf[key].revenue += bAmt(b);
+      catPerf[key].bookings += 1;
+      const l = listingMap.get(b.listingId); const dk = String(l?.district || l?.city || 'Unknown');
+      distPerf[dk] = distPerf[dk] || { district: dk, revenue: 0, bookings: 0 };
+      distPerf[dk].revenue += bAmt(b);
+      distPerf[dk].bookings += 1;
+    }
+    const listingAnalytics = {
+      mostViewed, mostBooked, highestConversion, noBookings, recent,
+      categoryPerformance: Object.values(catPerf).sort((a, b) => b.revenue - a.revenue),
+      districtPerformance: Object.values(distPerf).sort((a, b) => b.revenue - a.revenue).slice(0, 15),
+    };
+
+    // -------- Marketing analytics --------
+    const couponUses = await couponUseC.find({}, { projection: { _id: 0 } }).toArray();
+    const couponUsageInRange = couponUses.filter((c) => new Date(c.usedAt || c.createdAt) >= start && new Date(c.usedAt || c.createdAt) <= end);
+    const totalDiscountFromCoupons = sum(couponUsageInRange, (c) => c.discountAmount || c.amount || 0);
+    const promotionsCount = await promoC.countDocuments({});
+    const activePromotions = await promoC.countDocuments({ active: true });
+    const referralsInRange = referralsAll.filter((r) => new Date(r.createdAt) >= start && new Date(r.createdAt) <= end);
+    const referralReward = sum(referralsInRange, (r) => r.rewardAmount || 0);
+    const walletPaymentsInRange = walletTx.filter((t) => new Date(t.createdAt) >= start && new Date(t.createdAt) <= end && t.type === 'debit' && (t.reason === 'booking' || t.category === 'booking' || t.bookingId));
+    const marketingAnalytics = {
+      couponUsageCount: couponUsageInRange.length,
+      couponDiscount: totalDiscountFromCoupons,
+      promotionsTotal: promotionsCount,
+      promotionsActive: activePromotions,
+      referralsInRange: referralsInRange.length,
+      referralRewardAmount: referralReward,
+      creditsRedeemed: totalCreditsRedeemedRange,
+      walletPaymentsCount: walletPaymentsInRange.length,
+      walletPaymentsAmount: sum(walletPaymentsInRange, (t) => t.amount),
+      couponROI: totalDiscountFromCoupons > 0 ? +((kpi.totalRevenueRange - totalDiscountFromCoupons) / totalDiscountFromCoupons * 100).toFixed(1) : 0,
+      onlinePaymentDiscount: 0,
+    };
+
+    // -------- AI Planner analytics --------
+    const aiPlansAll = await safarPlansC.find({}, { projection: { _id: 0 } }).toArray();
+    const aiPlansRange = aiPlansAll.filter((p) => new Date(p.createdAt) >= start && new Date(p.createdAt) <= end);
+    const destCount = {}, typeCount = {}, dateCount = {};
+    for (const p of aiPlansAll) {
+      const dest = p.destination || p.location || 'Unknown';
+      destCount[dest] = (destCount[dest] || 0) + 1;
+      const type = p.itineraryType || p.tripType || 'general';
+      typeCount[type] = (typeCount[type] || 0) + 1;
+      if (p.startDate) {
+        const mo = m14MonthBucket(p.startDate);
+        dateCount[mo] = (dateCount[mo] || 0) + 1;
+      }
+    }
+    const planIds = new Set(aiPlansAll.map((p) => p.id));
+    const bookingsFromPlan = bookingsAll.filter((b) => b.aiPlanId && planIds.has(b.aiPlanId)).length;
+    const aiAnalytics = {
+      totalPlans: aiPlansAll.length,
+      plansInRange: aiPlansRange.length,
+      topDestinations: Object.entries(destCount).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+      popularTypes: Object.entries(typeCount).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+      popularMonths: Object.entries(dateCount).sort().map(([bucket, count]) => ({ bucket, count })),
+      conversionToBooking: aiPlansAll.length ? +(bookingsFromPlan / aiPlansAll.length * 100).toFixed(1) : 0,
+      bookingsFromPlan,
+    };
+
+    // -------- Revenue analytics --------
+    const revenueAnalytics = {
+      byDay: toSeries(daySeries),
+      byWeek: toSeries(weekSeries),
+      byMonth: toSeries(monthSeries),
+      categoryBreakdown: Object.values(categoryBreakdown).sort((a, b) => b.gross - a.gross),
+      grossRevenue: kpi.totalRevenueRange,
+      netRevenue: kpi.totalRevenueRange - kpi.platformCommission,
+      commission: kpi.platformCommission,
+      discounts: discountsInRange,
+      walletUsage,
+      refunds: refundsInRange,
+    };
+
+    return ok({
+      range: { key: rangeKey, start, end },
+      kpi,
+      revenueAnalytics,
+      bookingAnalytics,
+      travelerAnalytics,
+      hostAnalytics,
+      listingAnalytics,
+      marketingAnalytics,
+      aiAnalytics,
+    });
+  }
+
+  // GET /api/admin/analytics/filters — returns filter option lists
+  if (path === '/admin/analytics/filters' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const [listings, users] = await Promise.all([getCollection('listings'), getCollection('users')]);
+    const districtsAgg = await listings.distinct('district');
+    const cities = await listings.distinct('city');
+    const districts = Array.from(new Set([...(districtsAgg || []), ...(cities || [])])).filter(Boolean).sort();
+    const hosts = await users.find({ role: 'host' }, { projection: { _id: 0, id: 1, name: 1, email: 1 } }).limit(500).toArray();
+    return ok({
+      categories: ['hotels', 'houseboats', 'homestays', 'tours', 'activities', 'car_rentals', 'bike_rentals'],
+      districts,
+      hosts,
+      statuses: ['pending', 'approved', 'cancelled', 'rejected'],
+      paymentTypes: ['full', 'booking_fee', 'online', 'wallet', 'cash'],
+    });
+  }
+
+  // GET /api/admin/analytics/export?report=revenue|booking|host|traveler|listing|refund|wallet|referral|promotion&range=&from=&to=
+  if (path === '/admin/analytics/export' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const report = url.searchParams.get('report') || 'revenue';
+    const rangeKey = url.searchParams.get('range') || '30d';
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    const { start, end } = m14ResolveRange(rangeKey, from, to);
+    const esc = (v) => {
+      const s = v === null || v === undefined ? '' : (v instanceof Date ? v.toISOString() : String(v));
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csvOf = (headers, rows) => headers.join(',') + '\n' + rows.map((r) => headers.map((h) => esc(r[h])).join(',')).join('\n');
+
+    let csv = '', filename = `${report}-${Date.now()}.csv`;
+    const bookings = await (await getCollection('bookings')).find({ createdAt: { $gte: start, $lte: end } }, { projection: { _id: 0 } }).toArray();
+    if (report === 'revenue' || report === 'booking') {
+      const rows = bookings.map((b) => ({
+        bookingId: b.bookingId, listingTitle: b.listingTitle, travelerName: b.travelerName,
+        hostName: b.hostName, status: b.status, totalPrice: b.totalPrice,
+        checkInDate: b.checkInDate, checkOutDate: b.checkOutDate,
+        createdAt: b.createdAt, refunded: b.refunded ? 'yes' : 'no',
+      }));
+      csv = csvOf(['bookingId', 'listingTitle', 'travelerName', 'hostName', 'status', 'totalPrice', 'checkInDate', 'checkOutDate', 'createdAt', 'refunded'], rows);
+    } else if (report === 'host') {
+      const rows = await (await getCollection('hostEarnings')).find({ createdAt: { $gte: start, $lte: end } }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+      csv = csvOf(['bookingId', 'hostId', 'listingTitle', 'bookingAmount', 'commissionAmount', 'netEarnings', 'status', 'createdAt'], rows);
+    } else if (report === 'traveler') {
+      const users = await (await getCollection('users')).find({ createdAt: { $gte: start, $lte: end } }, { projection: { _id: 0, passwordHash: 0 } }).toArray();
+      csv = csvOf(['id', 'name', 'email', 'role', 'createdAt'], users);
+    } else if (report === 'listing') {
+      const listings = await (await getCollection('listings')).find({ createdAt: { $gte: start, $lte: end } }, { projection: { _id: 0 } }).toArray();
+      csv = csvOf(['id', 'title', 'category', 'district', 'city', 'hostId', 'status', 'price', 'createdAt'], listings);
+    } else if (report === 'refund') {
+      const rows = bookings.filter((b) => b.refunded).map((b) => ({ bookingId: b.bookingId, listingTitle: b.listingTitle, travelerName: b.travelerName, amount: b.totalPrice, createdAt: b.createdAt }));
+      csv = csvOf(['bookingId', 'listingTitle', 'travelerName', 'amount', 'createdAt'], rows);
+    } else if (report === 'wallet') {
+      const rows = await (await getCollection('walletTransactions')).find({ createdAt: { $gte: start, $lte: end } }, { projection: { _id: 0 } }).toArray();
+      csv = csvOf(['id', 'userId', 'type', 'amount', 'reason', 'bookingId', 'createdAt'], rows);
+    } else if (report === 'referral') {
+      const rows = await (await getCollection('referrals')).find({ createdAt: { $gte: start, $lte: end } }, { projection: { _id: 0 } }).toArray();
+      csv = csvOf(['id', 'referrerId', 'refereeId', 'code', 'status', 'rewardAmount', 'createdAt'], rows);
+    } else if (report === 'promotion') {
+      const rows = await (await getCollection('couponUses')).find({ createdAt: { $gte: start, $lte: end } }, { projection: { _id: 0 } }).toArray();
+      csv = csvOf(['id', 'couponCode', 'userId', 'bookingId', 'discountAmount', 'createdAt'], rows);
+    }
+    return new NextResponse(csv, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });

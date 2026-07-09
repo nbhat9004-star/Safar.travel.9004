@@ -659,6 +659,7 @@ function AdminInner() {
                     { label: 'Bookings', tab: 'bookings', icon: Calendar },
                     { label: 'Listings', tab: 'listings', icon: Home },
                     { label: 'Reviews', tab: 'reviews', icon: Star },
+                    { label: 'Analytics Center', href: '/admin/analytics', icon: BarChart3 },
                     { label: 'Reports (Analytics)', tab: 'revenue', icon: BarChart3 },
                     { label: 'Audit Logs', tab: 'activity', icon: FileSpreadsheet },
                     { label: 'Communication Center', href: '/admin/communication', icon: Sparkles },
