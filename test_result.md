@@ -3985,3 +3985,314 @@ agent_communication:
 
       Existing test file /app/email_verification_backend_test.py can be reused/adapted.
       No need to run Playwright, load tests, or Module 8/9 regressions.
+
+# ============================================================================
+# MODULE 18 — Enterprise CMS & Website Builder
+# ============================================================================
+backend:
+  - task: "Module 18: CMS backend endpoints /api/cms/* and /api/public/site"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Implemented Module 18 CMS/Website Builder backend. All endpoints super_admin/admin only.
+
+          Collections used:
+            cms_home_pages, cms_pages, cms_header, cms_footer, cms_navigation,
+            cms_theme, cms_media, cms_global, cms_versions
+
+          Templates (module-scope const CMS_TEMPLATES): 8 built-in home page templates each with
+          curated section arrays: safar-signature, valley-editorial, adventure-first,
+          luxury-collection, family-explorer, minimal-modern, seasonal-focus, marketplace-classic.
+
+          Endpoints implemented (all under /api/cms/, admin-gated):
+            GET  /cms/stats                                 -> overall counters
+            GET  /cms/templates, GET /cms/templates/:key    -> built-in template list & detail
+            GET  /cms/home-pages                            -> list home pages
+            POST /cms/home-pages                            -> create (optionally from templateKey)
+            GET  /cms/home-pages/:id                        -> single home page
+            PUT  /cms/home-pages/:id                        -> update (sections/seo/name/status)
+            DELETE /cms/home-pages/:id                      -> delete (blocked if active)
+            POST /cms/home-pages/:id/publish                -> publish + set as ACTIVE (only one active)
+            POST /cms/home-pages/:id/unpublish              -> unpublish + set to draft
+            POST /cms/home-pages/:id/duplicate              -> duplicate to new draft
+            GET/POST /cms/pages, GET/PUT/DELETE /cms/pages/:id, POST /cms/pages/:id/publish
+            GET/PUT  /cms/header  (single doc id='header')
+            GET/PUT  /cms/footer  (single doc id='footer')
+            GET/POST /cms/navigation, PUT/DELETE /cms/navigation/:id
+            GET/PUT  /cms/theme (single doc id='theme')
+            GET/POST /cms/media, PUT/DELETE /cms/media/:id
+            GET/POST /cms/global, PUT/DELETE /cms/global/:id
+            GET  /cms/versions, GET /cms/versions/:id, POST /cms/versions/:id/restore
+
+          Public read-only endpoints (no auth required):
+            GET  /public/site                -> { home (active|null), header, footer, theme }
+            GET  /public/page/:slug          -> single published CMS page
+            GET  /public/navigation/:name    -> named nav menu
+
+          Version snapshots automatically created on:
+            - home_page create/update/publish/restore
+            - page create/update/publish/restore
+            - header/footer/theme updates
+
+          Auth guard: reject 401 if no user, 403 if role not in [super_admin, admin].
+          Public homepage remains intact until a template is explicitly published.
+
+          Manual verification passed:
+            ✓ Login founder@safarcurated.com/SuperAdmin@2025 → super_admin
+            ✓ /api/cms/templates returns 8 templates
+            ✓ /api/cms/theme initializes default doc on first read
+            ✓ /api/cms/header, /cms/footer auto-initialize
+            ✓ Create home page from safar-signature template → 10 sections copied
+            ✓ Publish endpoint sets isActive=true, only one active at a time
+            ✓ /api/public/site returns published home page for anonymous users
+            ✓ Create page → /api/public/page/:slug returns after publish
+            ✓ Version list & restore working
+            ✓ Delete of active home page blocked with 400
+
+frontend:
+  - task: "Module 18: Website Builder Admin UI /admin/website-builder/*"
+    implemented: true
+    working: "NA"
+    file: "/app/app/admin/website-builder/**"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Built full admin UI for Module 18 Website Builder & CMS:
+
+          Layout / shell:
+            /app/components/safar/WebsiteBuilderShell.jsx  → sidebar + top bar, mobile responsive,
+            ProtectedRoute(roles=[super_admin,admin])
+
+          Pages under /admin/website-builder/:
+            page.js                        Dashboard with stats + quick-link cards
+            home-pages/page.js             Templates gallery (8) + Use Template + list
+            home-pages/[id]/page.js        Full home page editor: add/remove/duplicate/hide/move up-down
+                                            with SECTION_LIBRARY (30 section types), per-section props
+                                            editor, Save + Publish + Unpublish + Undo + device preview
+                                            (desktop/tablet/mobile) + SEO block
+            pages/page.js                  Pages list with status filters and search
+            pages/[id]/page.js             Page editor (title/slug/status + sections + SEO)
+            header/page.js                 Header builder (logo, nav, buttons, settings, announcement)
+            footer/page.js                 Footer builder (columns, socials, contact, extras)
+            navigation/page.js             Named-menu builder (mobile, mega-menu, footer-secondary)
+            theme/page.js                  Theme (colors with picker, fonts, radius, dark mode, animations)
+            media/page.js                  Media library (add by URL, search, copy URL, delete)
+            seo/page.js                    Global SEO center listing all pages + home pages
+            versions/page.js               Version history + restore (filter by entity)
+            global/page.js                 Global components (reusable data-driven cards)
+            custom-code/page.js            Placeholder for future custom-code injection
+
+          Public renderer:
+            /app/components/safar/SectionRenderer.jsx  →  Renders 30 section types with graceful
+            fallback (unknown types render nothing). Uses existing LISTINGS, PropertyCard,
+            CategoryPills, STATS, TESTIMONIALS, IMG data.
+            /app/app/page.js  →  Modified to fetch /api/public/site; if home page published (or
+            ?preview=<id> query param set for admins), renders SectionRenderer instead of the
+            existing static homepage. Falls back to existing static homepage otherwise (zero
+            breaking change).
+            /app/app/p/[slug]/page.js  →  Public renderer for CMS pages via /api/public/page/:slug.
+
+          Admin drawer:
+            Added "Website Builder" section to /admin sidebar with quick links.
+
+          Client library:
+            /app/lib/cms-api.js  →  cmsApi.* wrapper functions + SECTION_LIBRARY constant.
+
+          Guardrails / non-breaking:
+            - Existing homepage remains fully intact when no home page is published (verified).
+            - Auth, booking, payments, analytics, AI Planner, finance and messaging modules
+              were NOT modified. Only /admin/page.js gained a sidebar entry (additive).
+            - All changes are behind super_admin/admin role guard.
+
+test_plan:
+  current_focus:
+    - "Module 18: CMS backend endpoints /api/cms/* and /api/public/site"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Module 18 — Enterprise CMS & Website Builder — is IMPLEMENTED and needs backend testing.
+
+      Please run a focused BACKEND test on Module 18 CMS endpoints ONLY. Do NOT retest previous
+      modules. Use the existing super_admin credentials:
+          Email:    founder@safarcurated.com
+          Password: SuperAdmin@2025
+
+      Test scope (approx 25 assertions):
+
+      A) Auth guard
+        1. GET /api/cms/templates without auth → 401.
+        2. GET /api/cms/templates as traveler role → 403.
+        3. GET /api/cms/templates as super_admin → 200, returns 8 templates each with key/name.
+
+      B) Home pages CRUD + template
+        4. POST /api/cms/home-pages { name, templateKey: 'safar-signature' } as admin → 201,
+           sections length >= 8, status='draft', isActive=false.
+        5. POST without name → 400.
+        6. GET /api/cms/home-pages → includes the created id.
+        7. GET /api/cms/home-pages/:id → returns doc.
+        8. PUT /api/cms/home-pages/:id with sections=[...] → 200 sections updated.
+        9. POST /api/cms/home-pages/:id/duplicate → 201 new doc, isActive=false, name suffixed "(Copy)".
+        10. DELETE the active home page (see below) → 400 with message about active.
+
+      C) Publish flow
+        11. Before publish: GET /api/public/site → home is null (or previously active).
+        12. POST /api/cms/home-pages/:id/publish → 200, isActive=true, status='published'.
+        13. GET /api/public/site (no auth) → home is the newly-published one, sections match.
+        14. Publish a second home page → first becomes inactive automatically; only one active.
+        15. POST /api/cms/home-pages/:id/unpublish → isActive=false, status='draft'.
+
+      D) Pages
+        16. POST /api/cms/pages { title, slug } → 201 status='draft'.
+        17. Duplicate slug → 409.
+        18. PUT /api/cms/pages/:id with sections and seo → 200.
+        19. POST /api/cms/pages/:id/publish → status='published'.
+        20. GET /api/public/page/:slug → 200; unpublished pages → 404.
+
+      E) Header / Footer / Theme / Media / Navigation / Global
+        21. GET /api/cms/header (first call) → auto-seeded doc with logo/nav/settings.
+        22. PUT /api/cms/header with a new nav array → returns updated.
+        23. GET /api/cms/footer auto-seeds columns/socials/contact.
+        24. GET /api/cms/theme auto-seeds colors/fonts/radius.
+        25. POST /api/cms/media { url, name, alt } → 201; GET list → contains it; DELETE → 200.
+        26. POST /api/cms/navigation { name:'test-menu', items:[{label,href}] } → 201, then
+            GET /api/public/navigation/test-menu (public) → 200.
+        27. POST /api/cms/global { key:'top-banner', name, kind:'banner', data:{} } → 201.
+
+      F) Versions / restore
+        28. GET /api/cms/versions → includes recent snapshots for created entities.
+        29. POST /api/cms/versions/:id/restore for a home_page snapshot → 200, restored=true.
+
+      G) Cleanup (optional but preferred)
+        30. Unpublish + delete every home page you created so the existing static homepage
+            continues to serve.
+
+      Please save all test credentials + test artifacts as usual to /app/memory/test_credentials.md.
+      Do NOT touch bookings, payments, auth flows or listings — none of those were changed by
+      this module.
+
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ MODULE 18 CMS BACKEND COMPREHENSIVE TESTING COMPLETE - ALL TESTS PASSED (31/31)
+          
+          Test file: /app/module18_cms_backend_test.py
+          Test date: 2026-07-09
+          Success rate: 100.0%
+          
+          A) AUTH GUARD TESTS (3/3 passed):
+          ✅ A1: GET /cms/templates without auth → 401 Unauthorized
+          ✅ A2: GET /cms/templates as traveler → 403 Forbidden (super_admin only)
+          ✅ A3: GET /cms/templates as super_admin → 200, 8 templates with key/name/description
+          
+          B) HOME PAGES CRUD + TEMPLATE FLOW (7/7 passed):
+          ✅ B4: POST /cms/home-pages with template → 201, sections >= 8, status=draft, isActive=false
+          ✅ B5: POST /cms/home-pages without name → 400 Bad Request
+          ✅ B6: GET /cms/home-pages includes created id
+          ✅ B7: GET /cms/home-pages/:id returns doc with sections
+          ✅ B8: PUT /cms/home-pages/:id updates sections → 200, sections length == 1
+          ✅ B9: POST /cms/home-pages/:id/duplicate → 201, new id, isActive=false, name ends with "(Copy)"
+          ✅ B10: Publish then DELETE active home page → 400 (blocked as expected)
+          
+          C) PUBLISH FLOW (5/5 passed):
+          ✅ C11: GET /public/site (no auth) → 200, observe current state
+          ✅ C12: Published home page has isActive=true, status=published
+          ✅ C13: GET /public/site returns published home page with matching id and sections
+          ✅ C14: Publish second home page → first becomes isActive=false (only one active at a time)
+          ✅ C15: POST /cms/home-pages/:id/unpublish → 200, isActive=false, status=draft
+          
+          D) PAGES (5/5 passed):
+          ✅ D16: POST /cms/pages → 201, status=draft
+          ✅ D17: POST /cms/pages with duplicate slug → 409 Conflict
+          ✅ D18: PUT /cms/pages/:id updates sections and seo → 200
+          ✅ D19: POST /cms/pages/:id/publish → 200, status=published
+          ✅ D20: GET /public/page/about-us → 200, /public/page/does-not-exist → 404
+          
+          E) HEADER / FOOTER / THEME / MEDIA / NAVIGATION / GLOBAL (7/7 passed):
+          ✅ E21: GET /cms/header → 200 with logo, nav array, settings (auto-seed working)
+          ✅ E22: PUT /cms/header updates nav → 200
+          ✅ E23: GET /cms/footer → 200 with columns array (auto-seed working)
+          ✅ E24: GET /cms/theme → 200 with colors.primary (auto-seed working)
+          ✅ E25: POST /cms/media → 201, GET /cms/media contains it, DELETE → 200 deleted=true
+          ✅ E26: POST /cms/navigation → 201, GET /public/navigation/:name → 200 with items, DELETE → 200
+          ✅ E27: POST /cms/global → 201, DELETE → 200
+          
+          F) VERSIONS / RESTORE (2/2 passed):
+          ✅ F28: GET /cms/versions → non-empty (19 versions created by CRUD operations)
+          ✅ F29: POST /cms/versions/:id/restore → 200, restored=true
+          
+          G) CLEANUP (2/2 passed):
+          ✅ G30: Unpublish and delete all home pages, public site.home returns to null
+          ✅ G31: DELETE created page → 200
+          
+          CRITICAL FEATURES VERIFIED:
+          ✅ Super admin authentication guard working (401 for no auth, 403 for non-admin)
+          ✅ Template system working (8 templates: safar-signature, valley-editorial, adventure-first, 
+             luxury-collection, family-explorer, minimal-modern, seasonal-focus, marketplace-classic)
+          ✅ Home page CRUD operations working (create, read, update, delete, duplicate)
+          ✅ Publish/unpublish flow working (only one active home page at a time)
+          ✅ Public site endpoint working (returns active home page or null)
+          ✅ Pages CRUD working (create, update, publish, slug uniqueness)
+          ✅ Public page endpoint working (published pages accessible, 404 for non-existent)
+          ✅ Singleton documents working (header, footer, theme auto-seed on first read)
+          ✅ Media library working (create, list, delete)
+          ✅ Navigation menus working (create, public endpoint, delete)
+          ✅ Global components working (create, delete)
+          ✅ Version history working (automatic snapshots, restore functionality)
+          ✅ Active home page deletion blocked (400 error as expected)
+          ✅ Cleanup working (all resources properly deleted)
+          
+          NO CRITICAL ISSUES FOUND. MODULE 18 CMS BACKEND IS FULLY FUNCTIONAL AND PRODUCTION-READY.
+          
+          Test credentials used: founder@safarcurated.com / SuperAdmin@2025 (role: super_admin)
+
+
+agent_communication:
+  - agent: "testing"
+    message: |
+      ✅ MODULE 18 CMS BACKEND TESTING COMPLETE - ALL TESTS PASSED (31/31)
+      
+      Test file: /app/module18_cms_backend_test.py
+      Test date: 2026-07-09
+      Success rate: 100.0%
+      
+      COMPREHENSIVE TESTING COMPLETED:
+      ✅ Auth guard (3 tests) - super_admin only access verified
+      ✅ Home pages CRUD (7 tests) - create, list, get, update, duplicate, publish, delete
+      ✅ Publish flow (5 tests) - publish, unpublish, public site endpoint, only one active
+      ✅ Pages (5 tests) - create, duplicate slug check, update, publish, public page endpoint
+      ✅ Singletons (7 tests) - header, footer, theme, media, navigation, global
+      ✅ Versions (2 tests) - list versions, restore functionality
+      ✅ Cleanup (2 tests) - cleanup all created resources
+      
+      CRITICAL FEATURES VERIFIED:
+      ✅ Super admin authentication guard (401 for no auth, 403 for non-admin)
+      ✅ 8 built-in templates working (safar-signature, valley-editorial, etc.)
+      ✅ Home page CRUD with template initialization (10 sections from safar-signature)
+      ✅ Publish/unpublish flow (only one active home page at a time enforced)
+      ✅ Public endpoints working (/public/site, /public/page/:slug, /public/navigation/:name)
+      ✅ Singleton auto-seed working (header, footer, theme initialize on first read)
+      ✅ Version history automatic snapshots and restore working
+      ✅ Active home page deletion blocked (400 error as expected)
+      ✅ Slug uniqueness enforced (409 for duplicate page slugs)
+      
+      NO CRITICAL ISSUES FOUND.
+      
+      MODULE 18 CMS BACKEND IS FULLY FUNCTIONAL AND PRODUCTION-READY.
+      
+      Test credentials: founder@safarcurated.com / SuperAdmin@2025 (role: super_admin)
+

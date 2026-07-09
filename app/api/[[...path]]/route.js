@@ -72,6 +72,145 @@ async function logActivity(admin, action, details, ipAddress = null) {
 const CATEGORIES = ['stay','transport','experience','tour'];
 const STATUSES = ['pending','approved','rejected'];
 
+// ============================================================================
+// MODULE 18 — CMS Built-in Home Page Templates
+// ============================================================================
+// Each template is a curated section list; admin clicks "Use Template" and it
+// becomes a new draft home page they can edit and publish.
+// All sections are Safar-branded; visual style differs by heroStyle/theme props.
+const CMS_TEMPLATES = [
+  {
+    key: 'safar-signature',
+    name: 'Safar Signature',
+    description: 'Immersive full-bleed hero + curated stays + AI planner.',
+    inspiration: 'Airbnb × Booking',
+    thumbnail: 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'hero-1', type: 'hero', hidden: false, props: { variant: 'seasonal-slideshow', title: 'Experience Kashmir Like a Local.', subtitle: 'Curated stays, guides and experiences across the valley.', ctaPrimary: { label: 'Explore Stays', href: '/explore' }, ctaSecondary: { label: 'Plan with AI', href: '/ai-planner' } } },
+      { id: 'search-1', type: 'search', hidden: false, props: { style: 'floating-card' } },
+      { id: 'stats-1', type: 'stats', hidden: false, props: {} },
+      { id: 'categories-1', type: 'categories', hidden: false, props: {} },
+      { id: 'featured-1', type: 'featured-listings', hidden: false, props: { title: "Stays travelers can't stop talking about", limit: 8 } },
+      { id: 'destinations-1', type: 'destinations', hidden: false, props: { title: 'Where the valley calls you next' } },
+      { id: 'ai-1', type: 'ai-planner-promo', hidden: false, props: {} },
+      { id: 'experiences-1', type: 'experiences', hidden: false, props: { title: 'Beyond the stay — the soul of Kashmir' } },
+      { id: 'host-cta-1', type: 'host-cta', hidden: false, props: { title: 'List your home, cabin or experience — reach the world.' } },
+      { id: 'testimonials-1', type: 'testimonials', hidden: false, props: { title: 'Stories from the valley' } },
+    ],
+  },
+  {
+    key: 'valley-editorial',
+    name: 'Valley Editorial',
+    description: 'Magazine-style storytelling with rich imagery.',
+    inspiration: 'Visit Dubai × Switzerland Tourism',
+    thumbnail: 'https://images.pexels.com/photos/14262339/pexels-photo-14262339.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'hero-2', type: 'hero', hidden: false, props: { variant: 'editorial', title: 'A journey through Kashmir', subtitle: 'Stories, seasons and stays curated by locals.', ctaPrimary: { label: 'Start Exploring', href: '/explore' } } },
+      { id: 'destinations-2', type: 'destinations', hidden: false, props: { title: 'Trending destinations', columns: 3 } },
+      { id: 'featured-2', type: 'featured-listings', hidden: false, props: { title: 'Editor\u2019s picks', limit: 6 } },
+      { id: 'story-1', type: 'travel-stories', hidden: false, props: { title: 'Travel stories' } },
+      { id: 'experiences-2', type: 'experiences', hidden: false, props: { title: 'Experiences' } },
+      { id: 'newsletter-1', type: 'newsletter', hidden: false, props: {} },
+    ],
+  },
+  {
+    key: 'adventure-first',
+    name: 'Adventure First',
+    description: 'Bold, activity-led homepage with bike/car/houseboat rows.',
+    inspiration: 'GetYourGuide × Klook',
+    thumbnail: 'https://images.pexels.com/photos/32620987/pexels-photo-32620987.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'hero-3', type: 'hero', hidden: false, props: { variant: 'video-still', title: 'Ride, sail and roam Kashmir.', subtitle: 'Bikes, cars, houseboats and experiences — all in one place.', ctaPrimary: { label: 'Browse Rentals', href: '/explore' } } },
+      { id: 'search-3', type: 'search', hidden: false, props: { style: 'inline' } },
+      { id: 'categories-3', type: 'categories', hidden: false, props: {} },
+      { id: 'bikes-1', type: 'bike-rentals', hidden: false, props: { title: 'Bike rentals' } },
+      { id: 'cars-1', type: 'car-rentals', hidden: false, props: { title: 'Cab & car rentals' } },
+      { id: 'houseboats-1', type: 'houseboats', hidden: false, props: { title: 'Houseboats on Dal & Nigeen' } },
+      { id: 'experiences-3', type: 'experiences', hidden: false, props: {} },
+      { id: 'cta-3', type: 'host-cta', hidden: false, props: {} },
+    ],
+  },
+  {
+    key: 'luxury-collection',
+    name: 'Luxury Collection',
+    description: 'Premium, gold-accented dark aesthetic for high-end travelers.',
+    inspiration: 'Apple × Tesla',
+    thumbnail: 'https://images.pexels.com/photos/25786776/pexels-photo-25786776.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'hero-4', type: 'hero', hidden: false, props: { variant: 'dark-luxe', title: 'Kashmir, extraordinary.', subtitle: 'Handpicked luxury stays with gold-standard service.', ctaPrimary: { label: 'View Collection', href: '/explore?cat=stay' } } },
+      { id: 'luxury-1', type: 'luxury-collection', hidden: false, props: { title: 'The Luxury Collection' } },
+      { id: 'houseboats-2', type: 'houseboats', hidden: false, props: { title: 'Signature Houseboats' } },
+      { id: 'homestays-1', type: 'homestays', hidden: false, props: { title: 'Boutique Homestays' } },
+      { id: 'testimonials-2', type: 'testimonials', hidden: false, props: {} },
+      { id: 'newsletter-2', type: 'newsletter', hidden: false, props: {} },
+    ],
+  },
+  {
+    key: 'family-explorer',
+    name: 'Family Explorer',
+    description: 'Warm, family-friendly with guides, tours and experiences.',
+    inspiration: 'MakeMyTrip × Tripadvisor',
+    thumbnail: 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'hero-5', type: 'hero', hidden: false, props: { variant: 'warm', title: 'Kashmir made easy — for the whole family.', ctaPrimary: { label: 'Start Planning', href: '/ai-planner' } } },
+      { id: 'search-5', type: 'search', hidden: false, props: {} },
+      { id: 'destinations-5', type: 'destinations', hidden: false, props: {} },
+      { id: 'tours-1', type: 'tour-guides', hidden: false, props: { title: 'Trusted local guides' } },
+      { id: 'homestays-5', type: 'homestays', hidden: false, props: {} },
+      { id: 'wazwan-1', type: 'wazwan', hidden: false, props: { title: 'Wazwan & Kashmiri cuisine' } },
+      { id: 'reviews-5', type: 'testimonials', hidden: false, props: {} },
+      { id: 'faq-5', type: 'faq', hidden: false, props: {} },
+    ],
+  },
+  {
+    key: 'minimal-modern',
+    name: 'Minimal Modern',
+    description: 'Clean, spacious layout with typography-led hero.',
+    inspiration: 'Framer × Webflow',
+    thumbnail: 'https://images.pexels.com/photos/14262339/pexels-photo-14262339.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'hero-6', type: 'hero', hidden: false, props: { variant: 'minimal', title: 'Curated Kashmir.', subtitle: 'Stays, journeys, and stories — thoughtfully assembled.', ctaPrimary: { label: 'Explore', href: '/explore' } } },
+      { id: 'featured-6', type: 'featured-listings', hidden: false, props: { limit: 6 } },
+      { id: 'ai-6', type: 'ai-planner-promo', hidden: false, props: {} },
+      { id: 'stats-6', type: 'stats', hidden: false, props: {} },
+      { id: 'partners-6', type: 'partners', hidden: false, props: {} },
+    ],
+  },
+  {
+    key: 'seasonal-focus',
+    name: 'Seasonal Focus',
+    description: 'Season-of-the-moment showcase (winter ski / spring bloom).',
+    inspiration: 'Norway Tourism × Visit Dubai',
+    thumbnail: 'https://images.pexels.com/photos/32620987/pexels-photo-32620987.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'hero-7', type: 'hero', hidden: false, props: { variant: 'seasonal-slideshow', title: 'Every season, a different Kashmir.', ctaPrimary: { label: 'Book this season', href: '/explore' } } },
+      { id: 'destinations-7', type: 'destinations', hidden: false, props: {} },
+      { id: 'featured-7', type: 'featured-listings', hidden: false, props: {} },
+      { id: 'stories-7', type: 'travel-stories', hidden: false, props: {} },
+      { id: 'offers-7', type: 'offers', hidden: false, props: {} },
+      { id: 'newsletter-7', type: 'newsletter', hidden: false, props: {} },
+    ],
+  },
+  {
+    key: 'marketplace-classic',
+    name: 'Marketplace Classic',
+    description: 'Grid-heavy discovery-first homepage.',
+    inspiration: 'Booking × Expedia',
+    thumbnail: 'https://images.pexels.com/photos/25786776/pexels-photo-25786776.jpeg?auto=compress&cs=tinysrgb&w=800',
+    sections: [
+      { id: 'search-8', type: 'search', hidden: false, props: { style: 'top-bar' } },
+      { id: 'categories-8', type: 'categories', hidden: false, props: {} },
+      { id: 'featured-8', type: 'featured-listings', hidden: false, props: { limit: 12 } },
+      { id: 'destinations-8', type: 'destinations', hidden: false, props: {} },
+      { id: 'houseboats-8', type: 'houseboats', hidden: false, props: {} },
+      { id: 'homestays-8', type: 'homestays', hidden: false, props: {} },
+      { id: 'experiences-8', type: 'experiences', hidden: false, props: {} },
+      { id: 'offers-8', type: 'offers', hidden: false, props: {} },
+      { id: 'stats-8', type: 'stats', hidden: false, props: {} },
+    ],
+  },
+];
+
 // ---------- Email verification helpers ----------
 async function generateVerificationToken() {
   const crypto = await import('crypto');
@@ -9043,6 +9182,485 @@ Return ONLY valid JSON, no markdown.`;
         await col.updateOne({ id: m[1] }, { $addToSet: { deletedFor: me.id } });
       }
       return ok({ deleted: true, scope });
+    }
+  }
+
+  // ============================================================================
+  // MODULE 18 — Enterprise CMS & Website Builder (Super Admin)
+  // ============================================================================
+  // Data model (MongoDB collections, all under safar DB):
+  //   cms_home_pages : { id, name, templateKey, sections[], status, isActive, seo, createdAt, updatedAt }
+  //   cms_pages      : { id, slug, title, sections[], seo, status, scheduledAt, createdAt, updatedAt }
+  //   cms_header     : single doc  { id:'header', logo, nav[], buttons[], settings }
+  //   cms_footer     : single doc  { id:'footer', columns[], socials[], contact, settings }
+  //   cms_navigation : { id, name, items[] } (extra named menus)
+  //   cms_theme      : single doc  { id:'theme', colors, fonts, radius, spacing, dark }
+  //   cms_media      : { id, url, name, type, size, alt, tags[], folder, createdAt }
+  //   cms_global     : { id, key, name, kind, data, createdAt, updatedAt }
+  //   cms_versions   : { id, entity, entityId, snapshot, note, actorId, actorName, createdAt }
+
+  const isSuperAdmin = (u) => u && (u.role === 'super_admin' || u.role === 'admin');
+
+  // ---- helper: snapshot for version history ----
+  const cmsSnapshot = async (entity, entityId, doc, actor, note) => {
+    try {
+      const col = await getCollection('cms_versions');
+      await col.insertOne({
+        id: uuid(), entity, entityId, snapshot: doc, note: note || '',
+        actorId: actor?.id || null, actorName: actor?.name || 'system',
+        createdAt: new Date(),
+      });
+    } catch (e) { console.error('cms snapshot err', e); }
+  };
+
+  // ---- Public: site config (active homepage + header + footer + theme) ----
+  if (path === '/public/site' && method === 'GET') {
+    const hpCol = await getCollection('cms_home_pages');
+    const active = await hpCol.findOne({ isActive: true, status: 'published' }, { projection: { _id: 0 } });
+    const header = await (await getCollection('cms_header')).findOne({ id: 'header' }, { projection: { _id: 0 } });
+    const footer = await (await getCollection('cms_footer')).findOne({ id: 'footer' }, { projection: { _id: 0 } });
+    const theme  = await (await getCollection('cms_theme')).findOne({ id: 'theme' }, { projection: { _id: 0 } });
+    return ok({ home: active || null, header: header || null, footer: footer || null, theme: theme || null });
+  }
+
+  // ---- Public: single page by slug (published only) ----
+  const pubPageM = path.match(/^\/public\/page\/(.+)$/);
+  if (pubPageM && method === 'GET') {
+    const slug = decodeURIComponent(pubPageM[1]);
+    const col = await getCollection('cms_pages');
+    const page = await col.findOne({ slug, status: 'published' }, { projection: { _id: 0 } });
+    if (!page) return err('Page not found', 404);
+    return ok({ page });
+  }
+
+  // ---- Public: navigation menu by name ----
+  const pubNavM = path.match(/^\/public\/navigation\/(.+)$/);
+  if (pubNavM && method === 'GET') {
+    const name = decodeURIComponent(pubNavM[1]);
+    const col = await getCollection('cms_navigation');
+    const nav = await col.findOne({ name }, { projection: { _id: 0 } });
+    return ok({ navigation: nav || null });
+  }
+
+  // ---- CMS admin guard ----
+  if (path.startsWith('/cms/')) {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (!isSuperAdmin(me)) return err('Forbidden: Super Admin only', 403);
+
+    // ==================== TEMPLATES (built-in, read-only) ====================
+    if (path === '/cms/templates' && method === 'GET') {
+      // Templates are seed configurations that can be applied to a new home page.
+      const templates = CMS_TEMPLATES;
+      return ok({ templates: templates.map(t => ({ key: t.key, name: t.name, description: t.description, inspiration: t.inspiration, thumbnail: t.thumbnail })) });
+    }
+    if (path.match(/^\/cms\/templates\/([\w-]+)$/) && method === 'GET') {
+      const key = path.split('/').pop();
+      const t = CMS_TEMPLATES.find(x => x.key === key);
+      if (!t) return err('Template not found', 404);
+      return ok({ template: t });
+    }
+
+    // ==================== HOME PAGES ====================
+    if (path === '/cms/home-pages' && method === 'GET') {
+      const col = await getCollection('cms_home_pages');
+      const list = await col.find({}, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).toArray();
+      return ok({ homePages: list });
+    }
+    if (path === '/cms/home-pages' && method === 'POST') {
+      const body = await readBody(request);
+      const { name, templateKey, sections } = body;
+      if (!name || typeof name !== 'string') return err('name is required');
+      const col = await getCollection('cms_home_pages');
+      let secs = Array.isArray(sections) ? sections : [];
+      if (templateKey) {
+        const t = CMS_TEMPLATES.find(x => x.key === templateKey);
+        if (t) secs = JSON.parse(JSON.stringify(t.sections));
+      }
+      const doc = {
+        id: uuid(), name: name.trim(), templateKey: templateKey || null,
+        sections: secs, status: 'draft', isActive: false,
+        seo: body.seo || { title: name.trim(), description: '', keywords: [] },
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      await col.insertOne(doc);
+      await cmsSnapshot('home_page', doc.id, doc, me, 'created');
+      return ok({ homePage: doc }, 201);
+    }
+    const hpIdM = path.match(/^\/cms\/home-pages\/([\w-]+)$/);
+    if (hpIdM && method === 'GET') {
+      const col = await getCollection('cms_home_pages');
+      const doc = await col.findOne({ id: hpIdM[1] }, { projection: { _id: 0 } });
+      if (!doc) return err('Home page not found', 404);
+      return ok({ homePage: doc });
+    }
+    if (hpIdM && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_home_pages');
+      const cur = await col.findOne({ id: hpIdM[1] });
+      if (!cur) return err('Home page not found', 404);
+      const update = {
+        ...(body.name !== undefined ? { name: String(body.name) } : {}),
+        ...(body.sections !== undefined ? { sections: body.sections } : {}),
+        ...(body.seo !== undefined ? { seo: body.seo } : {}),
+        ...(body.status !== undefined && ['draft','published','scheduled','archived'].includes(body.status) ? { status: body.status } : {}),
+        updatedAt: new Date(),
+      };
+      await col.updateOne({ id: hpIdM[1] }, { $set: update });
+      const updated = await col.findOne({ id: hpIdM[1] }, { projection: { _id: 0 } });
+      await cmsSnapshot('home_page', hpIdM[1], updated, me, 'updated');
+      return ok({ homePage: updated });
+    }
+    if (hpIdM && method === 'DELETE') {
+      const col = await getCollection('cms_home_pages');
+      const cur = await col.findOne({ id: hpIdM[1] });
+      if (!cur) return err('Home page not found', 404);
+      if (cur.isActive) return err('Cannot delete the active home page. Publish another one first.', 400);
+      await col.deleteOne({ id: hpIdM[1] });
+      return ok({ deleted: true });
+    }
+    const hpPubM = path.match(/^\/cms\/home-pages\/([\w-]+)\/publish$/);
+    if (hpPubM && method === 'POST') {
+      const col = await getCollection('cms_home_pages');
+      const cur = await col.findOne({ id: hpPubM[1] });
+      if (!cur) return err('Home page not found', 404);
+      await col.updateMany({}, { $set: { isActive: false } });
+      await col.updateOne({ id: hpPubM[1] }, { $set: { isActive: true, status: 'published', publishedAt: new Date(), updatedAt: new Date() } });
+      const updated = await col.findOne({ id: hpPubM[1] }, { projection: { _id: 0 } });
+      await cmsSnapshot('home_page', hpPubM[1], updated, me, 'published');
+      return ok({ homePage: updated });
+    }
+    const hpUnpubM = path.match(/^\/cms\/home-pages\/([\w-]+)\/unpublish$/);
+    if (hpUnpubM && method === 'POST') {
+      const col = await getCollection('cms_home_pages');
+      await col.updateOne({ id: hpUnpubM[1] }, { $set: { isActive: false, status: 'draft', updatedAt: new Date() } });
+      const updated = await col.findOne({ id: hpUnpubM[1] }, { projection: { _id: 0 } });
+      return ok({ homePage: updated });
+    }
+    const hpDupM = path.match(/^\/cms\/home-pages\/([\w-]+)\/duplicate$/);
+    if (hpDupM && method === 'POST') {
+      const col = await getCollection('cms_home_pages');
+      const cur = await col.findOne({ id: hpDupM[1] });
+      if (!cur) return err('Home page not found', 404);
+      const dup = { ...cur, _id: undefined, id: uuid(), name: `${cur.name} (Copy)`, isActive: false, status: 'draft', createdAt: new Date(), updatedAt: new Date() };
+      delete dup._id;
+      await col.insertOne(dup);
+      const clean = await col.findOne({ id: dup.id }, { projection: { _id: 0 } });
+      return ok({ homePage: clean }, 201);
+    }
+
+    // ==================== PAGES ====================
+    if (path === '/cms/pages' && method === 'GET') {
+      const col = await getCollection('cms_pages');
+      const status = url.searchParams.get('status');
+      const q = url.searchParams.get('q') || '';
+      const filter = {};
+      if (status && ['draft','published','scheduled','archived'].includes(status)) filter.status = status;
+      if (q) filter.$or = [{ title: { $regex: q, $options: 'i' } }, { slug: { $regex: q, $options: 'i' } }];
+      const list = await col.find(filter, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).toArray();
+      return ok({ pages: list });
+    }
+    if (path === '/cms/pages' && method === 'POST') {
+      const body = await readBody(request);
+      const { title, slug, sections, seo } = body;
+      if (!title || !slug) return err('title and slug are required');
+      const col = await getCollection('cms_pages');
+      const clean = String(slug).toLowerCase().replace(/[^a-z0-9-\/]+/g, '-').replace(/^-+|-+$/g, '');
+      const exists = await col.findOne({ slug: clean });
+      if (exists) return err('A page with this slug already exists', 409);
+      const doc = {
+        id: uuid(), title: String(title).trim(), slug: clean,
+        sections: Array.isArray(sections) ? sections : [],
+        seo: seo || { title: String(title).trim(), description: '', keywords: [] },
+        status: 'draft', createdAt: new Date(), updatedAt: new Date(),
+      };
+      await col.insertOne(doc);
+      await cmsSnapshot('page', doc.id, doc, me, 'created');
+      return ok({ page: doc }, 201);
+    }
+    const pageIdM = path.match(/^\/cms\/pages\/([\w-]+)$/);
+    if (pageIdM && method === 'GET') {
+      const col = await getCollection('cms_pages');
+      const doc = await col.findOne({ id: pageIdM[1] }, { projection: { _id: 0 } });
+      if (!doc) return err('Page not found', 404);
+      return ok({ page: doc });
+    }
+    if (pageIdM && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_pages');
+      const update = { updatedAt: new Date() };
+      if (body.title !== undefined) update.title = String(body.title);
+      if (body.slug !== undefined) update.slug = String(body.slug).toLowerCase().replace(/[^a-z0-9-\/]+/g, '-');
+      if (body.sections !== undefined) update.sections = body.sections;
+      if (body.seo !== undefined) update.seo = body.seo;
+      if (body.status !== undefined && ['draft','published','scheduled','archived'].includes(body.status)) update.status = body.status;
+      if (body.scheduledAt !== undefined) update.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
+      await col.updateOne({ id: pageIdM[1] }, { $set: update });
+      const updated = await col.findOne({ id: pageIdM[1] }, { projection: { _id: 0 } });
+      if (!updated) return err('Page not found', 404);
+      await cmsSnapshot('page', pageIdM[1], updated, me, 'updated');
+      return ok({ page: updated });
+    }
+    if (pageIdM && method === 'DELETE') {
+      const col = await getCollection('cms_pages');
+      const del = await col.deleteOne({ id: pageIdM[1] });
+      if (del.deletedCount === 0) return err('Page not found', 404);
+      return ok({ deleted: true });
+    }
+    const pagePubM = path.match(/^\/cms\/pages\/([\w-]+)\/publish$/);
+    if (pagePubM && method === 'POST') {
+      const col = await getCollection('cms_pages');
+      await col.updateOne({ id: pagePubM[1] }, { $set: { status: 'published', publishedAt: new Date(), updatedAt: new Date() } });
+      const updated = await col.findOne({ id: pagePubM[1] }, { projection: { _id: 0 } });
+      if (!updated) return err('Page not found', 404);
+      await cmsSnapshot('page', pagePubM[1], updated, me, 'published');
+      return ok({ page: updated });
+    }
+
+    // ==================== HEADER ====================
+    if (path === '/cms/header' && method === 'GET') {
+      const col = await getCollection('cms_header');
+      let doc = await col.findOne({ id: 'header' }, { projection: { _id: 0 } });
+      if (!doc) {
+        doc = { id: 'header', logo: { text: 'Safar', imageUrl: '' },
+          nav: [ { label: 'Explore', href: '/explore' }, { label: 'AI Planner', href: '/ai-planner' }, { label: 'Guides', href: '/guides' } ],
+          buttons: [{ label: 'Become a Host', href: '/add-listing', variant: 'primary' }],
+          settings: { sticky: true, transparent: true, showLanguage: false, showCurrency: false, showSearch: true, showAnnouncementBar: false, announcementText: '' },
+          updatedAt: new Date() };
+        await col.insertOne(doc);
+      }
+      return ok({ header: doc });
+    }
+    if (path === '/cms/header' && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_header');
+      const update = { ...body, id: 'header', updatedAt: new Date() };
+      delete update._id;
+      await col.updateOne({ id: 'header' }, { $set: update }, { upsert: true });
+      const doc = await col.findOne({ id: 'header' }, { projection: { _id: 0 } });
+      await cmsSnapshot('header', 'header', doc, me, 'updated');
+      return ok({ header: doc });
+    }
+
+    // ==================== FOOTER ====================
+    if (path === '/cms/footer' && method === 'GET') {
+      const col = await getCollection('cms_footer');
+      let doc = await col.findOne({ id: 'footer' }, { projection: { _id: 0 } });
+      if (!doc) {
+        doc = { id: 'footer',
+          columns: [
+            { title: 'Explore', links: [{ label: 'Stays', href: '/explore?cat=stay' }, { label: 'Experiences', href: '/explore?cat=experience' }] },
+            { title: 'Company', links: [{ label: 'About', href: '/about' }, { label: 'Contact', href: '/contact' }] },
+            { title: 'Support', links: [{ label: 'Help Center', href: '/help' }, { label: 'Cancellation', href: '/cancellation-policy' }] },
+          ],
+          socials: [{ platform: 'instagram', href: 'https://instagram.com/safar' }, { platform: 'twitter', href: 'https://twitter.com/safar' }],
+          contact: { email: 'hello@safarcurated.com', phone: '', address: 'Srinagar, Kashmir' },
+          copyright: '© Safar Curated. All rights reserved.',
+          settings: { showNewsletter: true, showAppDownload: false, showPaymentIcons: true },
+          updatedAt: new Date() };
+        await col.insertOne(doc);
+      }
+      return ok({ footer: doc });
+    }
+    if (path === '/cms/footer' && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_footer');
+      const update = { ...body, id: 'footer', updatedAt: new Date() };
+      delete update._id;
+      await col.updateOne({ id: 'footer' }, { $set: update }, { upsert: true });
+      const doc = await col.findOne({ id: 'footer' }, { projection: { _id: 0 } });
+      await cmsSnapshot('footer', 'footer', doc, me, 'updated');
+      return ok({ footer: doc });
+    }
+
+    // ==================== NAVIGATION (named menus) ====================
+    if (path === '/cms/navigation' && method === 'GET') {
+      const col = await getCollection('cms_navigation');
+      const list = await col.find({}, { projection: { _id: 0 } }).sort({ name: 1 }).toArray();
+      return ok({ navigations: list });
+    }
+    if (path === '/cms/navigation' && method === 'POST') {
+      const body = await readBody(request);
+      const { name, items } = body;
+      if (!name) return err('name is required');
+      const col = await getCollection('cms_navigation');
+      const exists = await col.findOne({ name });
+      if (exists) return err('Menu with this name exists', 409);
+      const doc = { id: uuid(), name: String(name), items: Array.isArray(items) ? items : [], createdAt: new Date(), updatedAt: new Date() };
+      await col.insertOne(doc);
+      return ok({ navigation: doc }, 201);
+    }
+    const navIdM = path.match(/^\/cms\/navigation\/([\w-]+)$/);
+    if (navIdM && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_navigation');
+      const update = { ...body, updatedAt: new Date() };
+      delete update._id; delete update.id;
+      await col.updateOne({ id: navIdM[1] }, { $set: update });
+      const updated = await col.findOne({ id: navIdM[1] }, { projection: { _id: 0 } });
+      if (!updated) return err('Menu not found', 404);
+      return ok({ navigation: updated });
+    }
+    if (navIdM && method === 'DELETE') {
+      const col = await getCollection('cms_navigation');
+      const del = await col.deleteOne({ id: navIdM[1] });
+      if (del.deletedCount === 0) return err('Menu not found', 404);
+      return ok({ deleted: true });
+    }
+
+    // ==================== THEME ====================
+    if (path === '/cms/theme' && method === 'GET') {
+      const col = await getCollection('cms_theme');
+      let doc = await col.findOne({ id: 'theme' }, { projection: { _id: 0 } });
+      if (!doc) {
+        doc = { id: 'theme',
+          colors: { primary: '#0F3D2E', secondary: '#D4A147', accent: '#059669', background: '#FFFFFF', text: '#1A1A1A' },
+          fonts: { display: 'Poppins', body: 'Inter' },
+          radius: { sm: '0.5rem', md: '1rem', lg: '1.5rem', xl: '2rem' },
+          buttons: { style: 'rounded', size: 'md' },
+          spacing: { section: 'lg', container: 'default' },
+          containerWidth: '1280px',
+          dark: false, animations: true,
+          updatedAt: new Date() };
+        await col.insertOne(doc);
+      }
+      return ok({ theme: doc });
+    }
+    if (path === '/cms/theme' && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_theme');
+      const update = { ...body, id: 'theme', updatedAt: new Date() };
+      delete update._id;
+      await col.updateOne({ id: 'theme' }, { $set: update }, { upsert: true });
+      const doc = await col.findOne({ id: 'theme' }, { projection: { _id: 0 } });
+      await cmsSnapshot('theme', 'theme', doc, me, 'updated');
+      return ok({ theme: doc });
+    }
+
+    // ==================== MEDIA LIBRARY ====================
+    if (path === '/cms/media' && method === 'GET') {
+      const col = await getCollection('cms_media');
+      const q = url.searchParams.get('q') || '';
+      const folder = url.searchParams.get('folder');
+      const type = url.searchParams.get('type');
+      const filter = {};
+      if (q) filter.$or = [{ name: { $regex: q, $options: 'i' } }, { alt: { $regex: q, $options: 'i' } }, { tags: { $regex: q, $options: 'i' } }];
+      if (folder) filter.folder = folder;
+      if (type) filter.type = type;
+      const list = await col.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(500).toArray();
+      return ok({ media: list });
+    }
+    if (path === '/cms/media' && method === 'POST') {
+      const body = await readBody(request);
+      const { url: mediaUrl, name, type, size, alt, tags, folder } = body;
+      if (!mediaUrl) return err('url is required');
+      const col = await getCollection('cms_media');
+      const doc = {
+        id: uuid(), url: String(mediaUrl), name: name || 'untitled',
+        type: type || 'image', size: size || 0,
+        alt: alt || '', tags: Array.isArray(tags) ? tags : [], folder: folder || 'default',
+        createdAt: new Date(),
+      };
+      await col.insertOne(doc);
+      return ok({ media: doc }, 201);
+    }
+    const mediaIdM = path.match(/^\/cms\/media\/([\w-]+)$/);
+    if (mediaIdM && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_media');
+      const update = { ...body }; delete update._id; delete update.id;
+      await col.updateOne({ id: mediaIdM[1] }, { $set: update });
+      const doc = await col.findOne({ id: mediaIdM[1] }, { projection: { _id: 0 } });
+      if (!doc) return err('Media not found', 404);
+      return ok({ media: doc });
+    }
+    if (mediaIdM && method === 'DELETE') {
+      const col = await getCollection('cms_media');
+      const del = await col.deleteOne({ id: mediaIdM[1] });
+      if (del.deletedCount === 0) return err('Media not found', 404);
+      return ok({ deleted: true });
+    }
+
+    // ==================== GLOBAL COMPONENTS ====================
+    if (path === '/cms/global' && method === 'GET') {
+      const col = await getCollection('cms_global');
+      const list = await col.find({}, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).toArray();
+      return ok({ components: list });
+    }
+    if (path === '/cms/global' && method === 'POST') {
+      const body = await readBody(request);
+      const { key, name, kind, data } = body;
+      if (!key || !name) return err('key and name are required');
+      const col = await getCollection('cms_global');
+      const doc = { id: uuid(), key: String(key), name: String(name), kind: kind || 'banner', data: data || {}, createdAt: new Date(), updatedAt: new Date() };
+      await col.insertOne(doc);
+      return ok({ component: doc }, 201);
+    }
+    const gcIdM = path.match(/^\/cms\/global\/([\w-]+)$/);
+    if (gcIdM && method === 'PUT') {
+      const body = await readBody(request);
+      const col = await getCollection('cms_global');
+      const update = { ...body, updatedAt: new Date() }; delete update._id; delete update.id;
+      await col.updateOne({ id: gcIdM[1] }, { $set: update });
+      const doc = await col.findOne({ id: gcIdM[1] }, { projection: { _id: 0 } });
+      if (!doc) return err('Component not found', 404);
+      return ok({ component: doc });
+    }
+    if (gcIdM && method === 'DELETE') {
+      const col = await getCollection('cms_global');
+      const del = await col.deleteOne({ id: gcIdM[1] });
+      if (del.deletedCount === 0) return err('Component not found', 404);
+      return ok({ deleted: true });
+    }
+
+    // ==================== VERSIONS / HISTORY ====================
+    if (path === '/cms/versions' && method === 'GET') {
+      const col = await getCollection('cms_versions');
+      const entity = url.searchParams.get('entity');
+      const entityId = url.searchParams.get('entityId');
+      const filter = {};
+      if (entity) filter.entity = entity;
+      if (entityId) filter.entityId = entityId;
+      const list = await col.find(filter, { projection: { _id: 0, snapshot: 0 } }).sort({ createdAt: -1 }).limit(100).toArray();
+      return ok({ versions: list });
+    }
+    const verIdM = path.match(/^\/cms\/versions\/([\w-]+)$/);
+    if (verIdM && method === 'GET') {
+      const col = await getCollection('cms_versions');
+      const v = await col.findOne({ id: verIdM[1] }, { projection: { _id: 0 } });
+      if (!v) return err('Version not found', 404);
+      return ok({ version: v });
+    }
+    const verRestoreM = path.match(/^\/cms\/versions\/([\w-]+)\/restore$/);
+    if (verRestoreM && method === 'POST') {
+      const col = await getCollection('cms_versions');
+      const v = await col.findOne({ id: verRestoreM[1] });
+      if (!v) return err('Version not found', 404);
+      const targetCollection =
+        v.entity === 'home_page' ? 'cms_home_pages' :
+        v.entity === 'page' ? 'cms_pages' :
+        v.entity === 'header' ? 'cms_header' :
+        v.entity === 'footer' ? 'cms_footer' :
+        v.entity === 'theme'  ? 'cms_theme'  : null;
+      if (!targetCollection) return err('Cannot restore this entity', 400);
+      const t = await getCollection(targetCollection);
+      const snap = { ...(v.snapshot || {}) }; delete snap._id;
+      snap.updatedAt = new Date();
+      const key = ['cms_header','cms_footer','cms_theme'].includes(targetCollection) ? 'id' : 'id';
+      await t.updateOne({ [key]: snap[key] }, { $set: snap }, { upsert: true });
+      await cmsSnapshot(v.entity, v.entityId, snap, me, `restored from ${verRestoreM[1]}`);
+      return ok({ restored: true, entity: v.entity, entityId: v.entityId });
+    }
+
+    // ==================== DASHBOARD STATS ====================
+    if (path === '/cms/stats' && method === 'GET') {
+      const hp = await (await getCollection('cms_home_pages')).countDocuments({});
+      const pg = await (await getCollection('cms_pages')).countDocuments({});
+      const pgPub = await (await getCollection('cms_pages')).countDocuments({ status: 'published' });
+      const mediaCount = await (await getCollection('cms_media')).countDocuments({});
+      const versionsCount = await (await getCollection('cms_versions')).countDocuments({});
+      const activeHome = await (await getCollection('cms_home_pages')).findOne({ isActive: true }, { projection: { _id: 0, sections: 0 } });
+      return ok({ stats: { homePages: hp, pages: pg, pagesPublished: pgPub, media: mediaCount, versions: versionsCount, activeHome: activeHome || null } });
     }
   }
 

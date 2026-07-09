@@ -638,6 +638,13 @@ function AdminInner() {
                     { label: 'Marketplace CRM', href: '/admin/marketplace', icon: Users },
                     { label: 'Templates', href: '/admin/marketplace/templates', icon: FileSpreadsheet },
                   ]},
+                  { section: 'Website Builder', items: [
+                    { label: 'Website Builder', href: '/admin/website-builder', icon: Sparkles },
+                    { label: 'Home Pages', href: '/admin/website-builder/home-pages', icon: Home },
+                    { label: 'Pages', href: '/admin/website-builder/pages', icon: FileSpreadsheet },
+                    { label: 'Media Library', href: '/admin/website-builder/media', icon: FileSpreadsheet },
+                    { label: 'Theme', href: '/admin/website-builder/theme', icon: Settings2 },
+                  ]},
                   { section: 'Revenue & Rewards', items: [
                     { label: 'Finance Center', href: '/admin/finance', icon: BadgeIndianRupee },
                     { label: 'Dynamic Pricing', href: '/admin/pricing', icon: TrendingUp },

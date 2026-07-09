@@ -1,14 +1,15 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
-import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check } from 'lucide-react';
+import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/safar/Navbar';
 import PropertyCard from '@/components/safar/PropertyCard';
 import CategoryPills from '@/components/safar/CategoryPills';
+import SectionRenderer from '@/components/safar/SectionRenderer';
 import { LISTINGS, CATEGORIES, IMG, STATS, TESTIMONIALS, AI_PROMPT_SUGGESTIONS } from '@/lib/data';
 
 // PERF: Lazy load below-the-fold components to reduce initial JS bundle and defer Framer Motion
@@ -70,8 +71,31 @@ function ymdOffset(days) {
 
 function App() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const previewId = searchParams?.get('preview');
   const [cat, setCat] = useState('all');
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // MODULE 18 — CMS: if a home page is published (or ?preview=<id>), render CMS sections
+  // instead of the static homepage. Falls back to static content if none published.
+  const [cmsHome, setCmsHome] = useState(null);
+  const [cmsChecking, setCmsChecking] = useState(true);
+  useEffect(() => {
+    (async () => {
+      try {
+        if (previewId) {
+          // Preview: fetch requested (admin-gated). If not permitted, silently fall back.
+          const r = await fetch(`/api/cms/home-pages/${previewId}`, { credentials: 'include' });
+          const j = await r.json();
+          if (j?.ok && j.homePage) { setCmsHome(j.homePage); setCmsChecking(false); return; }
+        }
+        const r = await fetch('/api/public/site');
+        const j = await r.json();
+        if (j?.ok && j.home) setCmsHome(j.home);
+      } catch {}
+      finally { setCmsChecking(false); }
+    })();
+  }, [previewId]);
   
   // Hero search state — fully functional, drives /explore navigation
   const [where, setWhere] = useState('');
@@ -100,6 +124,23 @@ function App() {
 
   const featured = LISTINGS.filter(l => l.featured);
   const filtered = cat === 'all' ? LISTINGS : LISTINGS.filter(l => l.category === cat);
+
+  // MODULE 18 — Render CMS home page when active/preview
+  if (cmsHome) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar transparent />
+        {previewId && (
+          <div className="fixed top-3 right-3 z-50 bg-amber-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg">
+            PREVIEW · {cmsHome.name}
+          </div>
+        )}
+        <SectionRenderer sections={cmsHome.sections || []} />
+        <Footer />
+        <AIAssistantFloating />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background">
