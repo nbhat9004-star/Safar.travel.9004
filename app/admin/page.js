@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart, Sparkles, Menu, Settings2, CreditCard, Gift, Ticket, Award, ChevronRight, LogOut, Coins } from 'lucide-react';
+import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart, Sparkles, Menu, Settings2, CreditCard, Gift, Ticket, Award, ChevronRight, LogOut, Coins, BadgeIndianRupee } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -639,6 +639,7 @@ function AdminInner() {
                     { label: 'Templates', href: '/admin/marketplace/templates', icon: FileSpreadsheet },
                   ]},
                   { section: 'Revenue & Rewards', items: [
+                    { label: 'Finance Center', href: '/admin/finance', icon: BadgeIndianRupee },
                     { label: 'Payment Gateways', href: '/admin/settings/payment-gateways', icon: CreditCard },
                     { label: 'Revenue Engine', href: '/admin/settings/revenue-engine', icon: Settings2 },
                     { label: 'Promotions', href: '/admin/settings/revenue-engine?tab=promo', icon: Sparkles },

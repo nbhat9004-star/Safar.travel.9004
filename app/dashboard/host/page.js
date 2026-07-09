@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight, Loader2, AlertTriangle, Trash2, Check, BookOpen } from 'lucide-react';
+import { TrendingUp, Wallet, Calendar, Star, Plus, Eye, BarChart3, ArrowUpRight, Loader2, AlertTriangle, Trash2, Check, BookOpen, DollarSign, CreditCard, Filter, Download, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
 import ProfileSettings from '@/components/safar/ProfileSettings';
+import HostEarnings from '@/components/safar/HostEarnings';
+import HostPayoutSettings from '@/components/safar/HostPayoutSettings';
 import { useAuth } from '@/lib/auth-context';
 import { listingsApi, bookingsApi } from '@/lib/listings-api';
 
@@ -279,8 +281,10 @@ function HostDashboardInner() {
         </div>
 
         <Tabs defaultValue="dashboard" className="mt-8">
-          <TabsList className="grid w-full max-w-3xl grid-cols-2 sm:grid-cols-4 h-auto">
+          <TabsList className="grid w-full max-w-4xl grid-cols-3 sm:grid-cols-6 h-auto">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="earnings">💰 Earnings</TabsTrigger>
+            <TabsTrigger value="payouts">🏦 Payouts</TabsTrigger>
             <TabsTrigger value="ai-growth">📈 AI Growth</TabsTrigger>
             <TabsTrigger value="resources">📚 Resources</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -386,6 +390,16 @@ function HostDashboardInner() {
         </section>
           </TabsContent>
           
+          {/* MODULE 12 — Earnings Tab */}
+          <TabsContent value="earnings" className="space-y-6">
+            <HostEarnings myListings={myListings} />
+          </TabsContent>
+
+          {/* MODULE 12 — Payouts Tab */}
+          <TabsContent value="payouts" className="space-y-6">
+            <HostPayoutSettings />
+          </TabsContent>
+
           {/* AI Growth Center Tab */}
           <TabsContent value="ai-growth" className="space-y-6">
             <div className="rounded-3xl border bg-white p-6">

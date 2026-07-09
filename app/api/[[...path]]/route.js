@@ -95,6 +95,185 @@ function requireVerifiedEmail(me) {
   return { ok: true };
 }
 
+// ============================================================================
+// MODULE 12 — Host Earnings, Commission & Payout Management (helpers)
+// ============================================================================
+// Design goals:
+//   - All finance amounts stored as numbers (INR). Percentages 0-100.
+//   - Provider-agnostic: `hostPayouts.method` is a string ('bank'|'upi'|'wallet'|
+//     'manual'|'razorpay_route'|'stripe_connect'|'cashfree'|...). Business logic
+//     does not depend on the string — future providers plug in without changes.
+//   - Non-blocking: earnings / audit writes never break the primary flow.
+//   - Idempotent: earnings creation is upserted per bookingId.
+
+const FINANCE_DEFAULTS_M12 = {
+  id: 'default',
+  commissionMode: 'percent',         // 'percent' | 'fixed'
+  defaultCommissionPct: 15,
+  fixedCommission: 0,
+  categoryCommissions: {
+    hotels: 15, houseboats: 15, homestays: 12, tours: 10,
+    activities: 10, car_rentals: 12, bike_rentals: 12,
+  },
+  minPayoutAmount: 500,
+  payoutSchedule: 'weekly',          // 'instant' | 'daily' | 'weekly' | 'monthly'
+  holdPeriodDays: 3,                 // funds move to `available` this many days after checkout
+  autoPayouts: false,
+  manualApproval: true,
+  enabledMethods: { wallet: true, bank: true, upi: true },
+  createdAt: new Date(), updatedAt: new Date(),
+};
+
+async function m12GetFinanceSettings() {
+  const col = await getCollection('financeSettings');
+  let doc = await col.findOne({ id: 'default' }, { projection: { _id: 0 } });
+  if (!doc) {
+    doc = { ...FINANCE_DEFAULTS_M12 };
+    try { await col.insertOne({ ...doc }); } catch {}
+  }
+  // Ensure new fields exist (forward-compatible)
+  const merged = { ...FINANCE_DEFAULTS_M12, ...doc, categoryCommissions: { ...FINANCE_DEFAULTS_M12.categoryCommissions, ...(doc.categoryCommissions || {}) }, enabledMethods: { ...FINANCE_DEFAULTS_M12.enabledMethods, ...(doc.enabledMethods || {}) } };
+  return merged;
+}
+
+function m12ResolveCommission(listing, settings) {
+  // Map internal category → finance category key
+  const cat = (listing?.category || '').toLowerCase();
+  const sub = (listing?.subcategory || '').toLowerCase();
+  const map = {
+    stay: sub === 'houseboat' ? 'houseboats' : (sub === 'home' || sub === 'homestay' || sub === 'cottage' ? 'homestays' : 'hotels'),
+    tour: 'tours',
+    experience: 'activities',
+    transport: sub === 'bike' ? 'bike_rentals' : 'car_rentals',
+  };
+  const key = map[cat] || 'hotels';
+  if (settings.commissionMode === 'fixed') {
+    return { mode: 'fixed', pct: 0, fixed: Number(settings.fixedCommission) || 0, categoryKey: key };
+  }
+  const pct = Number(settings.categoryCommissions?.[key] ?? settings.defaultCommissionPct) || 0;
+  return { mode: 'percent', pct, fixed: 0, categoryKey: key };
+}
+
+function m12CalcNet(bookingAmount, commissionResolved, refundDeduction = 0) {
+  const amt = Number(bookingAmount) || 0;
+  const commissionAmount = commissionResolved.mode === 'fixed'
+    ? Math.min(amt, Number(commissionResolved.fixed) || 0)
+    : Math.round(amt * (commissionResolved.pct / 100));
+  const net = Math.max(0, amt - commissionAmount - (Number(refundDeduction) || 0));
+  return { commissionAmount, netEarnings: net };
+}
+
+async function m12CreateHostEarnings(booking, listing) {
+  try {
+    if (!booking || !listing || !booking.hostId) return;
+    const col = await getCollection('hostEarnings');
+    // Idempotent
+    const existing = await col.findOne({ bookingId: booking.bookingId });
+    if (existing) return;
+    const settings = await m12GetFinanceSettings();
+    const resolved = m12ResolveCommission(listing, settings);
+    const { commissionAmount, netEarnings } = m12CalcNet(booking.totalPrice, resolved, 0);
+    const availableAt = new Date();
+    availableAt.setDate(availableAt.getDate() + (Number(settings.holdPeriodDays) || 0));
+    const doc = {
+      id: uuid(),
+      bookingId: booking.bookingId,
+      hostId: booking.hostId,
+      listingId: booking.listingId,
+      listingTitle: booking.listingTitle,
+      listingCategory: listing.category || null,
+      listingSubcategory: listing.subcategory || null,
+      commissionCategory: resolved.categoryKey,
+      travelerId: booking.travelerId,
+      travelerName: booking.travelerName,
+      checkInDate: booking.checkInDate,
+      checkOutDate: booking.checkOutDate,
+      bookingAmount: Number(booking.totalPrice) || 0,
+      commissionMode: resolved.mode,
+      commissionPct: resolved.pct,
+      commissionFixed: resolved.fixed,
+      commissionAmount,
+      refundDeduction: 0,
+      netEarnings,
+      status: 'pending',              // pending | available | paid | refunded
+      availableAt,
+      payoutId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await col.insertOne(doc);
+  } catch (e) { console.error('m12CreateHostEarnings error', e); }
+}
+
+async function m12RefundHostEarnings(bookingId, actor) {
+  try {
+    if (!bookingId) return;
+    const col = await getCollection('hostEarnings');
+    const rec = await col.findOne({ bookingId });
+    if (!rec) return;
+    if (rec.status === 'paid') {
+      // Cannot claw-back a paid earning automatically; mark refunded with deduction note
+      await col.updateOne({ bookingId }, { $set: { refundDeduction: rec.netEarnings, status: 'refunded', updatedAt: new Date(), refundedAt: new Date() } });
+    } else {
+      await col.updateOne({ bookingId }, { $set: { refundDeduction: rec.netEarnings, netEarnings: 0, status: 'refunded', updatedAt: new Date(), refundedAt: new Date() } });
+    }
+    m12LogFinanceAudit(actor || { role: 'system', name: 'System' }, 'earnings_refunded', { bookingId, previous: { status: rec.status, netEarnings: rec.netEarnings }, new: { status: 'refunded' } }).catch(() => {});
+  } catch (e) { console.error('m12RefundHostEarnings error', e); }
+}
+
+async function m12MarkEarningsAvailableIfDue() {
+  // Utility called on host earnings reads; moves 'pending' → 'available' when availableAt has passed AND booking is 'approved'.
+  try {
+    const col = await getCollection('hostEarnings');
+    const now = new Date();
+    const due = await col.find({ status: 'pending', availableAt: { $lte: now } }).toArray();
+    if (!due.length) return;
+    const bookingsCol = await getCollection('bookings');
+    for (const e of due) {
+      const b = await bookingsCol.findOne({ bookingId: e.bookingId }, { projection: { status: 1, _id: 0 } });
+      if (!b) continue;
+      if (b.status === 'approved') {
+        await col.updateOne({ id: e.id }, { $set: { status: 'available', updatedAt: new Date() } });
+      }
+    }
+  } catch (e) { console.error('m12MarkEarningsAvailableIfDue error', e); }
+}
+
+async function m12LogFinanceAudit(actor, action, details) {
+  try {
+    const col = await getCollection('financeAuditLog');
+    await col.insertOne({
+      id: uuid(),
+      actorId: actor?.id || null,
+      actorName: actor?.name || (actor?.role === 'system' ? 'System' : 'Unknown'),
+      actorRole: actor?.role || null,
+      action,
+      details: details || {},
+      timestamp: new Date(),
+    });
+  } catch (e) { console.error('m12LogFinanceAudit error', e); }
+}
+
+function m12MaskAccount(acc) {
+  if (!acc) return '';
+  const s = String(acc);
+  if (s.length <= 4) return '****';
+  return `****${s.slice(-4)}`;
+}
+
+function m12SanitizePayoutSettings(doc, { unmask = false } = {}) {
+  if (!doc) return null;
+  const { _id, accountNumber, ...rest } = doc;
+  return {
+    ...rest,
+    accountNumber: unmask ? accountNumber : m12MaskAccount(accountNumber),
+    accountNumberMasked: m12MaskAccount(accountNumber),
+  };
+}
+// ============================================================================
+// End Module 12 helpers
+// ============================================================================
+
 // ---------- Seeding: ensure demo listings exist (idempotent) ----------
 let _seeded = false;
 async function seedDemoListings() {
@@ -1117,6 +1296,9 @@ async function route(request, { params }) {
     };
     await bookings.insertOne(doc);
 
+    // Module 12: create host earnings record (pending until hold period elapses)
+    m12CreateHostEarnings(doc, listing).catch(() => {});
+
     // Update available counter (if multi-type)
     if (selectedType) {
       await listings.updateOne(
@@ -1263,6 +1445,11 @@ async function route(request, { params }) {
       reason: reason || null,
       listingTitle: b.listingTitle,
     }).catch(() => {});
+
+    // Module 12: refund host earnings on cancellation / rejection
+    if (status === 'cancelled' || status === 'rejected') {
+      m12RefundHostEarnings(id, me).catch(() => {});
+    }
 
     return ok({ booking: fresh });
   }
@@ -1532,6 +1719,8 @@ async function route(request, { params }) {
       previousStatus: booking.status,
       listingTitle: booking.listingTitle,
     }).catch(() => {});
+    // Module 12: refund host earnings
+    m12RefundHostEarnings(id, me).catch(() => {});
     return ok({ booking: fresh });
   }
 
@@ -1549,6 +1738,8 @@ async function route(request, { params }) {
       amount: booking.totalPrice || 0,
       listingTitle: booking.listingTitle,
     }).catch(() => {});
+    // Module 12: refund host earnings
+    m12RefundHostEarnings(id, me).catch(() => {});
     return ok({ booking: fresh });
   }
 
@@ -6171,6 +6362,356 @@ Return ONLY valid JSON, no markdown.`;
       await m8AddTimeline(businessId, 'Host Invitation Sent', me, { email, reviewUrl });
       return ok({ sent: true, reviewUrl });
     }
+  }
+
+  // ============================================================================
+  // MODULE 12 — Host Earnings, Commission & Payout Management (endpoints)
+  // ============================================================================
+
+  // ------------------- HOST EARNINGS -------------------
+
+  // GET /api/host/earnings/summary
+  if (path === '/host/earnings/summary' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host' && me.role !== 'admin' && me.role !== 'super_admin') return err('Forbidden', 403);
+    await m12MarkEarningsAvailableIfDue();
+    const col = await getCollection('hostEarnings');
+    const bookings = await getCollection('bookings');
+    const settings = await m12GetFinanceSettings();
+    const hostId = me.id;
+    const all = await col.find({ hostId }, { projection: { _id: 0 } }).toArray();
+    const sumBy = (fn, filter = () => true) => all.filter(filter).reduce((s, r) => s + (Number(fn(r)) || 0), 0);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const available = sumBy((r) => r.netEarnings, (r) => r.status === 'available');
+    const pending = sumBy((r) => r.netEarnings, (r) => r.status === 'pending');
+    const paid = sumBy((r) => r.netEarnings, (r) => r.status === 'paid');
+    const lifetime = available + pending + paid; // net of refunds
+    const monthNet = sumBy((r) => r.netEarnings, (r) => new Date(r.createdAt) >= monthStart && r.status !== 'refunded');
+    const completed = await bookings.countDocuments({ hostId, status: 'approved' });
+    const commissionPaid = sumBy((r) => r.commissionAmount, (r) => r.status !== 'refunded');
+    const refundDed = sumBy((r) => r.refundDeduction, () => true);
+    // Upcoming payout date
+    const upcoming = all.filter((r) => r.status === 'pending').map((r) => new Date(r.availableAt)).sort((a, b) => a - b)[0] || null;
+    return ok({
+      summary: {
+        availableBalance: available,
+        pendingBalance: pending,
+        lifetimeEarnings: lifetime,
+        thisMonthEarnings: monthNet,
+        totalCompletedBookings: completed,
+        platformCommissionPaid: commissionPaid,
+        totalRefundDeductions: refundDed,
+        upcomingPayoutDate: upcoming,
+        minPayoutAmount: settings.minPayoutAmount,
+        payoutSchedule: settings.payoutSchedule,
+      },
+    });
+  }
+
+  // GET /api/host/earnings/history?from=&to=&property=&status=
+  if (path === '/host/earnings/history' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host' && me.role !== 'admin' && me.role !== 'super_admin') return err('Forbidden', 403);
+    await m12MarkEarningsAvailableIfDue();
+    const url = new URL(request.url);
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    const property = url.searchParams.get('property');
+    const status = url.searchParams.get('status');
+    const filter = { hostId: me.id };
+    if (property) filter.listingId = property;
+    if (status && ['pending', 'available', 'paid', 'refunded'].includes(status)) filter.status = status;
+    if (from || to) {
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = new Date(from);
+      if (to) filter.createdAt.$lte = new Date(to);
+    }
+    const col = await getCollection('hostEarnings');
+    const list = await col.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    return ok({ earnings: list });
+  }
+
+  // GET /api/host/payouts/history
+  if (path === '/host/payouts/history' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host' && me.role !== 'admin' && me.role !== 'super_admin') return err('Forbidden', 403);
+    const col = await getCollection('hostPayouts');
+    const list = await col.find({ hostId: me.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    return ok({ payouts: list });
+  }
+
+  // ------------------- HOST PAYOUT SETTINGS -------------------
+
+  // GET /api/host/payout-settings
+  if (path === '/host/payout-settings' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host' && me.role !== 'admin' && me.role !== 'super_admin') return err('Forbidden', 403);
+    const col = await getCollection('hostPayoutSettings');
+    const doc = await col.findOne({ hostId: me.id });
+    return ok({ settings: doc ? m12SanitizePayoutSettings(doc, { unmask: true }) : null });
+  }
+
+  // PUT /api/host/payout-settings
+  if (path === '/host/payout-settings' && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host' && me.role !== 'admin') return err('Forbidden', 403);
+    const b = await readBody(request);
+    const col = await getCollection('hostPayoutSettings');
+    const existing = await col.findOne({ hostId: me.id });
+    const set = {
+      hostId: me.id,
+      accountHolder: (b.accountHolder || '').toString().trim(),
+      bankName: (b.bankName || '').toString().trim(),
+      accountNumber: (b.accountNumber || '').toString().trim(),
+      ifsc: (b.ifsc || '').toString().trim().toUpperCase(),
+      upi: (b.upi || '').toString().trim(),
+      pan: (b.pan || '').toString().trim().toUpperCase(),
+      gst: (b.gst || '').toString().trim().toUpperCase(),
+      isDisabled: !!b.isDisabled,
+      verificationStatus: existing?.verificationStatus || 'pending',
+      updatedAt: new Date(),
+    };
+    if (!existing) set.createdAt = new Date();
+    await col.updateOne({ hostId: me.id }, { $set: set }, { upsert: true });
+    const fresh = await col.findOne({ hostId: me.id });
+    m12LogFinanceAudit(me, 'host_payout_settings_updated', { hostId: me.id, previous: existing ? { bankName: existing.bankName, accountNumber: m12MaskAccount(existing.accountNumber), upi: existing.upi } : null, new: { bankName: set.bankName, accountNumber: m12MaskAccount(set.accountNumber), upi: set.upi } }).catch(() => {});
+    return ok({ settings: m12SanitizePayoutSettings(fresh, { unmask: true }) });
+  }
+
+  // ------------------- ADMIN: FINANCE SETTINGS -------------------
+
+  // GET /api/admin/finance-settings
+  if (path === '/admin/finance-settings' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    return ok({ settings: await m12GetFinanceSettings() });
+  }
+
+  // PUT /api/admin/finance-settings
+  if (path === '/admin/finance-settings' && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    const existing = await m12GetFinanceSettings();
+    const merged = {
+      ...existing,
+      ...body,
+      id: 'default',
+      categoryCommissions: { ...existing.categoryCommissions, ...(body.categoryCommissions || {}) },
+      enabledMethods: { ...existing.enabledMethods, ...(body.enabledMethods || {}) },
+      updatedAt: new Date(),
+      updatedBy: me.id,
+      updatedByName: me.name || me.email,
+    };
+    const col = await getCollection('financeSettings');
+    await col.updateOne({ id: 'default' }, { $set: merged }, { upsert: true });
+    m12LogFinanceAudit(me, 'finance_settings_updated', { previous: existing, new: merged }).catch(() => {});
+    return ok({ settings: merged });
+  }
+
+  // ------------------- ADMIN: HOST PAYOUTS -------------------
+
+  // GET /api/admin/host-payouts?status=&search=
+  if (path === '/admin/host-payouts' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status');
+    const search = (url.searchParams.get('search') || '').trim().toLowerCase();
+    const filter = {};
+    if (status && ['pending', 'paid', 'rejected', 'hold'].includes(status)) filter.status = status;
+    const col = await getCollection('hostPayouts');
+    let list = await col.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    if (search) {
+      list = list.filter((p) => (p.hostName || '').toLowerCase().includes(search) || (p.hostEmail || '').toLowerCase().includes(search) || (p.id || '').toLowerCase().includes(search));
+    }
+    return ok({ payouts: list });
+  }
+
+  // GET /api/admin/host-payouts/available — list hosts with earnings available for payout
+  if (path === '/admin/host-payouts/available' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    await m12MarkEarningsAvailableIfDue();
+    const col = await getCollection('hostEarnings');
+    const settings = await m12GetFinanceSettings();
+    const users = await getCollection('users');
+    const rows = await col.aggregate([
+      { $match: { status: 'available' } },
+      { $group: { _id: '$hostId', amount: { $sum: '$netEarnings' }, bookingCount: { $sum: 1 } } },
+    ]).toArray();
+    const enriched = [];
+    for (const r of rows) {
+      const u = await users.findOne({ id: r._id }, { projection: { name: 1, email: 1, _id: 0 } });
+      enriched.push({ hostId: r._id, hostName: u?.name || 'Unknown', hostEmail: u?.email || '', amount: r.amount, bookingCount: r.bookingCount, meetsMinimum: r.amount >= (settings.minPayoutAmount || 0) });
+    }
+    return ok({ hosts: enriched, minPayoutAmount: settings.minPayoutAmount });
+  }
+
+  // POST /api/admin/host-payouts/create { hostId, method }
+  if (path === '/admin/host-payouts/create' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const { hostId, method = 'bank', note } = await readBody(request);
+    if (!hostId) return err('hostId required');
+    const settings = await m12GetFinanceSettings();
+    const earn = await getCollection('hostEarnings');
+    const rows = await earn.find({ hostId, status: 'available', payoutId: null }, { projection: { _id: 0 } }).toArray();
+    if (!rows.length) return err('No available earnings for this host', 400);
+    const amount = rows.reduce((s, r) => s + (Number(r.netEarnings) || 0), 0);
+    if (amount < (Number(settings.minPayoutAmount) || 0)) return err(`Amount ₹${amount} is below minimum payout ₹${settings.minPayoutAmount}`, 400);
+    const users = await getCollection('users');
+    const host = await users.findOne({ id: hostId }, { projection: { name: 1, email: 1, _id: 0 } });
+    const payoutSettings = await (await getCollection('hostPayoutSettings')).findOne({ hostId });
+    const payoutId = uuid();
+    const payoutDoc = {
+      id: payoutId,
+      hostId,
+      hostName: host?.name || 'Unknown',
+      hostEmail: host?.email || '',
+      amount,
+      bookingCount: rows.length,
+      earningIds: rows.map((r) => r.id),
+      method,
+      status: settings.manualApproval ? 'pending' : 'paid',
+      payoutSettingsSnapshot: payoutSettings ? m12SanitizePayoutSettings(payoutSettings) : null,
+      note: note || null,
+      requestedBy: me.id,
+      requestedByName: me.name || me.email,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const col = await getCollection('hostPayouts');
+    await col.insertOne(payoutDoc);
+    // Mark earnings with payoutId
+    await earn.updateMany({ id: { $in: payoutDoc.earningIds } }, { $set: { payoutId, updatedAt: new Date(), status: settings.manualApproval ? 'available' : 'paid' } });
+    m12LogFinanceAudit(me, 'host_payout_created', { payoutId, hostId, amount, bookingCount: rows.length, method, status: payoutDoc.status }).catch(() => {});
+    return ok({ payout: payoutDoc }, 201);
+  }
+
+  // POST /api/admin/host-payouts/:id/approve|reject|mark-paid|hold
+  {
+    const m = path.match(/^\/admin\/host-payouts\/([^/]+)\/(approve|reject|mark-paid|hold)$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+      const [_, id, action] = m;
+      const body = await readBody(request);
+      const col = await getCollection('hostPayouts');
+      const rec = await col.findOne({ id });
+      if (!rec) return err('Payout not found', 404);
+      const earn = await getCollection('hostEarnings');
+      let newStatus = rec.status;
+      let earningStatus = null;
+      if (action === 'approve' || action === 'mark-paid') {
+        newStatus = 'paid';
+        earningStatus = 'paid';
+      } else if (action === 'reject') {
+        newStatus = 'rejected';
+        earningStatus = 'available'; // return earnings to available pool
+      } else if (action === 'hold') {
+        newStatus = 'hold';
+        earningStatus = 'available';
+      }
+      const set = { status: newStatus, updatedAt: new Date(), processedBy: me.id, processedByName: me.name || me.email };
+      if (newStatus === 'paid') set.paidAt = new Date();
+      if (body.reason) set.reason = body.reason;
+      if (body.transactionRef) set.transactionRef = body.transactionRef;
+      await col.updateOne({ id }, { $set: set });
+      if (earningStatus) {
+        const update = { $set: { updatedAt: new Date(), status: earningStatus } };
+        if (earningStatus !== 'paid') update.$set.payoutId = null;
+        await earn.updateMany({ id: { $in: rec.earningIds || [] } }, update);
+      }
+      const fresh = await col.findOne({ id }, { projection: { _id: 0 } });
+      m12LogFinanceAudit(me, `host_payout_${action.replace('-', '_')}`, { payoutId: id, hostId: rec.hostId, amount: rec.amount, previousStatus: rec.status, newStatus, reason: body.reason || null }).catch(() => {});
+      return ok({ payout: fresh });
+    }
+  }
+
+  // ------------------- ADMIN: REPORTS -------------------
+
+  // GET /api/admin/finance/reports
+  if (path === '/admin/finance/reports' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    await m12MarkEarningsAvailableIfDue();
+    const earn = await getCollection('hostEarnings');
+    const payouts = await getCollection('hostPayouts');
+    const [earnings, payoutList] = await Promise.all([
+      earn.find({}, { projection: { _id: 0 } }).toArray(),
+      payouts.find({}, { projection: { _id: 0 } }).toArray(),
+    ]);
+    const sum = (arr, fn) => arr.reduce((s, r) => s + (Number(fn(r)) || 0), 0);
+    const platformRevenue = sum(earnings.filter(e => e.status !== 'refunded'), e => e.bookingAmount);
+    const hostEarningsTotal = sum(earnings.filter(e => e.status !== 'refunded'), e => e.netEarnings);
+    const commissionEarned = sum(earnings.filter(e => e.status !== 'refunded'), e => e.commissionAmount);
+    const pendingPayouts = sum(payoutList.filter(p => p.status === 'pending' || p.status === 'hold'), p => p.amount);
+    const paidPayouts = sum(payoutList.filter(p => p.status === 'paid'), p => p.amount);
+    const refundedCount = earnings.filter(e => e.status === 'refunded').length;
+    const refundedAmount = sum(earnings.filter(e => e.status === 'refunded'), e => e.refundDeduction);
+    return ok({
+      reports: {
+        platformRevenue,
+        hostEarningsTotal,
+        commissionEarned,
+        pendingPayouts,
+        paidPayouts,
+        refundStats: { count: refundedCount, amount: refundedAmount },
+        earningsCount: earnings.length,
+        payoutsCount: payoutList.length,
+      },
+    });
+  }
+
+  // GET /api/admin/finance/reports/export?type=earnings|payouts
+  if (path === '/admin/finance/reports/export' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const type = url.searchParams.get('type') || 'earnings';
+    const escape = (v) => {
+      const s = v === null || v === undefined ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    let csv = '';
+    if (type === 'payouts') {
+      const col = await getCollection('hostPayouts');
+      const list = await col.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+      const headers = ['id', 'hostName', 'hostEmail', 'amount', 'bookingCount', 'method', 'status', 'createdAt', 'paidAt'];
+      csv = headers.join(',') + '\n' + list.map((r) => headers.map((h) => escape(r[h])).join(',')).join('\n');
+    } else {
+      const col = await getCollection('hostEarnings');
+      const list = await col.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+      const headers = ['bookingId', 'hostId', 'listingTitle', 'travelerName', 'checkInDate', 'checkOutDate', 'bookingAmount', 'commissionAmount', 'refundDeduction', 'netEarnings', 'status', 'createdAt'];
+      csv = headers.join(',') + '\n' + list.map((r) => headers.map((h) => escape(r[h])).join(',')).join('\n');
+    }
+    return new NextResponse(csv, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="finance-${type}-${Date.now()}.csv"`,
+      },
+    });
+  }
+
+  // ------------------- ADMIN: AUDIT LOG -------------------
+
+  // GET /api/admin/finance/audit-log
+  if (path === '/admin/finance/audit-log' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const limit = Math.min(500, Number(url.searchParams.get('limit')) || 200);
+    const col = await getCollection('financeAuditLog');
+    const list = await col.find({}, { projection: { _id: 0 } }).sort({ timestamp: -1 }).limit(limit).toArray();
+    return ok({ logs: list });
   }
 
   // Health
