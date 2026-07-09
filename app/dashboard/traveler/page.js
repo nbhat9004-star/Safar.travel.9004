@@ -76,6 +76,9 @@ function TravelerDashboardInner() {
               <Link href="/dashboard/traveler/messages"><MessageCircle className="size-4 mr-2" /> Messages</Link>
             </Button>
             <Button asChild variant="outline" className="rounded-full font-semibold">
+              <Link href="/dashboard/traveler/reviews"><Sparkles className="size-4 mr-2" /> My Reviews</Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-full font-semibold">
               <Link href="/notifications"><Bell className="size-4 mr-2" /> Notifications</Link>
             </Button>
             <Button asChild variant="outline" className="rounded-full font-semibold">

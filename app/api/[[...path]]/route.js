@@ -2834,29 +2834,9 @@ Return ONLY the JSON, no other text.`;
   }
 
   // ---------- REVIEWS ----------
-  if (path === '/reviews' && method === 'POST') {
-    const { propertyId, rating, reviewText } = await readBody(request);
-    const me = await getCurrentUser(request);
-    if (!me) return err('Authentication required', 401);
-    if (!propertyId || !rating || rating < 1 || rating > 5) return err('Valid propertyId and rating (1-5) required');
-
-    const reviews = await getCollection('reviews');
-    const existing = await reviews.findOne({ propertyId, userId: me.id });
-    if (existing) return err('You have already reviewed this property');
-
-    const review = {
-      id: uuid(),
-      propertyId,
-      userId: me.id,
-      userName: me.name,
-      rating: Number(rating),
-      reviewText: reviewText || '',
-      createdAt: new Date(),
-    };
-    await reviews.insertOne(review);
-    const { _id, ...data } = review;
-    return ok({ review: data }, 201);
-  }
+  // Module 15 note: POST /reviews handler is defined later in the file with the
+  // full extended schema (verified booking, categories, media, host reply, etc.).
+  // The legacy GET /reviews (by propertyId) remains here for backward compat.
 
   if (path === '/reviews' && method === 'GET') {
     const { propertyId } = Object.fromEntries(new URL(request.url).searchParams);
@@ -7525,6 +7505,627 @@ Return ONLY valid JSON, no markdown.`;
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
+  }
+
+  // ============================================================================
+  // MODULE 15 — Trust, Reviews & Reputation (extended endpoints)
+  // ============================================================================
+  // Backwards compat: legacy POST /reviews with { propertyId, rating, reviewText }
+  // still works. New payload supports the full Module 15 schema.
+
+  const M15_DEFAULTS = {
+    minReviewLength: 20,
+    maxReviewLength: 4000,
+    allowAnonymous: true,
+    allowPhotos: true,
+    allowVideos: true,
+    maxPhotos: 10,
+    maxVideos: 2,
+    editWindowHours: 48,
+    autoPublish: true,
+    requireApproval: false,
+    enableAiSummary: true,
+    badgeThresholds: {
+      trustedHostMinBookings: 10,
+      trustedHostMinRating: 4.5,
+      topRatedMinReviews: 20,
+      topRatedMinRating: 4.7,
+      superHostMinBookings: 50,
+      superHostMinRating: 4.8,
+      fastResponderMaxHours: 2,
+      eliteTravelerMinTrips: 25,
+    },
+  };
+
+  const m15GetSettings = async () => {
+    const col = await getCollection('reviewSettings');
+    let doc = await col.findOne({ id: 'default' }, { projection: { _id: 0 } });
+    if (!doc) {
+      doc = { id: 'default', ...M15_DEFAULTS, createdAt: new Date(), updatedAt: new Date() };
+      try { await col.insertOne({ ...doc }); } catch {}
+    }
+    return { ...M15_DEFAULTS, ...doc, badgeThresholds: { ...M15_DEFAULTS.badgeThresholds, ...(doc.badgeThresholds || {}) } };
+  };
+
+  // Compute an aggregated summary for a listing:
+  //   overall average, histogram, category averages, AI-style summary text.
+  const m15SummarizeReviews = (reviews) => {
+    if (!reviews.length) {
+      return {
+        count: 0, averageRating: 0,
+        histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        categoryAverages: {},
+        aiSummary: null,
+      };
+    }
+    const round1 = (n) => Math.round(n * 10) / 10;
+    const sum = (arr, fn) => arr.reduce((s, r) => s + (Number(fn(r)) || 0), 0);
+    const catKeys = ['cleanliness', 'location', 'value', 'hostBehaviour', 'communication', 'accuracy', 'amenities', 'safety'];
+    const categoryAverages = {};
+    catKeys.forEach((k) => {
+      const rated = reviews.filter((r) => r.categories && r.categories[k]);
+      categoryAverages[k] = rated.length ? round1(sum(rated, (r) => r.categories[k]) / rated.length) : 0;
+    });
+    const histogram = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    reviews.forEach((r) => { const b = Math.round(r.rating); if (histogram[b] !== undefined) histogram[b] += 1; });
+    const averageRating = round1(sum(reviews, (r) => r.rating) / reviews.length);
+    // Non-LLM AI-style summary: pick top praised categories + note common cons keywords.
+    const topCategories = Object.entries(categoryAverages).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k.replace(/([A-Z])/g, ' $1').toLowerCase());
+    const bottomCat = Object.entries(categoryAverages).filter(([, v]) => v > 0).sort((a, b) => a[1] - b[1])[0];
+    const commonCons = reviews.flatMap((r) => (r.cons || '').split(/[,;\.]/).map((s) => s.trim()).filter((s) => s.length > 3 && s.length < 40));
+    const consMap = {};
+    commonCons.forEach((c) => { const k = c.toLowerCase(); consMap[k] = (consMap[k] || 0) + 1; });
+    const topCon = Object.entries(consMap).sort((a, b) => b[1] - a[1])[0];
+    let aiSummary = '';
+    if (topCategories.length) {
+      aiSummary = `Guests frequently praise ${topCategories.join(', ')}`;
+      if (topCon && topCon[1] >= 2) aiSummary += `, while suggesting improvements in ${topCon[0]}`;
+      else if (bottomCat && bottomCat[1] > 0 && bottomCat[1] < 4) aiSummary += `, while noting ${bottomCat[0].replace(/([A-Z])/g, ' $1').toLowerCase()} could improve`;
+      aiSummary += '.';
+    } else {
+      aiSummary = `Average rating ${averageRating} across ${reviews.length} review${reviews.length === 1 ? '' : 's'}.`;
+    }
+    return { count: reviews.length, averageRating, histogram, categoryAverages, aiSummary };
+  };
+
+  // Compute Host Trust Score + badges
+  const m15ComputeHostScore = async (hostId) => {
+    const [bookingsC, reviewsC, listingsC, payoutsC, usersC, settings] = await Promise.all([
+      getCollection('bookings'), getCollection('reviews'), getCollection('listings'),
+      getCollection('hostPayoutSettings'), getCollection('users'), m15GetSettings(),
+    ]);
+    const [bookings, listings, user, payoutSettings] = await Promise.all([
+      bookingsC.find({ hostId }, { projection: { _id: 0 } }).toArray(),
+      listingsC.find({ hostId }, { projection: { _id: 0, id: 1 } }).toArray(),
+      usersC.findOne({ id: hostId }, { projection: { _id: 0 } }),
+      payoutsC.findOne({ hostId }),
+    ]);
+    const listingIds = listings.map((l) => l.id);
+    const reviews = await reviewsC.find({ $or: [{ listingId: { $in: listingIds } }, { propertyId: { $in: listingIds } }] }, { projection: { _id: 0 } }).toArray();
+    const avgRating = reviews.length ? reviews.reduce((s, r) => s + Number(r.rating || 0), 0) / reviews.length : 0;
+    const total = bookings.length || 1;
+    const completed = bookings.filter((b) => b.status === 'approved').length;
+    const cancelled = bookings.filter((b) => b.status === 'cancelled').length;
+    const rejected = bookings.filter((b) => b.status === 'rejected').length;
+    const cancellationRate = (cancelled / total) * 100;
+    const acceptanceRate = ((total - rejected) / total) * 100;
+    const responseRate = bookings.filter((b) => b.status !== 'pending').length / total * 100;
+    // Repeat guests
+    const gCount = {};
+    bookings.forEach((b) => { if (b.travelerId) gCount[b.travelerId] = (gCount[b.travelerId] || 0) + 1; });
+    const repeatGuests = Object.values(gCount).filter((c) => c > 1).length;
+    const yearsActive = user?.createdAt ? Math.max(0, ((Date.now() - new Date(user.createdAt).getTime()) / (365 * 86400000)).toFixed(1)) : 0;
+    // Identity verification (loose heuristic — reuses existing fields if present)
+    const identity = {
+      email: !!user?.emailVerified || !!user?.email,
+      phone: !!user?.phoneVerified || !!user?.phone,
+      governmentId: !!user?.identityVerified || !!user?.idVerified,
+      payout: !!payoutSettings,
+    };
+    // Weighted trust score (0-100)
+    let score = 0;
+    score += Math.min(40, avgRating * 8);              // up to 40 for rating
+    score += Math.min(20, acceptanceRate * 0.2);        // up to 20 for acceptance
+    score += Math.min(15, responseRate * 0.15);         // up to 15 for response
+    score += Math.max(0, 10 - cancellationRate);        // up to 10 (penalise cancels)
+    score += Math.min(5, repeatGuests);                 // up to 5 for repeat guests
+    score += (identity.email ? 2 : 0) + (identity.phone ? 3 : 0) + (identity.governmentId ? 3 : 0) + (identity.payout ? 2 : 0);
+    score = Math.round(score);
+
+    // Badges
+    const bt = settings.badgeThresholds;
+    const badges = [];
+    const daysActive = user?.createdAt ? (Date.now() - new Date(user.createdAt).getTime()) / 86400000 : 0;
+    if (daysActive < 60) badges.push('new_host');
+    if (identity.email || identity.phone) badges.push('verified_host');
+    if (completed >= bt.trustedHostMinBookings && avgRating >= bt.trustedHostMinRating) badges.push('trusted_host');
+    if (reviews.length >= bt.topRatedMinReviews && avgRating >= bt.topRatedMinRating) badges.push('top_rated');
+    if (repeatGuests >= 5) badges.push('guest_favourite');
+    if (responseRate >= 90) badges.push('fast_responder');
+    if (completed >= bt.superHostMinBookings && avgRating >= bt.superHostMinRating) badges.push('super_host');
+    const cleanlinessScores = reviews.filter((r) => r.categories?.cleanliness).map((r) => r.categories.cleanliness);
+    const cleanAvg = cleanlinessScores.length ? cleanlinessScores.reduce((s, v) => s + v, 0) / cleanlinessScores.length : 0;
+    if (cleanAvg >= 4.7) badges.push('excellent_cleanliness');
+    if (avgRating >= 4.6 && reviews.length >= 10) badges.push('highly_recommended');
+    if (score >= 85) badges.push('premium_host');
+
+    return {
+      hostId, trustScore: score, badges,
+      metrics: { avgRating: +avgRating.toFixed(2), totalBookings: total, completed, cancelled, cancellationRate: +cancellationRate.toFixed(1), acceptanceRate: +acceptanceRate.toFixed(1), responseRate: +responseRate.toFixed(1), repeatGuests, yearsActive, reviewCount: reviews.length },
+      identity,
+    };
+  };
+
+  // Compute Traveler badges + stats
+  const m15ComputeTravelerBadges = async (travelerId) => {
+    const [bookingsC, reviewsC, referralsC, settings] = await Promise.all([
+      getCollection('bookings'), getCollection('reviews'), getCollection('referrals'), m15GetSettings(),
+    ]);
+    const [bookings, reviews, referrals] = await Promise.all([
+      bookingsC.find({ travelerId }, { projection: { _id: 0 } }).toArray(),
+      reviewsC.find({ userId: travelerId }, { projection: { _id: 0 } }).toArray(),
+      referralsC.find({ referrerId: travelerId }, { projection: { _id: 0 } }).toArray(),
+    ]);
+    const completed = bookings.filter((b) => b.status === 'approved').length;
+    const cancelled = bookings.filter((b) => b.status === 'cancelled').length;
+    const cancelRate = bookings.length ? (cancelled / bookings.length) * 100 : 0;
+    const helpfulVotes = reviews.reduce((s, r) => s + (r.helpfulCount || 0), 0);
+    const bt = settings.badgeThresholds;
+    const badges = ['verified_traveler'];
+    if (completed >= 5) badges.push('explorer');
+    if (completed >= bt.eliteTravelerMinTrips) badges.push('elite_traveler');
+    if (bookings.some((b) => b.checkInDate && new Date(b.checkInDate).getDay() >= 5)) badges.push('weekend_traveler');
+    // Guess family/luxury/adventure heuristically from booking counts (soft-tag)
+    if (bookings.filter((b) => (b.guests || 1) >= 3).length >= 3) badges.push('family_traveler');
+    if (bookings.some((b) => (b.totalPrice || 0) > 25000)) badges.push('luxury_traveler');
+    if (reviews.length >= 10) badges.push('top_contributor');
+    if (helpfulVotes >= 25) badges.push('vip_traveler');
+    return {
+      travelerId, badges,
+      stats: {
+        tripsCompleted: completed, bookingsCompleted: completed, reviewsWritten: reviews.length,
+        helpfulVotes, referralCount: referrals.length,
+        cancellationRate: +cancelRate.toFixed(1),
+      },
+    };
+  };
+
+  // POST /api/reviews  (extended — backwards-compatible with legacy payload)
+  if (path === '/reviews' && method === 'POST') {
+    const b = await readBody(request);
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const settings = await m15GetSettings();
+
+    const listingId = b.listingId || b.propertyId;
+    const rating = Number(b.rating);
+    const reviewText = String(b.reviewText || b.review || '').trim();
+    if (!listingId || !rating || rating < 1 || rating > 5) return err('Valid listingId and rating (1-5) required');
+    if (reviewText.length && (reviewText.length < settings.minReviewLength || reviewText.length > settings.maxReviewLength)) {
+      return err(`Review must be ${settings.minReviewLength}–${settings.maxReviewLength} characters`);
+    }
+
+    const reviews = await getCollection('reviews');
+
+    // Verified booking check (if bookingId provided)
+    let verifiedBooking = false, bookingId = b.bookingId || null;
+    if (bookingId) {
+      const bk = await (await getCollection('bookings')).findOne({ bookingId });
+      if (!bk) return err('Booking not found', 404);
+      if (bk.travelerId !== me.id) return err('You cannot review this booking', 403);
+      if (bk.status !== 'approved') return err('Only completed bookings can be reviewed', 400);
+      if (bk.checkOutDate && new Date(bk.checkOutDate) > new Date()) return err('You can review after check-out', 400);
+      const dup = await reviews.findOne({ bookingId });
+      if (dup) return err('You have already reviewed this booking');
+      verifiedBooking = true;
+    } else {
+      // Legacy path — one review per (listing, user)
+      const existing = await reviews.findOne({ $or: [{ listingId, userId: me.id }, { propertyId: listingId, userId: me.id }] });
+      if (existing) return err('You have already reviewed this property');
+    }
+
+    // Media validation
+    const photos = Array.isArray(b.photos) ? b.photos.slice(0, settings.maxPhotos) : [];
+    const videos = Array.isArray(b.videos) ? b.videos.slice(0, settings.maxVideos) : [];
+    if (!settings.allowPhotos && photos.length) return err('Photos are not allowed');
+    if (!settings.allowVideos && videos.length) return err('Videos are not allowed');
+
+    const categories = {};
+    ['cleanliness', 'location', 'value', 'hostBehaviour', 'communication', 'accuracy', 'amenities', 'safety'].forEach((k) => {
+      if (b.categories && typeof b.categories[k] === 'number' && b.categories[k] >= 1 && b.categories[k] <= 5) {
+        categories[k] = Number(b.categories[k]);
+      } else if (typeof b[k] === 'number') {
+        categories[k] = Number(b[k]);
+      }
+    });
+
+    const review = {
+      id: uuid(),
+      listingId,
+      propertyId: listingId, // legacy alias
+      bookingId,
+      userId: me.id,
+      userName: b.anonymous && settings.allowAnonymous ? 'Anonymous Traveler' : (me.name || 'Traveler'),
+      realUserName: me.name || null,
+      anonymous: !!b.anonymous && settings.allowAnonymous,
+      rating,
+      categories,
+      title: String(b.title || '').slice(0, 140),
+      reviewText,
+      pros: String(b.pros || '').slice(0, 1000),
+      cons: String(b.cons || '').slice(0, 1000),
+      visitType: ['solo', 'family', 'friends', 'couple', 'business'].includes(b.visitType) ? b.visitType : null,
+      stayMonth: b.stayMonth || null,
+      wouldRecommend: typeof b.wouldRecommend === 'boolean' ? b.wouldRecommend : null,
+      photos,
+      videos,
+      verifiedBooking,
+      verifiedTraveler: !!me.emailVerified || !!me.phoneVerified,
+      helpfulCount: 0,
+      notHelpfulCount: 0,
+      helpfulVoters: [],
+      notHelpfulVoters: [],
+      reports: [],
+      hostReply: null,
+      moderationStatus: settings.requireApproval ? 'pending' : 'approved',
+      hidden: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await reviews.insertOne(review);
+    const { _id, ...data } = review;
+    return ok({ review: data }, 201);
+  }
+
+  // PUT /api/reviews/:id  (edit within window)
+  {
+    const m = path.match(/^\/reviews\/([^/]+)$/);
+    if (m && method === 'PUT') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const settings = await m15GetSettings();
+      const b = await readBody(request);
+      const reviews = await getCollection('reviews');
+      const rec = await reviews.findOne({ id: m[1] });
+      if (!rec) return err('Review not found', 404);
+      const isOwner = rec.userId === me.id;
+      const isAdmin = ['admin', 'super_admin'].includes(me.role);
+      if (!isOwner && !isAdmin) return err('Forbidden', 403);
+      // Owner: allowed only within edit window unless admin override
+      if (isOwner && !isAdmin) {
+        const hours = (Date.now() - new Date(rec.createdAt).getTime()) / 3600000;
+        if (hours > settings.editWindowHours) return err('Edit window has expired. Contact support to edit.', 403);
+      }
+      const patch = { updatedAt: new Date() };
+      ['rating', 'title', 'reviewText', 'pros', 'cons', 'visitType', 'stayMonth', 'wouldRecommend', 'photos', 'videos', 'categories', 'anonymous'].forEach((k) => {
+        if (b[k] !== undefined) patch[k] = b[k];
+      });
+      await reviews.updateOne({ id: m[1] }, { $set: patch });
+      const fresh = await reviews.findOne({ id: m[1] }, { projection: { _id: 0 } });
+      return ok({ review: fresh });
+    }
+    if (m && method === 'DELETE') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const reviews = await getCollection('reviews');
+      const rec = await reviews.findOne({ id: m[1] });
+      if (!rec) return err('Review not found', 404);
+      const isOwner = rec.userId === me.id;
+      const isAdmin = ['admin', 'super_admin'].includes(me.role);
+      if (!isOwner && !isAdmin) return err('Forbidden', 403);
+      await reviews.deleteOne({ id: m[1] });
+      if (isAdmin) m12LogFinanceAudit(me, 'review_deleted', { reviewId: m[1], listingId: rec.listingId }).catch(() => {});
+      return ok({ deleted: true });
+    }
+  }
+
+  // POST /api/reviews/:id/reply — host reply
+  {
+    const m = path.match(/^\/reviews\/([^/]+)\/reply$/);
+    if (m && (method === 'POST' || method === 'PUT')) {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      if (me.role !== 'host' && !['admin', 'super_admin'].includes(me.role)) return err('Only hosts can reply', 403);
+      const b = await readBody(request);
+      const text = String(b.text || '').trim();
+      if (!text) return err('Reply text required');
+      const reviews = await getCollection('reviews');
+      const rec = await reviews.findOne({ id: m[1] });
+      if (!rec) return err('Review not found', 404);
+      // Verify host owns the listing
+      const listing = await (await getCollection('listings')).findOne({ id: rec.listingId || rec.propertyId }, { projection: { hostId: 1, _id: 0 } });
+      if (me.role === 'host' && listing?.hostId !== me.id) return err('Not your listing', 403);
+      if (rec.hostReply && method === 'POST') return err('You have already replied. Use PUT to edit.', 400);
+      if (rec.hostReply && method === 'PUT') {
+        const hours = (Date.now() - new Date(rec.hostReply.createdAt).getTime()) / 3600000;
+        if (hours > 24 && !['admin', 'super_admin'].includes(me.role)) return err('Reply edit window closed (24h)', 403);
+      }
+      const reply = {
+        text: text.slice(0, 2000),
+        hostId: me.id, hostName: me.name || me.email,
+        createdAt: rec.hostReply?.createdAt || new Date(),
+        updatedAt: new Date(),
+      };
+      await reviews.updateOne({ id: m[1] }, { $set: { hostReply: reply, updatedAt: new Date() } });
+      // Notify traveler
+      mkNotif({ userId: rec.userId, type: 'review_reply', category: 'review', title: 'Host replied to your review', body: text.slice(0, 140), link: `/listing/${rec.listingId || rec.propertyId}` }).catch(() => {});
+      return ok({ hostReply: reply });
+    }
+    if (m && method === 'DELETE') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+      const reviews = await getCollection('reviews');
+      await reviews.updateOne({ id: m[1] }, { $set: { hostReply: null, updatedAt: new Date() } });
+      m12LogFinanceAudit(me, 'review_reply_removed', { reviewId: m[1] }).catch(() => {});
+      return ok({ deleted: true });
+    }
+  }
+
+  // POST /api/reviews/:id/vote  { vote: 'helpful' | 'not_helpful' }
+  {
+    const m = path.match(/^\/reviews\/([^/]+)\/vote$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const { vote } = await readBody(request);
+      if (!['helpful', 'not_helpful'].includes(vote)) return err('Invalid vote');
+      const reviews = await getCollection('reviews');
+      const rec = await reviews.findOne({ id: m[1] });
+      if (!rec) return err('Review not found', 404);
+      const helpfulSet = new Set(rec.helpfulVoters || []);
+      const notSet = new Set(rec.notHelpfulVoters || []);
+      // Remove any prior vote from this user
+      helpfulSet.delete(me.id); notSet.delete(me.id);
+      if (vote === 'helpful') helpfulSet.add(me.id); else notSet.add(me.id);
+      await reviews.updateOne({ id: m[1] }, { $set: {
+        helpfulVoters: [...helpfulSet], notHelpfulVoters: [...notSet],
+        helpfulCount: helpfulSet.size, notHelpfulCount: notSet.size,
+        updatedAt: new Date(),
+      } });
+      return ok({ helpfulCount: helpfulSet.size, notHelpfulCount: notSet.size });
+    }
+  }
+
+  // POST /api/reviews/:id/report  { reason, note }
+  {
+    const m = path.match(/^\/reviews\/([^/]+)\/report$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+      const { reason, note } = await readBody(request);
+      if (!['spam', 'fake', 'offensive', 'wrong_property', 'duplicate', 'other'].includes(reason)) return err('Invalid reason');
+      const reviews = await getCollection('reviews');
+      const rec = await reviews.findOne({ id: m[1] });
+      if (!rec) return err('Review not found', 404);
+      // Prevent duplicate report by same user
+      if ((rec.reports || []).some((r) => r.userId === me.id)) return err('You have already reported this review');
+      const report = { userId: me.id, userName: me.name || me.email, reason, note: (note || '').slice(0, 500), createdAt: new Date() };
+      await reviews.updateOne({ id: m[1] }, { $push: { reports: report }, $set: { updatedAt: new Date() } });
+      return ok({ reported: true });
+    }
+  }
+
+  // GET /api/listings/:id/reviews (paginated + sorted + filtered) with summary
+  {
+    const m = path.match(/^\/listings\/([^/]+)\/reviews$/);
+    if (m && method === 'GET') {
+      const url = new URL(request.url);
+      const listingId = m[1];
+      const sort = url.searchParams.get('sort') || 'newest';
+      const filterVerified = url.searchParams.get('verified') === '1';
+      const filterPhotos = url.searchParams.get('photos') === '1';
+      const filterVideos = url.searchParams.get('videos') === '1';
+      const filterRating = url.searchParams.get('rating');
+      const filterVisit = url.searchParams.get('visitType');
+      const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+      const pageSize = Math.min(50, Number(url.searchParams.get('pageSize')) || 10);
+      const reviewsC = await getCollection('reviews');
+      const query = {
+        $or: [{ listingId }, { propertyId: listingId }],
+        hidden: { $ne: true },
+        moderationStatus: { $in: ['approved', null] },
+      };
+      if (filterVerified) query.verifiedBooking = true;
+      if (filterPhotos) query.photos = { $exists: true, $not: { $size: 0 } };
+      if (filterVideos) query.videos = { $exists: true, $not: { $size: 0 } };
+      if (filterRating) query.rating = Number(filterRating);
+      if (filterVisit) query.visitType = filterVisit;
+      const all = await reviewsC.find({ $or: [{ listingId }, { propertyId: listingId }] }, { projection: { _id: 0 } }).toArray();
+      const visible = await reviewsC.find(query, { projection: { _id: 0 } }).toArray();
+      // Sort
+      const sortFns = {
+        newest: (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+        oldest: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+        highest: (a, b) => b.rating - a.rating,
+        lowest: (a, b) => a.rating - b.rating,
+        most_helpful: (a, b) => (b.helpfulCount || 0) - (a.helpfulCount || 0),
+        photos_first: (a, b) => (b.photos?.length || 0) - (a.photos?.length || 0),
+        videos_first: (a, b) => (b.videos?.length || 0) - (a.videos?.length || 0),
+      };
+      visible.sort(sortFns[sort] || sortFns.newest);
+      const start = (page - 1) * pageSize;
+      const pageItems = visible.slice(start, start + pageSize);
+      const summary = m15SummarizeReviews(all.filter((r) => !r.hidden && (r.moderationStatus || 'approved') === 'approved'));
+      return ok({ reviews: pageItems, total: visible.length, page, pageSize, summary });
+    }
+  }
+
+  // GET /api/hosts/:id/score
+  {
+    const m = path.match(/^\/hosts\/([^/]+)\/score$/);
+    if (m && method === 'GET') {
+      return ok(await m15ComputeHostScore(m[1]));
+    }
+  }
+
+  // GET /api/host/reviews  (received + reply pending; the caller is a host)
+  if (path === '/host/reviews' && method === 'GET') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host' && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+    const listings = await (await getCollection('listings')).find({ hostId: me.id }, { projection: { _id: 0, id: 1, title: 1 } }).toArray();
+    const listingIds = listings.map((l) => l.id);
+    const reviews = await (await getCollection('reviews')).find({ $or: [{ listingId: { $in: listingIds } }, { propertyId: { $in: listingIds } }] }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    const score = await m15ComputeHostScore(me.id);
+    return ok({ reviews, listings, score, pendingReplies: reviews.filter((r) => !r.hostReply).length });
+  }
+
+  // POST /api/host/reviews/traveler — host reviews traveler (private + public parts)
+  if (path === '/host/reviews/traveler' && method === 'POST') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host') return err('Only hosts', 403);
+    const b = await readBody(request);
+    if (!b.bookingId) return err('bookingId required');
+    const booking = await (await getCollection('bookings')).findOne({ bookingId: b.bookingId });
+    if (!booking) return err('Booking not found', 404);
+    if (booking.hostId !== me.id) return err('Not your booking', 403);
+    const col = await getCollection('travelerReviews');
+    const existing = await col.findOne({ bookingId: b.bookingId });
+    if (existing) return err('Already reviewed', 400);
+    const doc = {
+      id: uuid(),
+      bookingId: b.bookingId,
+      travelerId: booking.travelerId,
+      travelerName: booking.travelerName,
+      hostId: me.id,
+      hostName: me.name || me.email,
+      ratings: {
+        communication: Number(b.communication) || 0,
+        cleanliness: Number(b.cleanliness) || 0,
+        punctuality: Number(b.punctuality) || 0,
+        ruleFollowing: Number(b.ruleFollowing) || 0,
+        overall: Number(b.overall) || 0,
+      },
+      wouldHostAgain: !!b.wouldHostAgain,
+      publicComment: String(b.publicComment || '').slice(0, 1000),
+      privateNotes: String(b.privateNotes || '').slice(0, 1000),
+      createdAt: new Date(),
+    };
+    await col.insertOne(doc);
+    const { _id, ...data } = doc;
+    return ok({ review: data }, 201);
+  }
+
+  // GET /api/host/reviews/given
+  if (path === '/host/reviews/given' && method === 'GET') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    if (me.role !== 'host' && !['admin', 'super_admin'].includes(me.role)) return err('Forbidden', 403);
+    const list = await (await getCollection('travelerReviews')).find({ hostId: me.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    return ok({ reviews: list });
+  }
+
+  // GET /api/traveler/reviews — my reviews + reviewable bookings
+  if (path === '/traveler/reviews' && method === 'GET') {
+    const me = await getCurrentUser(request); if (!me) return err('Authentication required', 401);
+    const reviews = await (await getCollection('reviews')).find({ userId: me.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    const bookings = await (await getCollection('bookings')).find({ travelerId: me.id, status: 'approved' }, { projection: { _id: 0 } }).toArray();
+    const now = new Date();
+    const reviewed = new Set(reviews.map((r) => r.bookingId).filter(Boolean));
+    const eligible = bookings.filter((b) => !reviewed.has(b.bookingId) && b.checkOutDate && new Date(b.checkOutDate) <= now);
+    const badges = await m15ComputeTravelerBadges(me.id);
+    return ok({ reviews, eligibleBookings: eligible, badges });
+  }
+
+  // GET /api/traveler/:id/public-profile — trips completed, badges, avg rating from hosts
+  {
+    const m = path.match(/^\/traveler\/([^/]+)\/public-profile$/);
+    if (m && method === 'GET') {
+      const travelerId = m[1];
+      const [bookings, hostReviews, badges] = await Promise.all([
+        (await getCollection('bookings')).find({ travelerId, status: 'approved' }, { projection: { _id: 0, listingId: 1, checkInDate: 1, totalPrice: 1 } }).toArray(),
+        (await getCollection('travelerReviews')).find({ travelerId }, { projection: { _id: 0, ratings: 1 } }).toArray(),
+        m15ComputeTravelerBadges(travelerId),
+      ]);
+      const listings = await (await getCollection('listings')).find({ id: { $in: bookings.map((b) => b.listingId).filter(Boolean) } }, { projection: { _id: 0, city: 1, district: 1, country: 1 } }).toArray();
+      const cities = new Set(listings.map((l) => l.city).filter(Boolean));
+      const countries = new Set(listings.map((l) => l.country).filter(Boolean));
+      const avgFromHosts = hostReviews.length ? hostReviews.reduce((s, r) => s + Number(r.ratings?.overall || 0), 0) / hostReviews.length : 0;
+      return ok({
+        stats: {
+          ...badges.stats,
+          citiesVisited: cities.size,
+          countriesVisited: countries.size,
+          averageRatingFromHosts: +avgFromHosts.toFixed(2),
+        },
+        badges: badges.badges,
+      });
+    }
+  }
+
+  // ------------------- ADMIN: MODERATION -------------------
+
+  // GET /api/admin/reviews/moderation?status=pending|reported|deleted|approved
+  if (path === '/admin/reviews/moderation' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status') || 'reported';
+    const col = await getCollection('reviews');
+    let filter = {};
+    if (status === 'pending') filter = { moderationStatus: 'pending' };
+    else if (status === 'reported') filter = { 'reports.0': { $exists: true } };
+    else if (status === 'hidden') filter = { hidden: true };
+    else if (status === 'approved') filter = { moderationStatus: 'approved', hidden: { $ne: true } };
+    const reviews = await col.find(filter, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).limit(200).toArray();
+    // Stats
+    const [pendingC, reportedC, hiddenC, approvedC, totalC] = await Promise.all([
+      col.countDocuments({ moderationStatus: 'pending' }),
+      col.countDocuments({ 'reports.0': { $exists: true } }),
+      col.countDocuments({ hidden: true }),
+      col.countDocuments({ moderationStatus: 'approved', hidden: { $ne: true } }),
+      col.countDocuments({}),
+    ]);
+    // Most reported listings
+    const reported = await col.aggregate([
+      { $match: { 'reports.0': { $exists: true } } },
+      { $group: { _id: { $ifNull: ['$listingId', '$propertyId'] }, reports: { $sum: { $size: '$reports' } } } },
+      { $sort: { reports: -1 } }, { $limit: 10 },
+    ]).toArray();
+    // Most active reviewers
+    const active = await col.aggregate([
+      { $group: { _id: '$userId', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }, { $limit: 10 },
+    ]).toArray();
+    return ok({ reviews, stats: { pending: pendingC, reported: reportedC, hidden: hiddenC, approved: approvedC, total: totalC }, mostReportedListings: reported, mostActiveReviewers: active });
+  }
+
+  // POST /api/admin/reviews/:id/moderate  { action: approve|reject|hide|delete|restore, reason }
+  {
+    const m = path.match(/^\/admin\/reviews\/([^/]+)\/moderate$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request);
+      const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+      const { action, reason } = await readBody(request);
+      const col = await getCollection('reviews');
+      const rec = await col.findOne({ id: m[1] });
+      if (!rec) return err('Review not found', 404);
+      let update = { updatedAt: new Date(), moderatedBy: me.id, moderatedByName: me.name || me.email };
+      if (action === 'approve') update = { ...update, moderationStatus: 'approved', hidden: false };
+      else if (action === 'reject') update = { ...update, moderationStatus: 'rejected', hidden: true };
+      else if (action === 'hide') update = { ...update, hidden: true };
+      else if (action === 'restore') update = { ...update, hidden: false, moderationStatus: 'approved' };
+      else if (action === 'delete') {
+        await col.deleteOne({ id: m[1] });
+        m12LogFinanceAudit(me, 'review_moderation_delete', { reviewId: m[1], listingId: rec.listingId, reason }).catch(() => {});
+        return ok({ deleted: true });
+      } else return err('Invalid action');
+      if (reason) update.moderationReason = reason;
+      await col.updateOne({ id: m[1] }, { $set: update });
+      m12LogFinanceAudit(me, `review_moderation_${action}`, { reviewId: m[1], listingId: rec.listingId, reason }).catch(() => {});
+      return ok({ review: { ...rec, ...update } });
+    }
+  }
+
+  // GET/PUT /api/admin/review-settings
+  if (path === '/admin/review-settings' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    return ok({ settings: await m15GetSettings() });
+  }
+  if (path === '/admin/review-settings' && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    const existing = await m15GetSettings();
+    const merged = { ...existing, ...body, id: 'default', badgeThresholds: { ...existing.badgeThresholds, ...(body.badgeThresholds || {}) }, updatedAt: new Date(), updatedBy: me.id };
+    const col = await getCollection('reviewSettings');
+    await col.updateOne({ id: 'default' }, { $set: merged }, { upsert: true });
+    m12LogFinanceAudit(me, 'review_settings_updated', { previous: existing, new: merged }).catch(() => {});
+    return ok({ settings: merged });
   }
 
   // Health
