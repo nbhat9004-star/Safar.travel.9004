@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Sparkles, Heart, Calendar, MessageCircle, Wand2, BookOpen, MapPin, Loader2, X,
-  Trash2, Wallet, Users, Phone,
+  Trash2, Wallet, Users, Phone, Bell,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
@@ -72,6 +72,12 @@ function TravelerDashboardInner() {
             <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Your travel hub</h1>
           </div>
           <div className="flex flex-wrap gap-3">
+            <Button asChild variant="outline" className="rounded-full font-semibold">
+              <Link href="/dashboard/traveler/messages"><MessageCircle className="size-4 mr-2" /> Messages</Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-full font-semibold">
+              <Link href="/notifications"><Bell className="size-4 mr-2" /> Notifications</Link>
+            </Button>
             <Button asChild variant="outline" className="rounded-full font-semibold">
               <Link href="/dashboard/traveler/bookings"><Calendar className="size-4 mr-2" /> My Bookings</Link>
             </Button>

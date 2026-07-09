@@ -243,7 +243,7 @@ export default function Navbar({ transparent = false }) {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-semibold text-sm">{notif.title}</div>
-                              <div className="text-xs text-muted-foreground mt-0.5">{notif.description}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">{notif.description || notif.body}</div>
                               <div className="text-[10px] text-muted-foreground mt-1">
                                 {new Date(notif.createdAt).toLocaleString()}
                               </div>
@@ -256,6 +256,12 @@ export default function Navbar({ transparent = false }) {
                       ))
                     )}
                   </div>
+                  <button
+                    onClick={() => { setShowNotifications(false); router.push('/notifications'); }}
+                    className="border-t p-3 text-sm font-semibold text-emerald2 hover:bg-secondary text-center"
+                  >
+                    View all notifications →
+                  </button>
                 </div>
               )}
             </div>

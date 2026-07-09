@@ -1299,6 +1299,26 @@ async function route(request, { params }) {
     // Module 12: create host earnings record (pending until hold period elapses)
     m12CreateHostEarnings(doc, listing).catch(() => {});
 
+    // Module 13: in-app notifications for booking creation
+    mkNotif({
+      userId: listing.hostId,
+      type: 'booking_created',
+      category: 'booking',
+      title: 'New booking request',
+      body: `${me.name} requested ${listing.title} · ${nights} night${nights === 1 ? '' : 's'} · ${g} guest${g === 1 ? '' : 's'}`,
+      link: `/dashboard/host?tab=bookings`,
+      meta: { bookingId: doc.bookingId, listingTitle: listing.title, listingId: listingId, amount: totalPrice },
+    }).catch(() => {});
+    mkNotif({
+      userId: me.id,
+      type: 'booking_created',
+      category: 'booking',
+      title: 'Booking request sent',
+      body: `Your request for ${listing.title} was sent to the host.`,
+      link: `/dashboard/traveler/bookings/${doc.bookingId}`,
+      meta: { bookingId: doc.bookingId, listingTitle: listing.title, listingId },
+    }).catch(() => {});
+
     // Update available counter (if multi-type)
     if (selectedType) {
       await listings.updateOne(
@@ -1451,6 +1471,43 @@ async function route(request, { params }) {
       m12RefundHostEarnings(id, me).catch(() => {});
     }
 
+    // Module 13: booking lifecycle notifications
+    if (status === 'approved') {
+      mkNotif({
+        userId: b.travelerId,
+        type: 'booking_confirmed',
+        category: 'booking',
+        title: 'Booking confirmed',
+        body: `${b.listingTitle} — Your booking has been confirmed by the host.`,
+        link: `/dashboard/traveler/bookings/${id}`,
+        meta: { bookingId: id, listingTitle: b.listingTitle, listingId: b.listingId },
+      }).catch(() => {});
+    } else if (status === 'rejected') {
+      mkNotif({
+        userId: b.travelerId,
+        type: 'booking_rejected',
+        category: 'booking',
+        title: 'Booking not accepted',
+        body: reason ? `${b.listingTitle} — ${reason}` : `${b.listingTitle} — Unfortunately your booking wasn't accepted.`,
+        link: `/dashboard/traveler/bookings/${id}`,
+        meta: { bookingId: id, listingTitle: b.listingTitle, reason: reason || null },
+      }).catch(() => {});
+    } else if (status === 'cancelled') {
+      // notify counter-party
+      const others = [b.travelerId, b.hostId].filter((uid) => uid && uid !== me.id);
+      others.forEach((uid) => {
+        mkNotif({
+          userId: uid,
+          type: 'booking_cancelled',
+          category: 'booking',
+          title: 'Booking cancelled',
+          body: `${b.listingTitle} — booking was cancelled.`,
+          link: `/dashboard/traveler/bookings/${id}`,
+          meta: { bookingId: id, listingTitle: b.listingTitle, cancelledBy: me.id },
+        }).catch(() => {});
+      });
+    }
+
     return ok({ booking: fresh });
   }
 
@@ -1516,6 +1573,26 @@ async function route(request, { params }) {
     } catch (e) { console.error('mkMessageNotif error', e); }
   };
 
+  // MODULE 13 — Generic notification helper (used across booking / payment / wallet events)
+  const mkNotif = async ({ userId, type, title, body, link = null, meta = {}, category = null }) => {
+    if (!userId) return;
+    try {
+      const notifications = await getCollection('notifications');
+      await notifications.insertOne({
+        id: uuid(),
+        userId,
+        type,
+        category: category || (String(type).split('_')[0]),
+        title: String(title || '').slice(0, 180),
+        body: String(body || '').slice(0, 500),
+        link,
+        meta: meta || {},
+        read: false,
+        createdAt: new Date(),
+      });
+    } catch (e) { console.error('mkNotif error', e); }
+  };
+
   // POST /api/bookings/:id/messages — send a message (traveler / host / admin)
   if (segments[0] === 'bookings' && segments[1] && segments[2] === 'messages' && method === 'POST') {
     const me = await getCurrentUser(request);
@@ -1529,8 +1606,11 @@ async function route(request, { params }) {
     }
     const body = await readBody(request);
     const text = String(body.text || body.message || '').trim();
-    if (!text) return err('Message text is required');
+    const imageUrl = body.imageUrl ? String(body.imageUrl).trim() : null;
+    const attachmentType = body.attachmentType || (imageUrl ? 'image' : null);
+    if (!text && !imageUrl) return err('Message text or attachment is required');
     if (text.length > 4000) return err('Message too long (max 4000 chars)');
+    if (imageUrl && imageUrl.length > 5000) return err('Attachment URL too long');
 
     const msg = {
       id: uuid(),
@@ -1541,6 +1621,8 @@ async function route(request, { params }) {
       // Denormalize participants for cheap indexed lookups later
       participantIds: [b.travelerId, b.hostId].filter(Boolean),
       text,
+      imageUrl,
+      attachmentType,
       createdAt: new Date(),
       readBy: [me.id], // sender counts as read
     };
@@ -1550,6 +1632,7 @@ async function route(request, { params }) {
 
     // Upsert lightweight conversation doc for fast list rendering.
     const convos = await getCollection('bookingConversations');
+    const preview = text || (imageUrl ? '📷 Photo' : '');
     await convos.updateOne(
       { bookingId: id },
       { $set: {
@@ -1560,8 +1643,9 @@ async function route(request, { params }) {
           listingId: b.listingId,
           listingTitle: b.listingTitle,
           listingImage: b.listingImage,
+          bookingStatus: b.status,
           lastMessageAt: msg.createdAt,
-          lastMessagePreview: text.slice(0, 200),
+          lastMessagePreview: preview.slice(0, 200),
           lastSenderId: me.id,
           lastSenderName: msg.senderName,
         },
@@ -1581,7 +1665,7 @@ async function route(request, { params }) {
     const admins = await users.find({ role: { $in: ['admin','super_admin'] } }, { projection: { id: 1 } }).toArray();
     admins.forEach(a => { if (a.id !== me.id) notifyIds.add(a.id); });
 
-    await Promise.all([...notifyIds].map(rid => mkMessageNotif(rid, me, b, text)));
+    await Promise.all([...notifyIds].map(rid => mkMessageNotif(rid, me, b, preview || 'sent an attachment')));
 
     // Email notification for traveler ↔ host (skip admins to avoid noise).
     // AWAITED (Vercel serverless email fix pattern established earlier).
@@ -1593,12 +1677,14 @@ async function route(request, { params }) {
     );
     const emailTasks = recipientUsers.filter(Boolean).filter(u => u.email).map(u => {
       const subject = `New message about ${b.listingTitle || 'your booking'}`;
+      const safeText = (text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const imageBlock = imageUrl ? `<div style="margin-top:12px"><img src="${imageUrl}" alt="attachment" style="max-width:100%;border-radius:8px" /></div>` : '';
       const html = `
         <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#1c1917">
           <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#059669;font-weight:700">Safar · New Message</div>
           <h1 style="font-size:24px;margin:8px 0 4px 0">${msg.senderName} sent you a message</h1>
           <div style="font-size:13px;color:#6b7280">About: ${b.listingTitle || 'Booking ' + id}</div>
-          <div style="margin:24px 0;padding:20px;background:#f8fafc;border-left:4px solid #10b981;border-radius:8px;font-size:15px;line-height:1.6;white-space:pre-wrap">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+          <div style="margin:24px 0;padding:20px;background:#f8fafc;border-left:4px solid #10b981;border-radius:8px;font-size:15px;line-height:1.6;white-space:pre-wrap">${safeText || '(sent an attachment)'}${imageBlock}</div>
           <a href="${process.env.NEXT_PUBLIC_BASE_URL || ''}/dashboard/traveler/bookings/${id}"
              style="display:inline-block;background:#10b981;color:#fff;padding:12px 24px;border-radius:9999px;font-weight:600;text-decoration:none">Reply on Safar</a>
           <div style="margin-top:32px;font-size:12px;color:#9ca3af">You're receiving this because you're a participant on booking #${id.slice(0,8)}.</div>
@@ -1740,6 +1826,16 @@ async function route(request, { params }) {
     }).catch(() => {});
     // Module 12: refund host earnings
     m12RefundHostEarnings(id, me).catch(() => {});
+    // Module 13: notify traveler about refund
+    mkNotif({
+      userId: booking.travelerId,
+      type: 'refund_issued',
+      category: 'payment',
+      title: 'Refund issued',
+      body: `A refund of ₹${(booking.totalPrice || 0).toLocaleString('en-IN')} has been issued for ${booking.listingTitle}.`,
+      link: `/dashboard/traveler/bookings/${id}`,
+      meta: { bookingId: id, amount: booking.totalPrice || 0 },
+    }).catch(() => {});
     return ok({ booking: fresh });
   }
 
@@ -6631,6 +6727,28 @@ Return ONLY valid JSON, no markdown.`;
       }
       const fresh = await col.findOne({ id }, { projection: { _id: 0 } });
       m12LogFinanceAudit(me, `host_payout_${action.replace('-', '_')}`, { payoutId: id, hostId: rec.hostId, amount: rec.amount, previousStatus: rec.status, newStatus, reason: body.reason || null }).catch(() => {});
+      // Module 13: notify host on payout status change
+      if (newStatus === 'paid') {
+        mkNotif({
+          userId: rec.hostId,
+          type: 'host_payout_completed',
+          category: 'payout',
+          title: 'Payout completed',
+          body: `Your payout of ₹${(rec.amount || 0).toLocaleString('en-IN')} has been processed.`,
+          link: `/dashboard/host?tab=payouts`,
+          meta: { payoutId: id, amount: rec.amount, method: rec.method },
+        }).catch(() => {});
+      } else if (newStatus === 'rejected') {
+        mkNotif({
+          userId: rec.hostId,
+          type: 'host_payout_rejected',
+          category: 'payout',
+          title: 'Payout rejected',
+          body: body.reason ? `Payout was rejected: ${body.reason}` : 'Your recent payout request was rejected by admin.',
+          link: `/dashboard/host?tab=payouts`,
+          meta: { payoutId: id, reason: body.reason || null },
+        }).catch(() => {});
+      }
       return ok({ payout: fresh });
     }
   }
@@ -6712,6 +6830,170 @@ Return ONLY valid JSON, no markdown.`;
     const col = await getCollection('financeAuditLog');
     const list = await col.find({}, { projection: { _id: 0 } }).sort({ timestamp: -1 }).limit(limit).toArray();
     return ok({ logs: list });
+  }
+
+  // ============================================================================
+  // MODULE 13 — Communication Center (endpoints)
+  // ============================================================================
+
+  // DELETE /api/notifications/:id
+  if (path.match(/^\/notifications\/([^/]+)$/) && method === 'DELETE') {
+    const notificationId = path.match(/^\/notifications\/([^/]+)$/)[1];
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const notifications = await getCollection('notifications');
+    // Only allow deleting own notifications
+    const r = await notifications.deleteOne({ id: notificationId, userId: me.id });
+    return ok({ deleted: r.deletedCount === 1 });
+  }
+
+  // POST /api/notifications/delete-all-read — delete all read notifications for user
+  if (path === '/notifications/delete-all-read' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const notifications = await getCollection('notifications');
+    const r = await notifications.deleteMany({ userId: me.id, read: true });
+    return ok({ deleted: r.deletedCount });
+  }
+
+  // GET /api/me/inbox-summary — quick unread counts for bell + messages badge
+  if (path === '/me/inbox-summary' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const [notifications, msgs] = await Promise.all([getCollection('notifications'), getCollection('bookingMessages')]);
+    const [unreadNotif, unreadMsgs] = await Promise.all([
+      notifications.countDocuments({ userId: me.id, read: false }),
+      msgs.countDocuments({ participantIds: me.id, senderId: { $ne: me.id }, readBy: { $ne: me.id } }),
+    ]);
+    return ok({ unreadNotifications: unreadNotif, unreadMessages: unreadMsgs });
+  }
+
+  // ------------------- SUPER ADMIN COMMUNICATION CENTER -------------------
+
+  // GET /api/admin/broadcasts?status=active|expired|all
+  if (path === '/admin/broadcasts' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status') || 'all';
+    const col = await getCollection('adminBroadcasts');
+    const now = new Date();
+    const filter = {};
+    if (status === 'active') filter.$and = [{ $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] }, { $or: [{ scheduledFor: null }, { scheduledFor: { $lte: now } }] }];
+    if (status === 'expired') filter.expiresAt = { $lte: now };
+    if (status === 'scheduled') filter.scheduledFor = { $gt: now };
+    const list = await col.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
+    return ok({ broadcasts: list });
+  }
+
+  // POST /api/admin/broadcasts — create + immediately fan-out (or schedule)
+  if (path === '/admin/broadcasts' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    const title = String(b.title || '').trim();
+    const message = String(b.message || b.body || '').trim();
+    if (!title || !message) return err('title and message are required');
+    const audience = b.audience || 'all'; // 'all' | 'travelers' | 'hosts' | 'admins' | 'selected'
+    const userIds = Array.isArray(b.userIds) ? b.userIds : [];
+    const scheduledFor = b.scheduledFor ? new Date(b.scheduledFor) : null;
+    const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null;
+    const category = b.category || 'announcement';
+    const link = b.link || null;
+
+    const broadcast = {
+      id: uuid(),
+      title,
+      message,
+      audience,
+      userIds: audience === 'selected' ? userIds : [],
+      scheduledFor,
+      expiresAt,
+      category,
+      link,
+      createdBy: me.id,
+      createdByName: me.name || me.email,
+      createdByRole: me.role,
+      createdAt: new Date(),
+      dispatchedAt: null,
+      recipientCount: 0,
+      status: scheduledFor && scheduledFor > new Date() ? 'scheduled' : 'sent',
+    };
+
+    // Resolve recipients unless scheduled for later
+    let recipientCount = 0;
+    const users = await getCollection('users');
+    const notifications = await getCollection('notifications');
+    if (broadcast.status === 'sent') {
+      let targets = [];
+      if (audience === 'all') {
+        targets = await users.find({}, { projection: { id: 1, _id: 0 } }).toArray();
+      } else if (audience === 'travelers') {
+        targets = await users.find({ role: { $in: ['traveler', 'user', null] } }, { projection: { id: 1, _id: 0 } }).toArray();
+      } else if (audience === 'hosts') {
+        targets = await users.find({ role: 'host' }, { projection: { id: 1, _id: 0 } }).toArray();
+      } else if (audience === 'admins') {
+        targets = await users.find({ role: { $in: ['admin', 'super_admin'] } }, { projection: { id: 1, _id: 0 } }).toArray();
+      } else if (audience === 'selected') {
+        targets = userIds.map((uid) => ({ id: uid }));
+      }
+      const docs = targets.filter(t => t.id).map((t) => ({
+        id: uuid(),
+        userId: t.id,
+        type: 'system_announcement',
+        category,
+        title,
+        body: message,
+        link,
+        meta: { broadcastId: broadcast.id, audience },
+        read: false,
+        createdAt: new Date(),
+      }));
+      if (docs.length) {
+        try { await notifications.insertMany(docs, { ordered: false }); } catch (e) { console.error('broadcast insertMany', e); }
+      }
+      recipientCount = docs.length;
+      broadcast.dispatchedAt = new Date();
+      broadcast.recipientCount = recipientCount;
+    }
+
+    const col = await getCollection('adminBroadcasts');
+    await col.insertOne({ ...broadcast });
+    // Audit log
+    m12LogFinanceAudit(me, 'broadcast_sent', { broadcastId: broadcast.id, audience, recipientCount, title, scheduled: !!scheduledFor }).catch(() => {});
+    return ok({ broadcast: { ...broadcast, recipientCount } }, 201);
+  }
+
+  // DELETE /api/admin/broadcasts/:id
+  if (path.match(/^\/admin\/broadcasts\/([^/]+)$/) && method === 'DELETE') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const bid = path.match(/^\/admin\/broadcasts\/([^/]+)$/)[1];
+    const col = await getCollection('adminBroadcasts');
+    await col.deleteOne({ id: bid });
+    // Also delete notifications spawned by this broadcast (optional, keep notifications for user history)
+    const notifications = await getCollection('notifications');
+    await notifications.deleteMany({ 'meta.broadcastId': bid });
+    m12LogFinanceAudit(me, 'broadcast_deleted', { broadcastId: bid }).catch(() => {});
+    return ok({ deleted: true });
+  }
+
+  // GET /api/admin/users/search?role=&q=
+  if (path === '/admin/users/search' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['admin', 'super_admin']); if (!g.ok) return err(g.error, g.status);
+    const url = new URL(request.url);
+    const q = (url.searchParams.get('q') || '').trim();
+    const role = url.searchParams.get('role') || '';
+    const filter = {};
+    if (role) filter.role = role;
+    if (q) {
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ name: re }, { email: re }];
+    }
+    const users = await getCollection('users');
+    const list = await users.find(filter, { projection: { _id: 0, id: 1, name: 1, email: 1, role: 1 } }).limit(30).toArray();
+    return ok({ users: list });
   }
 
   // Health

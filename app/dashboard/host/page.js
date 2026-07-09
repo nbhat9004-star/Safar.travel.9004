@@ -12,6 +12,7 @@ import ProtectedRoute from '@/components/safar/ProtectedRoute';
 import ProfileSettings from '@/components/safar/ProfileSettings';
 import HostEarnings from '@/components/safar/HostEarnings';
 import HostPayoutSettings from '@/components/safar/HostPayoutSettings';
+import ConversationsPanel from '@/components/safar/ConversationsPanel';
 import { useAuth } from '@/lib/auth-context';
 import { listingsApi, bookingsApi } from '@/lib/listings-api';
 
@@ -281,8 +282,9 @@ function HostDashboardInner() {
         </div>
 
         <Tabs defaultValue="dashboard" className="mt-8">
-          <TabsList className="grid w-full max-w-4xl grid-cols-3 sm:grid-cols-6 h-auto">
+          <TabsList className="grid w-full max-w-5xl grid-cols-3 sm:grid-cols-7 h-auto">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="inbox">💬 Inbox</TabsTrigger>
             <TabsTrigger value="earnings">💰 Earnings</TabsTrigger>
             <TabsTrigger value="payouts">🏦 Payouts</TabsTrigger>
             <TabsTrigger value="ai-growth">📈 AI Growth</TabsTrigger>
@@ -390,6 +392,11 @@ function HostDashboardInner() {
         </section>
           </TabsContent>
           
+          {/* MODULE 13 — Inbox Tab */}
+          <TabsContent value="inbox" className="space-y-4">
+            <ConversationsPanel role="host" />
+          </TabsContent>
+
           {/* MODULE 12 — Earnings Tab */}
           <TabsContent value="earnings" className="space-y-6">
             <HostEarnings myListings={myListings} />
