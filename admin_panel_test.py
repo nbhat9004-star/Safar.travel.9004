@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta
 
 # Base URL from supervisor config
-BASE_URL = "https://deploy-fix-142.preview.emergentagent.com/api"
+BASE_URL = "https://circle-safar.preview.emergentagent.com/api"
 
 # Test results
 results = {

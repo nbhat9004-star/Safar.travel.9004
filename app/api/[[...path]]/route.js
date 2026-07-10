@@ -9664,6 +9664,435 @@ Return ONLY valid JSON, no markdown.`;
     }
   }
 
+  // ============================================================================
+  // SAFAR CIRCLE — Module 1: Journey Creation Engine, Discovery, Studio
+  // ============================================================================
+  // Collections: circle_journeys (new). Reuses users, listings (marketplace).
+  // Endpoints: /api/circle/*
+  //   POST   /circle/journeys                 create draft
+  //   GET    /circle/journeys                 discover (public + filters)
+  //   GET    /circle/journeys/mine            list my own
+  //   GET    /circle/journeys/id/:id          get by id (owner/admin can see any status)
+  //   GET    /circle/journeys/slug/:slug      get by slug (public only unless owner)
+  //   PUT    /circle/journeys/:id             update
+  //   DELETE /circle/journeys/:id             delete
+  //   PATCH  /circle/journeys/:id/visibility  change visibility (draft/public/private/invite/scheduled)
+  //   GET    /circle/marketplace              live proxy of approved listings (grouped by category)
+  //   GET    /circle/passport                 basic traveler passport data for current user
+  // ============================================================================
+  const CIRCLE_THEMES = ['adventure','luxury','photography','family','food','spiritual','bike_expedition','backpacking','weekend_escape','road_trip'];
+  const CIRCLE_VISIBILITY = ['draft','public','private','invite','scheduled'];
+  const CIRCLE_DIFFICULTY = ['easy','moderate','challenging','expert'];
+
+  const slugify = (s) => String(s || '').toLowerCase().trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 60) || 'journey';
+
+  async function ensureUniqueSlug(base) {
+    const col = await getCollection('circle_journeys');
+    let slug = base; let i = 1;
+    while (await col.findOne({ slug })) { i++; slug = `${base}-${i}`; }
+    return slug;
+  }
+
+  async function ensureCircleIndexes() {
+    try {
+      const col = await getCollection('circle_journeys');
+      await col.createIndex({ id: 1 }, { unique: true });
+      await col.createIndex({ slug: 1 }, { unique: true });
+      await col.createIndex({ curatorId: 1, updatedAt: -1 });
+      await col.createIndex({ visibility: 1, publishedAt: -1 });
+    } catch {}
+  }
+
+  function computeEstimate(services = [], maxMembers = 1, days = 1) {
+    const safeMembers = Math.max(1, Number(maxMembers) || 1);
+    const safeDays = Math.max(1, Number(days) || 1);
+    let subtotal = 0;
+    for (const s of services) {
+      const price = Number(s.price) || 0;
+      const qty = Number(s.qty) || 1;
+      // 'stay' pricing multiplies by nights; everything else is treated as one-time per group.
+      const isStay = (s.category || '').toLowerCase() === 'stay';
+      subtotal += isStay ? price * safeDays * qty : price * qty;
+    }
+    const platformFeePct = 0.03; // 3%
+    const platformFee = Math.round(subtotal * platformFeePct);
+    const taxes = Math.round(subtotal * 0.05); // 5% GST placeholder
+    const total = subtotal + platformFee + taxes;
+    const perPerson = Math.round(total / safeMembers);
+    const totalGroup = total;
+    const estimatedSavings = Math.round(subtotal * 0.08); // 8% "estimated" via credits
+    return {
+      subtotal,
+      platformFee,
+      platformFeePct,
+      taxes,
+      totalGroup,
+      perPerson,
+      estimatedSavings,
+      currency: 'INR',
+      days: safeDays,
+      members: safeMembers,
+    };
+  }
+
+  if (path.startsWith('/circle')) {
+    await ensureCircleIndexes();
+    const me = await getCurrentUser(request);
+    const journeys = await getCollection('circle_journeys');
+
+    // -------- Live marketplace proxy --------
+    // GET /api/circle/marketplace  -> live approved listings, optionally filtered.
+    if (path === '/circle/marketplace' && method === 'GET') {
+      const listings = await getCollection('listings');
+      const filter = { status: 'approved' };
+      const category = url.searchParams.get('category');
+      const subcategory = url.searchParams.get('subcategory');
+      const location = url.searchParams.get('location');
+      const q = url.searchParams.get('q');
+      const minPriceRaw = url.searchParams.get('minPrice');
+      const maxPriceRaw = url.searchParams.get('maxPrice');
+      const minPrice = minPriceRaw != null && minPriceRaw !== '' ? Number(minPriceRaw) : NaN;
+      const maxPrice = maxPriceRaw != null && maxPriceRaw !== '' ? Number(maxPriceRaw) : NaN;
+      const verified = url.searchParams.get('verified');
+      const instant = url.searchParams.get('instantBook');
+      const limit = Math.min(Number(url.searchParams.get('limit')) || 60, 120);
+      if (category) filter.category = category;
+      if (subcategory) filter.subcategory = subcategory;
+      if (location) filter.location = { $regex: location, $options: 'i' };
+      if (q) filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { location: { $regex: q, $options: 'i' } },
+        { subcategory: { $regex: q, $options: 'i' } },
+      ];
+      if (!isNaN(minPrice) || !isNaN(maxPrice)) {
+        filter.price = {};
+        if (!isNaN(minPrice)) filter.price.$gte = minPrice;
+        if (!isNaN(maxPrice)) filter.price.$lte = maxPrice;
+      }
+      if (verified === 'true') filter['host.verified'] = true;
+      if (instant === 'true') filter.instantBook = true;
+      const docs = await listings
+        .find(filter, { projection: { _id: 0, passwordHash: 0 } })
+        .sort({ rating: -1, createdAt: -1 })
+        .limit(limit)
+        .toArray();
+      // Group by category for the picker UI
+      const grouped = {};
+      for (const d of docs) {
+        const cat = d.subcategory || d.category || 'other';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push({
+          id: d.id,
+          title: d.title,
+          category: d.category,
+          subcategory: d.subcategory,
+          location: d.location,
+          price: d.price || d.displayPrice || 0,
+          image: (d.images && d.images[0]) || d.image || null,
+          rating: d.rating || 0,
+          reviews: d.reviews || 0,
+          hostId: d.hostId,
+          hostName: d.hostName || d.host?.name || 'Safar Host',
+          superhost: d.superhost || d.host?.verified || false,
+          instantBook: d.instantBook || false,
+          duration: d.duration,
+        });
+      }
+      return ok({ listings: docs.map(d => ({
+        id: d.id, title: d.title, category: d.category, subcategory: d.subcategory,
+        location: d.location, price: d.price || d.displayPrice || 0,
+        image: (d.images && d.images[0]) || d.image || null,
+        rating: d.rating || 0, reviews: d.reviews || 0,
+        hostId: d.hostId, hostName: d.hostName || d.host?.name || 'Safar Host',
+        superhost: d.superhost || d.host?.verified || false,
+        instantBook: d.instantBook || false, duration: d.duration,
+      })), grouped, total: docs.length });
+    }
+
+    // -------- Estimator (rule-based) --------
+    if (path === '/circle/estimate' && method === 'POST') {
+      const b = await readBody(request);
+      const services = Array.isArray(b.services) ? b.services : [];
+      const days = Number(b.days) || 1;
+      const members = Number(b.maxMembers) || 1;
+      return ok({ estimate: computeEstimate(services, members, days) });
+    }
+
+    // -------- Traveler Passport --------
+    if (path === '/circle/passport' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      // Basic passport data from existing user + journeys they curated
+      const curated = await journeys.find({ curatorId: me.id }, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).limit(50).toArray();
+      const publishedCount = curated.filter(j => j.visibility === 'public').length;
+      const uniqueDestinations = new Set(curated.map(j => j.destination?.name).filter(Boolean));
+      const uniqueDistricts = new Set(curated.map(j => j.destination?.district).filter(Boolean));
+      const badges = [];
+      if (publishedCount >= 1) badges.push({ id: 'first-journey', name: 'First Journey', emoji: '✨' });
+      if (publishedCount >= 5) badges.push({ id: 'five-journeys', name: 'Trail Blazer', emoji: '🔥' });
+      if (uniqueDestinations.size >= 3) badges.push({ id: 'multi-dest', name: 'Explorer', emoji: '🧭' });
+      if (me.emailVerified) badges.push({ id: 'verified', name: 'Verified Traveler', emoji: '✅' });
+      return ok({
+        passport: {
+          name: me.name,
+          email: me.email,
+          avatar: me.avatar,
+          role: me.role,
+          verified: !!me.emailVerified,
+          memberSince: me.createdAt,
+          journeysCurated: curated.length,
+          journeysPublished: publishedCount,
+          countries: 1, // India only for now
+          cities: uniqueDestinations.size,
+          districts: uniqueDistricts.size,
+          badges,
+          reviews: 0,
+          reputation: publishedCount * 10 + badges.length * 5,
+        },
+        recentJourneys: curated.slice(0, 6).map(j => ({
+          id: j.id, slug: j.slug, name: j.name, cover: j.cover,
+          theme: j.theme, destination: j.destination, visibility: j.visibility,
+          updatedAt: j.updatedAt,
+        })),
+      });
+    }
+
+    // -------- Create journey --------
+    if (path === '/circle/journeys' && method === 'POST') {
+      if (!me) return err('Sign in to create a journey', 401);
+      const b = await readBody(request);
+      const name = (b.name || '').trim();
+      if (name.length < 3) return err('Journey name must be at least 3 characters');
+      if (b.theme && !CIRCLE_THEMES.includes(b.theme)) return err('Invalid theme');
+      if (b.visibility && !CIRCLE_VISIBILITY.includes(b.visibility)) return err('Invalid visibility');
+      if (b.difficulty && !CIRCLE_DIFFICULTY.includes(b.difficulty)) return err('Invalid difficulty');
+      const services = Array.isArray(b.services) ? b.services : [];
+      const dest = b.destination || {};
+      // India-only guard (schema allows country later)
+      const country = (dest.country || 'India');
+      if (country !== 'India') return err('Only India destinations are supported at this time');
+      const startDate = b.startDate ? new Date(b.startDate) : null;
+      const endDate = b.endDate ? new Date(b.endDate) : null;
+      let days = 1;
+      if (startDate && endDate && endDate > startDate) {
+        days = Math.max(1, Math.ceil((endDate - startDate) / 86400000));
+      }
+      const maxMembers = Math.max(1, Math.min(50, Number(b.maxMembers) || 6));
+      const estimate = computeEstimate(services, maxMembers, days);
+      const baseSlug = slugify(name);
+      const slug = await ensureUniqueSlug(baseSlug);
+      const now = new Date();
+      const doc = {
+        id: uuid(),
+        slug,
+        curatorId: me.id,
+        curatorName: me.name,
+        curatorAvatar: me.avatar || null,
+        curatorRole: me.role,
+        name,
+        description: (b.description || '').trim(),
+        cover: b.cover || null,
+        theme: b.theme || 'weekend_escape',
+        destination: {
+          name: (dest.name || '').trim(),
+          district: (dest.district || '').trim(),
+          state: (dest.state || '').trim(),
+          country,
+          lat: Number(dest.lat) || null,
+          lng: Number(dest.lng) || null,
+        },
+        startDate, endDate,
+        isFlexibleDates: !!b.isFlexibleDates,
+        maxMembers,
+        budget: Number(b.budget) || null,
+        difficulty: b.difficulty || 'moderate',
+        agePreference: b.agePreference || null,
+        genderPreference: b.genderPreference || null,
+        languages: Array.isArray(b.languages) ? b.languages.slice(0, 8) : [],
+        services: services.slice(0, 30).map(s => ({
+          listingId: s.listingId,
+          category: s.category,
+          subcategory: s.subcategory,
+          title: s.title,
+          image: s.image,
+          price: Number(s.price) || 0,
+          hostName: s.hostName || null,
+          notes: (s.notes || '').slice(0, 240),
+          addedAt: now,
+        })),
+        estimate,
+        visibility: b.visibility && CIRCLE_VISIBILITY.includes(b.visibility) ? b.visibility : 'draft',
+        scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : null,
+        publishedAt: b.visibility === 'public' ? now : null,
+        viewsCount: 0,
+        likesCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await journeys.insertOne(doc);
+      const { _id, ...rest } = doc;
+      return ok({ journey: rest }, 201);
+    }
+
+    // -------- Discover / list journeys --------
+    if (path === '/circle/journeys' && method === 'GET') {
+      const filter = {};
+      const view = url.searchParams.get('view'); // 'discover' | 'all'
+      const theme = url.searchParams.get('theme');
+      const destination = url.searchParams.get('destination');
+      const district = url.searchParams.get('district');
+      const minBudgetRaw = url.searchParams.get('minBudget');
+      const maxBudgetRaw = url.searchParams.get('maxBudget');
+      const minBudget = minBudgetRaw != null && minBudgetRaw !== '' ? Number(minBudgetRaw) : NaN;
+      const maxBudget = maxBudgetRaw != null && maxBudgetRaw !== '' ? Number(maxBudgetRaw) : NaN;
+      const difficulty = url.searchParams.get('difficulty');
+      const limit = Math.min(Number(url.searchParams.get('limit')) || 24, 60);
+      // Discover only shows public + published (not scheduled in future)
+      filter.visibility = 'public';
+      const now = new Date();
+      filter.$or = [{ publishedAt: { $ne: null, $lte: now } }, { scheduledFor: { $lte: now } }];
+      if (theme) filter.theme = theme;
+      if (destination) filter['destination.name'] = { $regex: destination, $options: 'i' };
+      if (district) filter['destination.district'] = { $regex: district, $options: 'i' };
+      if (difficulty) filter.difficulty = difficulty;
+      if (!isNaN(minBudget) || !isNaN(maxBudget)) {
+        filter.budget = {};
+        if (!isNaN(minBudget)) filter.budget.$gte = minBudget;
+        if (!isNaN(maxBudget)) filter.budget.$lte = maxBudget;
+      }
+      const docs = await journeys.find(filter, { projection: { _id: 0 } })
+        .sort({ publishedAt: -1, createdAt: -1 })
+        .limit(limit)
+        .toArray();
+      return ok({ journeys: docs, total: docs.length });
+    }
+
+    // -------- My journeys (Studio) --------
+    if (path === '/circle/journeys/mine' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const status = url.searchParams.get('visibility');
+      const filter = { curatorId: me.id };
+      if (status && CIRCLE_VISIBILITY.includes(status)) filter.visibility = status;
+      const docs = await journeys.find(filter, { projection: { _id: 0 } })
+        .sort({ updatedAt: -1 }).limit(100).toArray();
+      const stats = {
+        total: docs.length,
+        drafts: docs.filter(d => d.visibility === 'draft').length,
+        published: docs.filter(d => d.visibility === 'public').length,
+        private: docs.filter(d => d.visibility === 'private' || d.visibility === 'invite').length,
+        scheduled: docs.filter(d => d.visibility === 'scheduled').length,
+        totalServices: docs.reduce((n, j) => n + (j.services?.length || 0), 0),
+        totalViews: docs.reduce((n, j) => n + (j.viewsCount || 0), 0),
+      };
+      return ok({ journeys: docs, stats });
+    }
+
+    // -------- Get by id --------
+    const idMatch = path.match(/^\/circle\/journeys\/id\/([\w-]+)$/);
+    if (idMatch && method === 'GET') {
+      const id = idMatch[1];
+      const doc = await journeys.findOne({ id }, { projection: { _id: 0 } });
+      if (!doc) return err('Journey not found', 404);
+      const isOwner = me && me.id === doc.curatorId;
+      const isAdmin = me && (me.role === 'admin' || me.role === 'super_admin');
+      if (doc.visibility !== 'public' && !isOwner && !isAdmin) return err('Journey not found', 404);
+      return ok({ journey: doc });
+    }
+
+    // -------- Get by slug --------
+    const slugMatch = path.match(/^\/circle\/journeys\/slug\/([\w-]+)$/);
+    if (slugMatch && method === 'GET') {
+      const slug = slugMatch[1];
+      const doc = await journeys.findOne({ slug }, { projection: { _id: 0 } });
+      if (!doc) return err('Journey not found', 404);
+      const isOwner = me && me.id === doc.curatorId;
+      const isAdmin = me && (me.role === 'admin' || me.role === 'super_admin');
+      if (doc.visibility !== 'public' && !isOwner && !isAdmin) return err('Journey not found', 404);
+      // increment views (fire-and-forget) — only for non-owner public views
+      if (!isOwner && doc.visibility === 'public') {
+        journeys.updateOne({ id: doc.id }, { $inc: { viewsCount: 1 } }).catch(() => {});
+      }
+      return ok({ journey: doc });
+    }
+
+    // -------- Update / Delete / Visibility --------
+    const anyIdMatch = path.match(/^\/circle\/journeys\/([\w-]+)(\/visibility)?$/);
+    if (anyIdMatch) {
+      const jid = anyIdMatch[1];
+      const isVisibilityRoute = !!anyIdMatch[2];
+      if (['mine','marketplace','estimate','passport'].includes(jid)) {
+        // guard: these are actual routes, not ids
+      } else {
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const isOwner = me && me.id === doc.curatorId;
+        const isAdmin = me && (me.role === 'admin' || me.role === 'super_admin');
+        if (!isOwner && !isAdmin) return err('You cannot modify this journey', 403);
+
+        if (isVisibilityRoute && method === 'PATCH') {
+          const b = await readBody(request);
+          if (!CIRCLE_VISIBILITY.includes(b.visibility)) return err('Invalid visibility');
+          const set = { visibility: b.visibility, updatedAt: new Date() };
+          if (b.visibility === 'public' && !doc.publishedAt) set.publishedAt = new Date();
+          if (b.visibility === 'scheduled' && b.scheduledFor) set.scheduledFor = new Date(b.scheduledFor);
+          await journeys.updateOne({ id: jid }, { $set: set });
+          return ok({ id: jid, visibility: b.visibility });
+        }
+
+        if (method === 'DELETE') {
+          await journeys.deleteOne({ id: jid });
+          return ok({ deleted: true });
+        }
+
+        if (method === 'PUT') {
+          const b = await readBody(request);
+          const set = { updatedAt: new Date() };
+          const allowed = ['name','description','cover','theme','destination','isFlexibleDates','maxMembers','budget','difficulty','agePreference','genderPreference','languages','services','startDate','endDate','visibility'];
+          for (const k of allowed) if (k in b) set[k] = b[k];
+          if (set.startDate) set.startDate = new Date(set.startDate);
+          if (set.endDate) set.endDate = new Date(set.endDate);
+          if (set.theme && !CIRCLE_THEMES.includes(set.theme)) return err('Invalid theme');
+          if (set.visibility && !CIRCLE_VISIBILITY.includes(set.visibility)) return err('Invalid visibility');
+          if (set.difficulty && !CIRCLE_DIFFICULTY.includes(set.difficulty)) return err('Invalid difficulty');
+          if (set.destination) {
+            if ((set.destination.country || 'India') !== 'India') return err('Only India destinations are supported at this time');
+            set.destination = {
+              name: (set.destination.name || doc.destination?.name || '').trim(),
+              district: (set.destination.district || doc.destination?.district || '').trim(),
+              state: (set.destination.state || doc.destination?.state || '').trim(),
+              country: 'India',
+              lat: set.destination.lat != null ? Number(set.destination.lat) : (doc.destination?.lat || null),
+              lng: set.destination.lng != null ? Number(set.destination.lng) : (doc.destination?.lng || null),
+            };
+          }
+          if (Array.isArray(set.services)) {
+            set.services = set.services.slice(0, 30).map(s => ({
+              listingId: s.listingId, category: s.category, subcategory: s.subcategory,
+              title: s.title, image: s.image, price: Number(s.price) || 0,
+              hostName: s.hostName || null, notes: (s.notes || '').slice(0, 240),
+              addedAt: s.addedAt ? new Date(s.addedAt) : new Date(),
+            }));
+          }
+          // recompute estimate
+          const services = set.services || doc.services || [];
+          const startD = set.startDate || doc.startDate;
+          const endD = set.endDate || doc.endDate;
+          let days = 1;
+          if (startD && endD && endD > startD) days = Math.max(1, Math.ceil((endD - startD) / 86400000));
+          const members = set.maxMembers || doc.maxMembers || 1;
+          set.estimate = computeEstimate(services, members, days);
+          if (set.visibility === 'public' && !doc.publishedAt) set.publishedAt = new Date();
+          await journeys.updateOne({ id: jid }, { $set: set });
+          const updated = await journeys.findOne({ id: jid }, { projection: { _id: 0 } });
+          return ok({ journey: updated });
+        }
+      }
+    }
+  }
+
   // Health
   if (path === '/health' || path === '/' || path === '') {
     return ok({ service: 'Safar API', message: 'Online' });
