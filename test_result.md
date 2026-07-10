@@ -103,16 +103,318 @@
 #====================================================================================================
 
 user_problem_statement: |
-  AUTH FINALIZATION TASK: Verify that Resend email authentication flows are working correctly.
-  Test email/password signup with verification email, email verification link flow, login after
-  verification, password reset email, and Google Sign-In. Environment variables (RESEND_API_KEY,
-  FROM_EMAIL, SUPPORT_EMAIL, NEXT_PUBLIC_BASE_URL) are configured in Vercel production.
-  Report PASS/FAIL for each feature. Fix only critical blockers.
+  SAFAR CIRCLE — MOBILE UI POLISH ONLY (no functional changes).
+  Fix the following mobile UI bugs in Safar Circle Module 1:
+  1. Bottom navigation shifts horizontally when switching between Discover/Create/Studio/Passport.
+     Nav container must stay permanently fixed at bottom-center; only the active icon animates.
+     Constant width, equal spacing, position:fixed with left:50% + translateX(-50%),
+     raised ~20px above bottom.
+  2. Horizontal overflow after using hamburger menu — pages become wider than viewport with
+     white area on the right. Ensure html/body/app-root are width:100%; max-width:100%;
+     overflow-x:hidden; replace 100vw with 100% where relevant. No margins/transforms/absolute
+     positioning may cause overflow.
+  3. Hamburger drawer must behave like a proper drawer: full-screen dark blurred backdrop,
+     auto-closes on link click, prevents background scroll while open, no partial layout shift.
+  4. Verify mobile responsiveness of /circle, /circle/discover, /circle/create, /circle/studio,
+     /circle/passport, /circle/j/[slug]. No horizontal scrolling, no right-side white space,
+     no moving bottom nav, consistent spacing.
+  Constraints: preserve current design/animations/glassmorphism; do NOT change functionality,
+  backend, APIs, DB, routes, or business logic.
 
-backend:
-  - task: "Auth API endpoints (register/login/logout/me) at /api/auth/*"
+test_plan:
+  current_focus:
+    - "Safar Circle — Mobile UI polish (bottom nav, overflow, drawer)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+frontend:
+  - task: "Safar Circle — Mobile UI polish (bottom nav, overflow, drawer)"
     implemented: true
-    working: true
+    working: false
+    file: "/app/components/circle/CircleNav.jsx, /app/app/circle/circle.css"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: |
+          MOBILE UI TESTING COMPLETE — 1 CRITICAL ISSUE FOUND (Scroll Lock)
+          
+          Test Date: 2026-07-10
+          Test Method: Playwright browser automation at mobile viewports (390×844, 375×667)
+          Test Coverage: All 6 URLs tested (/circle, /discover, /create, /studio, /passport, /j/[slug])
+          
+          ✅ PASS — Horizontal Overflow (Check A):
+          - ALL pages have NO horizontal overflow
+          - document.documentElement.scrollWidth === clientWidth on all pages
+          - document.body.getBoundingClientRect().right === window.innerWidth
+          - Tested on 390×844 and 375×667 viewports
+          - Aurora background and orbs stay within viewport bounds
+          
+          ✅ PASS — Bottom Navigation Stability (Check B):
+          - Bottom nav is perfectly centered on all pages (centerDiff: 0.00px)
+          - Distance from bottom: 20px (within 15-40px range)
+          - Nav dimensions are CONSTANT across all routes:
+            * Discover: left=70.0, right=320.0, width=250.0
+            * Create: left=70.0, right=320.0, width=250.0
+            * Studio: left=70.0, right=320.0, width=250.0
+            * Passport: left=70.0, right=320.0, width=250.0
+          - Container does NOT shift as active icon changes
+          - Exactly one child has data-active="true" on each route (except /circle landing)
+          - Active href matches current route
+          
+          ✅ PASS — Mobile Drawer (Check C - Partial):
+          - Drawer opens correctly with backdrop and floating panel
+          - .circle-drawer-backdrop and .circle-drawer both exist in DOM when open
+          - document.body.classList.contains('circle-drawer-open') is true
+          - Drawer closes on link click AND route changes correctly
+          - Drawer closes on backdrop click
+          - Both drawer + backdrop removed from DOM after close
+          - No horizontal overflow after drawer navigation
+          
+          ❌ FAIL — Scroll Lock (Check C - CRITICAL):
+          - Page DOES scroll even with drawer open
+          - Attempted scroll by 400px → actual scroll: 400px (should be ~0px)
+          - CSS rule exists: body:has(.circle-drawer-open): overflow: hidden;
+          - But computed style shows: overflow: hidden auto (not just hidden)
+          - Root cause: The :has() selector or overflow rule is not preventing scroll
+          - Impact: Users can scroll the background page while drawer is open (poor UX)
+          
+          ✅ PASS — Design Integrity (Check D):
+          - Landing hero: Gradient text "Worth Joining." visible, aurora background present
+          - Discover: Journey cards visible in single column, no overflow
+          - Create wizard: 4-step stepper visible (horizontal scroll within stepper is expected)
+          - Drawer: Full-bleed backdrop with blur, floating panel with rounded corners
+          - Bottom nav: Glassmorphic pill with gradient active state
+          
+          ✅ PASS — Desktop Regression (Check E):
+          - Bottom nav hidden on desktop (md:hidden working)
+          - Header nav visible on desktop
+          - Page renders correctly
+          
+          MINOR NOTES (Not Failures):
+          - Landing page (/circle) has 0 active links in bottom nav — this is CORRECT because /circle is not in the bottom nav (only Discover/Create/Studio/Passport are)
+          - Journey preview pages DO show bottom nav (tested with /circle/j/mobile-test-journey)
+          
+          TEST MATRIX SUMMARY:
+          
+          | URL                  | Overflow | Nav Centered | Nav Stable | Active Link |
+          |----------------------|----------|--------------|------------|-------------|
+          | /circle              | PASS     | PASS         | N/A        | N/A (0)     |
+          | /circle/discover     | PASS     | PASS         | PASS       | PASS        |
+          | /circle/create       | PASS     | PASS         | PASS       | PASS        |
+          | /circle/studio       | PASS     | PASS         | PASS       | PASS        |
+          | /circle/passport     | PASS     | PASS         | PASS       | PASS        |
+          | /circle/j/[slug]     | PASS     | PASS         | N/A        | N/A         |
+          
+          | Drawer Test          | Result   |
+          |----------------------|----------|
+          | Opens with backdrop  | PASS     |
+          | Body class added     | PASS     |
+          | Scroll lock          | FAIL ❌  |
+          | Closes on link click | PASS     |
+          | Closes on backdrop   | PASS     |
+          | No overflow after    | PASS     |
+          
+          RECOMMENDATION:
+          Fix the scroll lock issue by ensuring body overflow is truly hidden when drawer is open.
+          Possible solutions:
+          1. Add !important to the overflow rule
+          2. Use position: fixed on body with top offset
+          3. Add touch-action: none to prevent touch scrolling
+          4. Use JavaScript to prevent scroll events while drawer is open
+      - working: "NA"
+        agent: "main"
+        comment: |
+          MOBILE UI FIXES APPLIED (no functional/backend changes).
+
+          Files changed:
+            * /app/app/circle/circle.css
+            * /app/components/circle/CircleNav.jsx
+
+          1) Bottom navigation stability (.circle-bottomnav):
+             - Now uses `position: fixed; left: 50%; transform: translateX(-50%);`
+               with `bottom: calc(20px + env(safe-area-inset-bottom, 0px))` so it sits
+               ~20px above the bottom edge and respects iOS safe area.
+             - Container is a `display: grid; grid-auto-flow: column; grid-auto-columns: 56px;`
+               so the OUTER container never resizes as the active icon changes.
+             - Each anchor is `height: 44px; width: 100%` inside its grid cell → equal spacing,
+               constant hit areas.
+             - Only the active anchor's `background`/`color`/`box-shadow` animate. The active
+               state is driven via `data-active="true"` CSS instead of swapping class names,
+               so no layout thrash.
+             - `max-width: calc(100vw - 24px)` guarantees it never exceeds the viewport.
+
+          2) Horizontal overflow guard:
+             - Added `html:has(.circle-root), body:has(.circle-root) { overflow-x:hidden;
+               max-width:100%; width:100%; }` — scoped so it only applies to Safar Circle pages
+               and never affects the main Safar site.
+             - `.circle-root` itself set to `width:100%; max-width:100%; overflow-x:hidden`.
+             - Any direct `section`, `main`, `header`, `footer` inside `.circle-root` now has
+               `max-width:100%; overflow-x: clip;` so absolutely-positioned decor (aurora, orbs)
+               can never bleed outside the viewport.
+             - Reduced aurora `inset` from `-20%` to `-10%` and orb motion range so the
+               background elements stay within the parent even in narrow viewports.
+             - `.circle-root * { min-width: 0; }` prevents flex/grid children from forcing
+               a wider layout because of long strings.
+             - Header now uses `w-full max-w-full` on both the outer `<header>` and its inner
+               container, with `shrink-0` on the brand + right-side controls so the mobile
+               row cannot overflow.
+
+          3) Mobile navigation drawer:
+             - Replaced the inline expanding menu with a proper drawer:
+               • Full-screen backdrop (`.circle-drawer-backdrop`, `position: fixed; inset: 0;`
+                 z-index 50, `background: rgba(6,8,15,0.72); backdrop-filter: blur(14px)`).
+               • Floating drawer panel (`.circle-drawer`, `position: fixed; top: 64px;
+                 left/right: 12px; z-index: 60; border-radius: 24px;`).
+               • Backdrop click closes drawer; every item and the CTA close the drawer via
+                 `closeDrawer()`.
+               • Body scroll lock: the CircleNav effect adds `.circle-drawer-open` class to
+                 `document.body`, and CSS applies `body:has(.circle-drawer-open) { overflow: hidden; }`.
+               • `useEffect(pathname)` auto-closes the drawer + avatar menu on route change so
+                 the drawer never persists after navigation.
+             - Avatar dropdown is now separate state (`avatarOpen`) — no longer collides with
+               hamburger toggle.
+
+          4) Additional isolation:
+             - The user avatar dropdown text `{user.email}` now uses `truncate` so long emails
+               don't push the dropdown wider than the container.
+
+          What to verify (Playwright at mobile viewports 390×844 and 375×812):
+            • On /circle, /circle/discover, /circle/create, /circle/studio, /circle/passport
+              and a journey preview page (/circle/j/chinar-autumn-ride):
+              - `document.documentElement.scrollWidth === document.documentElement.clientWidth`
+                (no horizontal overflow, no right-edge white space).
+              - `.circle-bottomnav` bounding rect: `left + width/2 ≈ viewport width / 2`
+                (centered) and `bottom` never leaves the viewport bottom edge; the rect's
+                `left`/`right`/`width` must be IDENTICAL across all four tabs (only the
+                active icon should visually change).
+            • Open hamburger on /circle then navigate: drawer covers screen with dark blur,
+              body cannot scroll while drawer is open, drawer closes automatically after
+              tapping a link, and the destination page has no horizontal overflow.
+            • Design integrity: hero gradient text, aurora glow, poster cards on landing,
+              glass estimator on create/preview, cinematic hero on journey preview — all
+              preserved.
+
+          Test credentials (existing account created during Module 1 build) — Safar Circle
+          uses Single Sign-On with the main Safar auth cookie, register a new user for the
+          test run via /api/auth/register (existing endpoint) if a fresh account is easier
+          than password recovery.
+
+agent_communication:
+  - agent: "testing"
+    message: |
+      ✅ MOBILE UI TESTING COMPLETE — 1 CRITICAL ISSUE FOUND
+      
+      Test Date: 2026-07-10
+      Test Coverage: All 6 URLs at mobile viewports (390×844, 375×667)
+      Test Results: 5/6 checks PASS, 1/6 FAIL (scroll lock)
+      
+      ✅ WORKING CORRECTLY:
+      1. NO horizontal overflow on any page (scrollWidth === clientWidth)
+      2. Bottom nav perfectly centered and stable across all routes
+      3. Bottom nav dimensions constant (left=70, right=320, width=250 on all routes)
+      4. Drawer opens/closes correctly with backdrop
+      5. No overflow after drawer navigation
+      6. Design integrity preserved (gradient text, aurora, cards all visible)
+      
+      ❌ CRITICAL ISSUE — SCROLL LOCK NOT WORKING:
+      - When drawer is open, page background STILL scrolls
+      - Attempted scroll by 400px → actual scroll: 400px (should be ~0px)
+      - CSS rule exists: body:has(.circle-drawer-open): overflow: hidden;
+      - But computed style shows: overflow: hidden auto (not just hidden)
+      - Impact: Poor UX — users can scroll background while drawer is open
+      
+      ROOT CAUSE:
+      The CSS rule `body:has(.circle-drawer-open) { overflow: hidden; }` is present
+      but not preventing scroll. The computed style shows "hidden auto" instead of
+      just "hidden", suggesting the rule is being overridden or not fully applied.
+      
+      RECOMMENDED FIX:
+      Option 1: Add !important to force the rule
+        body:has(.circle-drawer-open) { overflow: hidden !important; }
+      
+      Option 2: Use position: fixed (more reliable)
+        body.circle-drawer-open {
+          position: fixed;
+          width: 100%;
+          overflow: hidden;
+        }
+      
+      Option 3: Add touch-action: none
+        body:has(.circle-drawer-open) {
+          overflow: hidden;
+          touch-action: none;
+        }
+      
+      TEST EVIDENCE:
+      - Screenshots captured: mobile_landing_with_nav.png, mobile_discover_page.png, mobile_drawer_open.png
+      - Console logs: No JavaScript errors found
+      - All other mobile UI fixes working perfectly
+      
+      NEXT STEPS:
+      Please fix the scroll lock issue and re-test. All other requirements are met.
+  - agent: "main"
+    message: |
+      MOBILE UI BUG FIX — please verify Safar Circle mobile responsiveness.
+      Two files were touched (CSS + one component); no backend/API/DB changes.
+
+      Please test with Playwright at a mobile viewport (390×844, and one iPhone SE-ish
+      375×667 pass). For each of these URLs:
+        - /circle
+        - /circle/discover
+        - /circle/create        (register a new traveler first via POST /api/auth/register
+                                 and store the cookie so the page renders the wizard,
+                                 not the sign-in gate)
+        - /circle/studio        (also needs auth)
+        - /circle/passport      (also needs auth)
+        - /circle/j/chinar-autumn-ride  (if that journey isn't in the DB, create one
+                                          via POST /api/circle/journeys as the authed
+                                          user and follow the returned slug)
+
+      Verify EACH of the following:
+        1) NO horizontal overflow:
+             evaluate `document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+             on every page above.
+        2) NO right-side white/empty area (visual + measurement of `document.body.getBoundingClientRect().right`
+           vs `window.innerWidth`).
+        3) Bottom navigation:
+             - `.circle-bottomnav` exists on mobile viewports.
+             - Its bounding rect `left`, `right`, `width`, and `bottom` values are
+               IDENTICAL on all four tabs (Discover/Create/Studio/Passport).
+             - It is horizontally centered (`Math.abs((rect.left + rect.right)/2 - vw/2) < 2`).
+             - It is raised ~20px above bottom (`vh - rect.bottom` between 15–40 px).
+             - Only the ACTIVE anchor visually changes (`data-active="true"` attribute
+               present on exactly one child at a time).
+        4) Hamburger drawer:
+             - Tapping the menu icon shows a full-screen backdrop
+               (`.circle-drawer-backdrop`) and a floating panel (`.circle-drawer`).
+             - Body scroll is disabled while open (`document.body.classList` contains
+               `circle-drawer-open`; try scrolling — should not scroll).
+             - Tapping a link inside the drawer navigates AND closes the drawer.
+             - Tapping backdrop closes the drawer.
+             - After the drawer closes and the new route loads, verify NO horizontal
+               overflow on the new page.
+        5) Design integrity preserved (spot-check screenshots): hero gradient text,
+           floating poster cards on landing (visible on desktop, hidden on mobile —
+           just confirm nothing broke), glass estimator card, cinematic journey hero.
+
+      Do NOT test backend/API — no server changes were made in this fix. Return a table
+      of pass/fail per URL per check above.
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 2
+  run_ui: true
+
+# ---------------------------------------------------------------------------
+# LEGACY HISTORY BELOW (preserved verbatim — do not edit)
+# ---------------------------------------------------------------------------
+
+
     file: "/app/app/api/[[...path]]/route.js"
     stuck_count: 0
     priority: "high"
