@@ -21,14 +21,43 @@ export default function CircleNav({ variant = 'default' }) {
     { href: '/circle/passport', label: 'Passport', icon: User2 },
   ];
 
-  // Body scroll lock while mobile drawer is open — CSS piggybacks on this class.
+  // Body scroll lock while mobile drawer is open — JS-driven so it beats any
+  // conflicting Tailwind reset / global overflow rules that make `:has()` unreliable.
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const body = document.body;
     if (menuOpen) {
-      document.body.classList.add('circle-drawer-open');
+      const scrollY = window.scrollY;
+      body.dataset.circleScrollY = String(scrollY);
+      body.classList.add('circle-drawer-open');
+      body.style.overflow = 'hidden';
+      body.style.position = 'fixed';
+      body.style.top = `-${scrollY}px`;
+      body.style.left = '0';
+      body.style.right = '0';
+      body.style.width = '100%';
     } else {
-      document.body.classList.remove('circle-drawer-open');
+      const scrollY = Number(body.dataset.circleScrollY || 0);
+      body.classList.remove('circle-drawer-open');
+      body.style.overflow = '';
+      body.style.position = '';
+      body.style.top = '';
+      body.style.left = '';
+      body.style.right = '';
+      body.style.width = '';
+      delete body.dataset.circleScrollY;
+      if (scrollY) window.scrollTo(0, scrollY);
     }
-    return () => document.body.classList.remove('circle-drawer-open');
+    return () => {
+      // Safety on unmount: always restore.
+      body.classList.remove('circle-drawer-open');
+      body.style.overflow = '';
+      body.style.position = '';
+      body.style.top = '';
+      body.style.left = '';
+      body.style.right = '';
+      body.style.width = '';
+    };
   }, [menuOpen]);
 
   // Auto-close drawer + avatar menu on route change.
