@@ -439,6 +439,110 @@ body:has(.circle-drawer-open) {
 }
 .circle-drawer-signin:hover { background: rgba(255,255,255,0.12); }
 
+/* ---------------------------------------------------------------- */
+/* Premium animated compass — hamburger replacement                  */
+/* ---------------------------------------------------------------- */
+.safar-compass {
+  display: inline-block;
+  color: currentColor;
+  overflow: visible;
+  will-change: transform;
+  transition: transform .35s cubic-bezier(.34, 1.56, .64, 1);
+  filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.25));
+}
+
+/* Hover: whole compass gently rotates (bezel wobble). */
+.circle-nav-trigger:hover .safar-compass,
+button:hover > .safar-compass,
+button:hover .safar-compass {
+  transform: rotate(18deg);
+}
+/* Tap feedback: small counter-rotate + scale. */
+.circle-nav-trigger:active .safar-compass,
+button:active > .safar-compass,
+button:active .safar-compass {
+  transform: rotate(-8deg) scale(0.94);
+  transition-duration: .18s;
+}
+
+/* Each SVG group animates independently. */
+.safar-compass .sc-ring,
+.safar-compass .sc-ring-inner,
+.safar-compass .sc-ticks,
+.safar-compass .sc-needle,
+.safar-compass .sc-x {
+  transform-origin: 12px 12px;
+  transition:
+    opacity .28s ease,
+    transform .34s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+/* Idle needle sway — subtle "seeking" motion. */
+.safar-compass .sc-needle {
+  animation: sc-idle-sway 5.5s ease-in-out infinite;
+}
+/* Idle ring — near-imperceptible breathing. */
+.safar-compass .sc-ring-inner {
+  animation: sc-idle-drift 22s linear infinite;
+  transform-origin: 12px 12px;
+}
+
+/* Close-icon strokes: hidden by default, ready to reveal. */
+.safar-compass .sc-x {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.4);
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  transition:
+    opacity .22s ease,
+    transform .34s cubic-bezier(.34, 1.56, .64, 1),
+    stroke-dashoffset .3s ease .05s;
+}
+
+/* Open state: compass fades / shrinks, X strokes swoop in. */
+.safar-compass.is-open .sc-ring        { opacity: 0; transform: scale(0.5); }
+.safar-compass.is-open .sc-ring-inner  { opacity: 0; transform: scale(0.5) rotate(45deg); animation: none; }
+.safar-compass.is-open .sc-ticks       { opacity: 0; transform: scale(0.5); }
+.safar-compass.is-open .sc-needle      { opacity: 0; transform: rotate(45deg) scale(0.5); animation: none; }
+.safar-compass.is-open .sc-x           { opacity: 1; transform: rotate(0deg) scale(1); stroke-dashoffset: 0; }
+
+@keyframes sc-idle-sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate( 4deg); }
+}
+@keyframes sc-idle-drift {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Respect reduced-motion: kill all idle + hover kinetics. */
+@media (prefers-reduced-motion: reduce) {
+  .safar-compass,
+  .safar-compass .sc-ring,
+  .safar-compass .sc-ring-inner,
+  .safar-compass .sc-ticks,
+  .safar-compass .sc-needle,
+  .safar-compass .sc-x {
+    animation: none !important;
+    transition: opacity .18s linear !important;
+  }
+  .circle-nav-trigger:hover .safar-compass,
+  button:hover .safar-compass,
+  button:hover > .safar-compass {
+    transform: none !important;
+  }
+  .safar-compass.is-open .sc-ring,
+  .safar-compass.is-open .sc-ring-inner,
+  .safar-compass.is-open .sc-ticks,
+  .safar-compass.is-open .sc-needle {
+    transform: none !important;
+  }
+  .safar-compass.is-open .sc-x {
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
+
 
 /* Fine control */
 .circle-input {

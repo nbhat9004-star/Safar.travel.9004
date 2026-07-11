@@ -9,7 +9,6 @@ import {
   Store,
   Settings,
   LogOut,
-  Menu,
   X,
   BadgeCheck,
   ChevronRight,
@@ -17,6 +16,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { signInHref } from '@/lib/circle-api';
 import { useEffect, useState } from 'react';
+import SafarCompassIcon from '@/components/circle/CompassIcon';
 
 export default function CircleNav({ variant = 'default' }) {
   const pathname = usePathname();
@@ -171,7 +171,9 @@ export default function CircleNav({ variant = 'default' }) {
                     <span className="text-xs font-semibold">{initials}</span>
                   )}
                 </span>
-                <Menu className="size-4 text-white/80 md:hidden" aria-hidden="true" />
+                <span className="md:hidden text-white/85 flex items-center pr-1" aria-hidden="true">
+                  <SafarCompassIcon open={menuOpen} size={18} />
+                </span>
               </button>
             ) : (
               <>
@@ -183,12 +185,12 @@ export default function CircleNav({ variant = 'default' }) {
                 </Link>
                 <button
                   onClick={openDrawer}
-                  className="md:hidden size-9 rounded-full circle-glass grid place-items-center shrink-0"
+                  className="md:hidden size-9 rounded-full circle-glass grid place-items-center shrink-0 text-white/90"
                   aria-label="Open navigation menu"
                   aria-expanded={menuOpen}
                   aria-controls="circle-drawer"
                 >
-                  <Menu className="size-4" />
+                  <SafarCompassIcon open={menuOpen} size={18} />
                 </button>
               </>
             )}
