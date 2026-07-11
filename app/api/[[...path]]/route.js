@@ -18,6 +18,8 @@ import {
   sendInvoiceEmail,
   sendContactFormEmail,
   sendPasswordResetEmail,
+  sendJourneyPublishedEmail,
+  sendPaymentSuccessEmail,
   sendEmail,
 } from '@/lib/email';
 import { verifyFirebaseToken } from '@/lib/firebase-admin';
@@ -2368,6 +2370,193 @@ async function route(request, { params }) {
       // Public identifier — safe to expose (Razorpay keyId is intended for client-side use)
       keyId: doc.keyId,
     }});
+  }
+
+  // =====================================================================
+  // MODULE 4 (Circle) — Shared Razorpay payment endpoints
+  // Reuses the same paymentGateways collection Safar Curated already uses.
+  // Any consumer (Curated booking, Circle join, future flows) creates orders
+  // and verifies signatures through these two endpoints — no duplication.
+  // =====================================================================
+
+  // Load active enabled gateway WITH decrypted secret (server-only helper).
+  const getActiveGatewayFull = async () => {
+    const col = await getCollection('paymentGateways');
+    const doc = await col.findOne({ enabled: true, status: 'configured' }, { sort: { updatedAt: -1 } });
+    if (!doc) return null;
+    const secret = doc.encryptedKeySecret ? pgDecrypt(doc.encryptedKeySecret) : '';
+    const webhookSecret = doc.encryptedWebhookSecret ? pgDecrypt(doc.encryptedWebhookSecret) : '';
+    return { ...doc, keySecret: secret, webhookSecret };
+  };
+
+  const PAYMENT_PURPOSES = ['circle_join', 'booking', 'other'];
+  const PAYMENT_PURPOSE_LABELS = {
+    circle_join: 'Safar Circle journey seat',
+    booking: 'Safar booking',
+    other: 'Safar payment',
+  };
+
+  // POST /api/payments/create-order — creates a Razorpay order via live API.
+  // Body: { amount (INR), currency='INR', purpose, refId, notes }
+  if (path === '/payments/create-order' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const b = await readBody(request);
+    const amount = Math.round(Number(b.amount));
+    const currency = (b.currency || 'INR').toUpperCase();
+    const purpose = PAYMENT_PURPOSES.includes(b.purpose) ? b.purpose : 'other';
+    const refId = (b.refId || '').toString().slice(0, 128) || null;
+    if (!Number.isFinite(amount) || amount <= 0) return err('Invalid amount');
+    if (amount > 10000000) return err('Amount exceeds allowed limit');
+
+    const gw = await getActiveGatewayFull();
+    if (!gw) return err('No payment gateway is configured. Contact support.', 503);
+    if (gw.provider !== 'razorpay') return err(`Provider ${gw.provider} is not yet supported for live checkout`, 501);
+    if (!gw.keyId || !gw.keySecret) return err('Payment gateway credentials incomplete', 503);
+
+    // Razorpay expects amount in the smallest currency unit (paise for INR).
+    const rzpAmount = amount * 100;
+    const receipt = `sfr_${uuid().slice(0, 24)}`;
+    try {
+      const auth = Buffer.from(`${gw.keyId}:${gw.keySecret}`).toString('base64');
+      const res = await fetch('https://api.razorpay.com/v1/orders', {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: rzpAmount,
+          currency,
+          receipt,
+          notes: {
+            purpose,
+            refId: refId || '',
+            userId: me.id,
+            ...(b.notes && typeof b.notes === 'object' ? b.notes : {}),
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return err(data?.error?.description || `Razorpay error (${res.status})`, 502);
+      }
+
+      // Persist a "created" payment record so we can reconcile later.
+      const payments = await getCollection('payments');
+      try {
+        await payments.createIndex({ orderId: 1 }, { unique: true });
+        await payments.createIndex({ userId: 1, createdAt: -1 });
+        await payments.createIndex({ refId: 1, purpose: 1, status: 1 });
+      } catch {}
+      const now = new Date();
+      const record = {
+        id: uuid(),
+        orderId: data.id,
+        paymentId: null,
+        signature: null,
+        provider: 'razorpay',
+        gatewayId: gw.id,
+        userId: me.id,
+        userEmail: me.email || null,
+        userName: me.name || null,
+        amount,
+        currency,
+        purpose,
+        refId,
+        status: 'created',
+        rzpReceipt: receipt,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await payments.insertOne(record);
+
+      return ok({
+        orderId: data.id,
+        amount,
+        rzpAmount,
+        currency,
+        keyId: gw.keyId,
+        receipt,
+        paymentRecordId: record.id,
+        purpose,
+      });
+    } catch (e) {
+      console.error('Razorpay createOrder error', e);
+      return err('Could not create payment order. Please try again.', 502);
+    }
+  }
+
+  // POST /api/payments/verify — verifies HMAC signature returned by Razorpay
+  // checkout and marks the corresponding payment record as paid/failed.
+  // Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature, status? }
+  if (path === '/payments/verify' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const b = await readBody(request);
+    const orderId = b.razorpay_order_id || b.orderId;
+    const paymentId = b.razorpay_payment_id || b.paymentId;
+    const signature = b.razorpay_signature || b.signature;
+    if (!orderId || !paymentId || !signature) return err('Missing verification fields');
+
+    const payments = await getCollection('payments');
+    const record = await payments.findOne({ orderId });
+    if (!record) return err('Payment record not found', 404);
+    if (record.userId !== me.id) return err('This payment does not belong to your account', 403);
+    if (record.status === 'paid') {
+      // Idempotent: return success again
+      return ok({ verified: true, paymentId: record.paymentId, orderId, alreadyPaid: true });
+    }
+
+    const gw = await getActiveGatewayFull();
+    if (!gw || !gw.keySecret) return err('Gateway not configured', 503);
+
+    const expected = crypto
+      .createHmac('sha256', gw.keySecret)
+      .update(`${orderId}|${paymentId}`)
+      .digest('hex');
+
+    // constant-time compare
+    const a = Buffer.from(expected, 'utf8');
+    const bBuf = Buffer.from(String(signature), 'utf8');
+    const match = a.length === bBuf.length && crypto.timingSafeEqual(a, bBuf);
+
+    const now = new Date();
+    if (!match) {
+      await payments.updateOne({ orderId }, { $set: { status: 'failed', paymentId, signature, updatedAt: now, failureReason: 'signature_mismatch' } });
+      return err('Signature verification failed', 400);
+    }
+
+    await payments.updateOne(
+      { orderId },
+      { $set: { status: 'paid', paymentId, signature, verifiedAt: now, updatedAt: now } }
+    );
+
+    // Fire email (fire-and-forget: never block API response on SMTP).
+    sendPaymentSuccessEmail(me, {
+      paymentId,
+      orderId,
+      amount: record.amount,
+      purpose: record.purpose,
+      purposeLabel: PAYMENT_PURPOSE_LABELS[record.purpose] || 'Safar payment',
+    }).catch(() => {});
+
+    return ok({
+      verified: true,
+      paymentId,
+      orderId,
+      amount: record.amount,
+      currency: record.currency,
+      purpose: record.purpose,
+      refId: record.refId,
+    });
+  }
+
+  // GET /api/payments/mine — list current user's payments (Circle dashboard & receipts)
+  if (path === '/payments/mine' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const col = await getCollection('payments');
+    const docs = await col.find({ userId: me.id }, { projection: { _id: 0, signature: 0 } })
+      .sort({ createdAt: -1 }).limit(100).toArray();
+    return ok({ payments: docs });
   }
 
   // =====================================================================
@@ -9681,7 +9870,7 @@ Return ONLY valid JSON, no markdown.`;
   //   GET    /circle/passport                 basic traveler passport data for current user
   // ============================================================================
   const CIRCLE_THEMES = ['adventure','luxury','photography','family','food','spiritual','bike_expedition','backpacking','weekend_escape','road_trip'];
-  const CIRCLE_VISIBILITY = ['draft','public','private','invite','scheduled'];
+  const CIRCLE_VISIBILITY = ['draft','public','private','invite','scheduled','archived'];
   const CIRCLE_DIFFICULTY = ['easy','moderate','challenging','expert'];
 
   const slugify = (s) => String(s || '').toLowerCase().trim()
@@ -10000,18 +10189,42 @@ Return ONLY valid JSON, no markdown.`;
     if (path === '/circle/journeys/mine' && method === 'GET') {
       if (!me) return err('Sign in required', 401);
       const status = url.searchParams.get('visibility');
+      const includeArchived = url.searchParams.get('includeArchived') === '1';
       const filter = { curatorId: me.id };
       if (status && CIRCLE_VISIBILITY.includes(status)) filter.visibility = status;
+      else if (!includeArchived) filter.visibility = { $ne: 'archived' };
       const docs = await journeys.find(filter, { projection: { _id: 0 } })
         .sort({ updatedAt: -1 }).limit(100).toArray();
+
+      // Revenue + booking stats — pulls from shared payments collection.
+      let bookings = 0;
+      let revenue = 0;
+      try {
+        const paymentsCol = await getCollection('payments');
+        const myJourneyIds = docs.map(d => d.id);
+        if (myJourneyIds.length > 0) {
+          const paidRows = await paymentsCol.find({
+            status: 'paid',
+            purpose: 'circle_join',
+            refId: { $in: myJourneyIds },
+          }).toArray();
+          bookings = paidRows.length;
+          revenue = paidRows.reduce((n, p) => n + (Number(p.amount) || 0), 0);
+        }
+      } catch (e) { /* payments collection may not exist yet — safe defaults */ }
+
       const stats = {
         total: docs.length,
         drafts: docs.filter(d => d.visibility === 'draft').length,
         published: docs.filter(d => d.visibility === 'public').length,
         private: docs.filter(d => d.visibility === 'private' || d.visibility === 'invite').length,
         scheduled: docs.filter(d => d.visibility === 'scheduled').length,
+        archived: docs.filter(d => d.visibility === 'archived').length,
         totalServices: docs.reduce((n, j) => n + (j.services?.length || 0), 0),
         totalViews: docs.reduce((n, j) => n + (j.viewsCount || 0), 0),
+        bookings,
+        revenue,
+        currency: 'INR',
       };
       return ok({ journeys: docs, stats });
     }
@@ -10139,6 +10352,117 @@ Return ONLY valid JSON, no markdown.`;
 
         const { _id, ...rest } = memberDoc;
         return ok({ membership: rest }, 201);
+      }
+    }
+
+    // POST /api/circle/journeys/:id/pay-and-join
+    // Verifies a Razorpay payment and creates an ACCEPTED membership in one call.
+    // Body: { seats, message, orderId, paymentId, signature }
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/pay-and-join$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in to join', 401);
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        if (doc.curatorId === me.id) return err('You are the curator of this journey', 400);
+        if (doc.visibility !== 'public') return err('This journey is not open for bookings', 403);
+        if (doc.registrationsClosed) return err('Registrations are closed for this journey', 403);
+        const b = await readBody(request);
+        const seats = Math.max(1, Math.min(6, Number(b.seats) || 1));
+        const message = (b.message || '').toString().slice(0, 500);
+        const orderId = b.orderId || b.razorpay_order_id;
+        const paymentId = b.paymentId || b.razorpay_payment_id;
+        const signature = b.signature || b.razorpay_signature;
+        if (!orderId || !paymentId || !signature) return err('Payment verification fields required');
+
+        // Duplicate/capacity checks first — fail fast BEFORE marking payment consumed
+        const existing = await circleMembers.findOne({ journeyId: jid, userId: me.id, status: { $in: ['pending', 'accepted'] } });
+        if (existing) {
+          if (existing.status === 'accepted') return err('You are already a member of this journey', 400);
+        }
+        const summary = await getJourneyMemberSummary(jid, doc);
+        if (summary.seatsRemaining < seats) return err(`Only ${summary.seatsRemaining} seat(s) remaining`, 400);
+
+        // Verify payment record + signature
+        const paymentsCol = await getCollection('payments');
+        const record = await paymentsCol.findOne({ orderId });
+        if (!record) return err('Payment record not found', 404);
+        if (record.userId !== me.id) return err('This payment does not belong to your account', 403);
+        if (record.refId !== jid) return err('This payment is not associated with this journey', 400);
+        if (record.status === 'paid' && record.consumed) {
+          return err('This payment has already been used', 409);
+        }
+
+        const gw = await getActiveGatewayFull();
+        if (!gw || !gw.keySecret) return err('Gateway not configured', 503);
+        const expected = crypto.createHmac('sha256', gw.keySecret).update(`${orderId}|${paymentId}`).digest('hex');
+        const aBuf = Buffer.from(expected, 'utf8');
+        const bBuf = Buffer.from(String(signature), 'utf8');
+        const match = aBuf.length === bBuf.length && crypto.timingSafeEqual(aBuf, bBuf);
+        const now = new Date();
+        if (!match) {
+          await paymentsCol.updateOne({ orderId }, { $set: { status: 'failed', paymentId, signature, updatedAt: now, failureReason: 'signature_mismatch' } });
+          return err('Signature verification failed', 400);
+        }
+        await paymentsCol.updateOne({ orderId }, {
+          $set: { status: 'paid', paymentId, signature, verifiedAt: now, updatedAt: now, consumed: true, consumedAt: now },
+        });
+
+        // Upsert/create ACCEPTED membership.
+        let memberDoc;
+        if (existing && existing.status === 'pending') {
+          memberDoc = { ...existing, status: 'accepted', decidedAt: now, decidedBy: 'auto_payment', updatedAt: now, paidAt: now, paymentId, orderId };
+          await circleMembers.updateOne({ id: existing.id }, { $set: memberDoc });
+        } else {
+          memberDoc = {
+            id: uuid(),
+            journeyId: jid,
+            userId: me.id,
+            userName: me.name,
+            userAvatar: me.avatar || null,
+            userReputation: Number(me.reputation) || 0,
+            role: 'traveler',
+            status: 'accepted',
+            seats,
+            message,
+            createdAt: now,
+            updatedAt: now,
+            decidedAt: now,
+            decidedBy: 'auto_payment',
+            paidAt: now,
+            paymentId,
+            orderId,
+          };
+          await circleMembers.insertOne(memberDoc);
+        }
+
+        // Notify curator
+        mkNotif({
+          userId: doc.curatorId,
+          type: 'circle_paid_join',
+          category: 'circle',
+          title: 'New paid booking',
+          body: `${me.name} paid to join ${doc.name} (${seats} seat${seats > 1 ? 's' : ''})`,
+          link: `/circle/j/${doc.slug}/members`,
+          meta: { journeyId: jid, memberId: memberDoc.id, requesterId: me.id, amount: record.amount },
+        }).catch(() => {});
+
+        // Fire booking confirmation to traveller (fire-and-forget)
+        sendBookingConfirmation({
+          bookingId: memberDoc.id,
+          listingTitle: doc.name,
+          listingImage: doc.cover,
+          checkInDate: doc.startDate,
+          checkOutDate: doc.endDate,
+          nights: 1,
+          guests: seats,
+          totalPrice: record.amount,
+          status: 'approved',
+        }, { name: me.name, email: me.email }).catch(() => {});
+
+        const { _id, ...rest } = memberDoc;
+        return ok({ membership: rest, payment: { orderId, paymentId, amount: record.amount } }, 201);
       }
     }
 
@@ -10736,10 +11060,16 @@ Return ONLY valid JSON, no markdown.`;
         if (isVisibilityRoute && method === 'PATCH') {
           const b = await readBody(request);
           if (!CIRCLE_VISIBILITY.includes(b.visibility)) return err('Invalid visibility');
+          const wasPublic = doc.visibility === 'public';
           const set = { visibility: b.visibility, updatedAt: new Date() };
           if (b.visibility === 'public' && !doc.publishedAt) set.publishedAt = new Date();
           if (b.visibility === 'scheduled' && b.scheduledFor) set.scheduledFor = new Date(b.scheduledFor);
+          if (b.visibility === 'archived') set.archivedAt = new Date();
           await journeys.updateOne({ id: jid }, { $set: set });
+          // Email curator on transition to public (first publish or re-publish)
+          if (b.visibility === 'public' && !wasPublic && me?.email) {
+            sendJourneyPublishedEmail(me, { ...doc, ...set }).catch(() => {});
+          }
           return ok({ id: jid, visibility: b.visibility });
         }
 

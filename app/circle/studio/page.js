@@ -15,6 +15,7 @@ const TABS = [
   { key: 'drafts', label: 'Drafts', icon: FileText },
   { key: 'published', label: 'Published', icon: Globe },
   { key: 'private', label: 'Private/Invite', icon: Lock },
+  { key: 'archived', label: 'Archived', icon: Trash2 },
   { key: 'services', label: 'Marketplace services', icon: Layers },
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
   { key: 'requests', label: 'Requests', icon: Send, locked: true },
@@ -27,15 +28,18 @@ export default function Studio() {
   const { user, loading: authLoading } = useAuth();
   const [tab, setTab] = useState('published');
   const [journeys, setJourneys] = useState([]);
-  const [stats, setStats] = useState({ total: 0, drafts: 0, published: 0, private: 0, scheduled: 0, totalServices: 0, totalViews: 0 });
+  const [stats, setStats] = useState({ total: 0, drafts: 0, published: 0, private: 0, scheduled: 0, archived: 0, totalServices: 0, totalViews: 0, bookings: 0, revenue: 0 });
   const [loading, setLoading] = useState(true);
   const [shareUrl, setShareUrl] = useState('');
   const [shareTitle, setShareTitle] = useState('');
+  const [busyId, setBusyId] = useState(null);
 
   const load = () => {
     setLoading(true);
-    circleApi.mine()
-      .then(r => { setJourneys(r.journeys || []); setStats(r.stats || {}); })
+    // includeArchived so the Archived tab has data
+    fetch('/api/circle/journeys/mine?includeArchived=1', { credentials: 'include' })
+      .then(r => r.json())
+      .then(r => { if (r.ok) { setJourneys(r.journeys || []); setStats(r.stats || {}); } else { setJourneys([]); } })
       .catch(() => setJourneys([]))
       .finally(() => setLoading(false));
   };
@@ -61,17 +65,37 @@ export default function Studio() {
   const drafts = journeys.filter(j => j.visibility === 'draft');
   const published = journeys.filter(j => j.visibility === 'public');
   const priv = journeys.filter(j => j.visibility === 'private' || j.visibility === 'invite' || j.visibility === 'scheduled');
+  const archived = journeys.filter(j => j.visibility === 'archived');
 
-  const doDelete = async (id) => {
-    if (!confirm('Delete this journey?')) return;
-    try { await circleApi.deleteJourney(id); toast.success('Deleted'); load(); }
-    catch (e) { toast.error(e.message || 'Delete failed'); }
+  // Guard against duplicate rapid clicks on the same journey action.
+  const guard = async (id, fn, successMsg, failMsg) => {
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      await fn();
+      if (successMsg) toast.success(successMsg);
+      load();
+    } catch (e) {
+      toast.error(e?.message || failMsg || 'Action failed');
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const doPublish = async (id) => {
-    try { await circleApi.setVisibility(id, 'public'); toast.success('Published'); load(); }
-    catch (e) { toast.error(e.message || 'Publish failed'); }
+  const doDelete = (id) => {
+    if (!confirm('Delete this journey? This action is permanent.')) return;
+    guard(id, () => circleApi.deleteJourney(id), 'Deleted', 'Delete failed');
   };
+  const doPublish = (id) => guard(id, () => circleApi.publishJourney(id), 'Published — travellers can now discover this journey', 'Publish failed');
+  const doUnpublish = (id) => {
+    if (!confirm('Unpublish this journey? It will move back to Drafts and disappear from Discover.')) return;
+    guard(id, () => circleApi.unpublishJourney(id), 'Moved to Drafts', 'Unpublish failed');
+  };
+  const doArchive = (id) => {
+    if (!confirm('Archive this journey? It will be hidden from Studio and Discover but preserved for records.')) return;
+    guard(id, () => circleApi.archiveJourney(id), 'Archived', 'Archive failed');
+  };
+  const doRestore = (id) => guard(id, () => circleApi.setVisibility(id, 'draft'), 'Restored to Drafts', 'Restore failed');
 
   const share = (j) => {
     const url = (typeof window !== 'undefined' ? window.location.origin : '') + `/circle/j/${j.slug}`;
@@ -96,11 +120,13 @@ export default function Studio() {
         </div>
 
         {/* Stats */}
-        <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
+        <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 md:gap-3">
           <StatCard icon={Layers} label="Total journeys" value={stats.total || 0} />
           <StatCard icon={Globe} label="Published" value={stats.published || 0} />
           <StatCard icon={FileText} label="Drafts" value={stats.drafts || 0} />
           <StatCard icon={Eye} label="Total views" value={stats.totalViews || 0} />
+          <StatCard icon={Users} label="Bookings" value={stats.bookings || 0} />
+          <StatCard icon={Wallet} label="Revenue" value={formatINR(stats.revenue || 0)} isText />
         </div>
 
         {/* Tabs — mobile: horizontal scroll with fade edges; desktop: pill row */}
@@ -134,9 +160,10 @@ export default function Studio() {
             </div>
           ) : (
             <>
-              {tab === 'published' && <JourneyGrid list={published} empty="Nothing published yet." onShare={share} onDelete={doDelete} onPublish={doPublish} />}
-              {tab === 'drafts' && <JourneyGrid list={drafts} empty="No drafts. Start one and save as draft." onShare={share} onDelete={doDelete} onPublish={doPublish} />}
-              {tab === 'private' && <JourneyGrid list={priv} empty="No private, invite-only or scheduled journeys." onShare={share} onDelete={doDelete} onPublish={doPublish} />}
+              {tab === 'published' && <JourneyGrid list={published} empty="Nothing published yet." onShare={share} onDelete={doDelete} onPublish={doPublish} onUnpublish={doUnpublish} onArchive={doArchive} busyId={busyId} />}
+              {tab === 'drafts' && <JourneyGrid list={drafts} empty="No drafts. Start one and save as draft." onShare={share} onDelete={doDelete} onPublish={doPublish} onArchive={doArchive} busyId={busyId} />}
+              {tab === 'private' && <JourneyGrid list={priv} empty="No private, invite-only or scheduled journeys." onShare={share} onDelete={doDelete} onPublish={doPublish} onArchive={doArchive} busyId={busyId} />}
+              {tab === 'archived' && <JourneyGrid list={archived} empty="No archived journeys." onShare={share} onDelete={doDelete} onRestore={doRestore} busyId={busyId} archivedView />}
               {tab === 'services' && <ServicesTab journeys={journeys} />}
               {tab === 'analytics' && <AnalyticsTab journeys={journeys} stats={stats} />}
               {(['requests', 'members', 'messages', 'timeline'].includes(tab)) && (
@@ -156,18 +183,18 @@ export default function Studio() {
   );
 }
 
-function StatCard({ icon: Icon, label, value }) {
+function StatCard({ icon: Icon, label, value, isText = false }) {
   return (
     <div className="circle-glass circle-card p-3.5 md:p-5">
       <div className="flex items-center gap-2 text-white/60 text-[11px] md:text-xs min-w-0">
         <Icon className="size-3.5 shrink-0" /> <span className="truncate">{label}</span>
       </div>
-      <div className="display text-2xl md:text-3xl font-bold mt-1.5 md:mt-2 circle-grad-text">{value}</div>
+      <div className={`display font-bold mt-1.5 md:mt-2 circle-grad-text ${isText ? 'text-lg md:text-xl truncate' : 'text-2xl md:text-3xl'}`}>{value}</div>
     </div>
   );
 }
 
-function JourneyGrid({ list, empty, onShare, onDelete, onPublish }) {
+function JourneyGrid({ list, empty, onShare, onDelete, onPublish, onUnpublish, onArchive, onRestore, archivedView = false, busyId }) {
   if (!list || list.length === 0) {
     return (
       <div className="circle-glass circle-card p-10 text-center">
@@ -180,15 +207,31 @@ function JourneyGrid({ list, empty, onShare, onDelete, onPublish }) {
   }
   return (
     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {list.map(j => <StudioCard key={j.id} j={j} onShare={() => onShare(j)} onDelete={() => onDelete(j.id)} onPublish={() => onPublish(j.id)} />)}
+      {list.map(j => (
+        <StudioCard
+          key={j.id}
+          j={j}
+          busy={busyId === j.id}
+          onShare={() => onShare(j)}
+          onDelete={() => onDelete(j.id)}
+          onPublish={onPublish ? () => onPublish(j.id) : null}
+          onUnpublish={onUnpublish ? () => onUnpublish(j.id) : null}
+          onArchive={onArchive ? () => onArchive(j.id) : null}
+          onRestore={onRestore ? () => onRestore(j.id) : null}
+          archivedView={archivedView}
+        />
+      ))}
     </div>
   );
 }
 
-function StudioCard({ j, onShare, onDelete, onPublish }) {
+function StudioCard({ j, onShare, onDelete, onPublish, onUnpublish, onArchive, onRestore, archivedView, busy }) {
   const th = themeLabel(j.theme);
+  const isPublic = j.visibility === 'public';
+  const isDraft = j.visibility === 'draft';
+  const isArchived = j.visibility === 'archived';
   return (
-    <div className="relative rounded-3xl overflow-hidden border border-white/10 circle-magnetic bg-white/5">
+    <div className={`relative rounded-3xl overflow-hidden border border-white/10 circle-magnetic bg-white/5 ${busy ? 'opacity-70 pointer-events-none' : ''}`}>
       <div className="relative aspect-[16/10]">
         {j.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -211,18 +254,42 @@ function StudioCard({ j, onShare, onDelete, onPublish }) {
           <span className="inline-flex items-center gap-1 min-w-0"><Wallet className="size-3 shrink-0" /> <span className="truncate">{formatINR(j.estimate?.perPerson || 0)}</span></span>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link href={`/circle/j/${j.slug}`} className="flex-1 min-w-[110px] inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold">
-            <Eye className="size-3.5" /> Preview
-          </Link>
-          <button onClick={onShare} aria-label="Share" className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0">
-            <Share2 className="size-3.5" />
-          </button>
-          {j.visibility !== 'public' && (
-            <button onClick={onPublish} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-primary text-xs font-semibold shrink-0">
+          {!isArchived && (
+            <Link href={`/circle/j/${j.slug}`} className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold">
+              <Eye className="size-3.5" /> Preview
+            </Link>
+          )}
+          {isPublic && (
+            <Link href={`/circle/j/${j.slug}`} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0" aria-label="Edit">
+              <Edit3 className="size-3.5" />
+            </Link>
+          )}
+          {!isArchived && (
+            <button onClick={onShare} aria-label="Share" className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0">
+              <Share2 className="size-3.5" />
+            </button>
+          )}
+          {onPublish && !isPublic && !isArchived && (
+            <button onClick={onPublish} disabled={busy} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-primary text-xs font-semibold shrink-0 disabled:opacity-60">
               <Globe className="size-3.5" /> Publish
             </button>
           )}
-          <button onClick={onDelete} aria-label="Delete" className="inline-flex items-center gap-1 px-3 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-200 text-xs font-semibold shrink-0">
+          {onUnpublish && isPublic && (
+            <button onClick={onUnpublish} disabled={busy} className="inline-flex items-center gap-1 px-3 py-2 rounded-full bg-white/5 border border-white/15 text-white/80 text-xs font-semibold shrink-0 hover:bg-white/10 disabled:opacity-60" aria-label="Unpublish">
+              <Lock className="size-3.5" /> Unpublish
+            </button>
+          )}
+          {onArchive && !isArchived && (
+            <button onClick={onArchive} disabled={busy} className="inline-flex items-center gap-1 px-3 py-2 rounded-full bg-white/5 border border-white/15 text-white/80 text-xs font-semibold shrink-0 hover:bg-white/10 disabled:opacity-60" aria-label="Archive">
+              <FileText className="size-3.5" /> Archive
+            </button>
+          )}
+          {onRestore && isArchived && (
+            <button onClick={onRestore} disabled={busy} className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full circle-btn-primary text-xs font-semibold disabled:opacity-60">
+              <ArrowRight className="size-3.5 rotate-180" /> Restore
+            </button>
+          )}
+          <button onClick={onDelete} disabled={busy} aria-label="Delete" className="inline-flex items-center gap-1 px-3 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-200 text-xs font-semibold shrink-0 hover:bg-red-500/30 disabled:opacity-60">
             <Trash2 className="size-3.5" />
           </button>
         </div>
