@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta
 
 # Configuration
-BASE_URL = "https://57f7d243-cf0e-4073-85f4-46f90c13ac69.preview.emergentagent.com/api"
+BASE_URL = "https://safar-drawer-ui.preview.emergentagent.com/api"
 MONGO_URL = "mongodb://localhost:27017"
 DB_NAME = "safar"
 
