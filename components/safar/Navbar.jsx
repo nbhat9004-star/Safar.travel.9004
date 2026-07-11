@@ -154,6 +154,19 @@ export default function Navbar({ transparent = false }) {
               {n.label}
             </Link>
           ))}
+          {/* Safar Circle — premium highlighted nav item */}
+          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
+            <Link
+              href="/circle"
+              className={`group relative ml-1.5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13.5px] font-semibold tracking-tight transition-all ${solid
+                ? 'text-white bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40'
+                : 'text-white bg-gradient-to-r from-emerald-400/40 via-violet-400/40 to-pink-400/40 border border-white/25 backdrop-blur hover:from-emerald-400/60 hover:via-violet-400/60 hover:to-pink-400/60'}`}
+            >
+              <Sparkles className="size-3.5" />
+              Safar Circle
+              <span className="ml-0.5 text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">Beta</span>
+            </Link>
+          )}
           {/* Module 11A — More menu (informational + policy links) */}
           {!(user?.role === 'admin' || user?.role === 'super_admin') && (
             <div className="relative more-dropdown">
@@ -310,6 +323,27 @@ export default function Navbar({ transparent = false }) {
               {/* Scrollable Navigation Content */}
               <div className="flex-1 overflow-y-auto">
                 <div className="p-3 pb-6">
+                  {/* Safar Circle — featured highlight (near top) */}
+                  {!(user?.role === 'admin' || user?.role === 'super_admin') && (
+                    <Link
+                      href="/circle"
+                      onClick={() => setOpen(false)}
+                      className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl mb-4 bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40 transition"
+                    >
+                      <div className="size-9 rounded-xl bg-white/20 grid place-items-center backdrop-blur">
+                        <Sparkles className="size-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-[15px]">Safar Circle</span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">Beta</span>
+                        </div>
+                        <div className="text-[11px] text-white/80 mt-0.5">Plan trips together with fellow travelers</div>
+                      </div>
+                      <ChevronDown className="size-4 rotate-[-90deg] text-white/80" />
+                    </Link>
+                  )}
+
                   {/* EXPLORE Section */}
                   <div className="mb-4">
                     <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Explore</div>
