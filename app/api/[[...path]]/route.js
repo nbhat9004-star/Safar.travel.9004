@@ -9739,10 +9739,36 @@ Return ONLY valid JSON, no markdown.`;
     };
   }
 
+  // -------- Circle Members helpers (Module 2: Collaboration Engine) --------
+  async function ensureCircleMembersIndexes() {
+    try {
+      const col = await getCollection('circle_members');
+      await col.createIndex({ id: 1 }, { unique: true });
+      await col.createIndex({ journeyId: 1, userId: 1, status: 1 });
+      await col.createIndex({ journeyId: 1, role: 1, status: 1 });
+      await col.createIndex({ userId: 1, status: 1 });
+    } catch {}
+  }
+
+  async function getJourneyMemberSummary(journeyId, journeyDoc) {
+    const col = await getCollection('circle_members');
+    const members = await col.find({ journeyId }, { projection: { _id: 0 } }).toArray();
+    const owner = { userId: journeyDoc.curatorId, name: journeyDoc.curatorName, avatar: journeyDoc.curatorAvatar, role: 'curator', status: 'accepted', seats: 1 };
+    const coCurators = members.filter(m => m.role === 'co_curator' && m.status === 'accepted');
+    const travelers = members.filter(m => m.role === 'traveler' && m.status === 'accepted');
+    const pending = members.filter(m => m.status === 'pending');
+    const acceptedSeats = 1 /* owner */ + coCurators.reduce((n, m) => n + (m.seats || 1), 0) + travelers.reduce((n, m) => n + (m.seats || 1), 0);
+    const capacity = Math.max(1, Number(journeyDoc.maxMembers) || 1);
+    const seatsRemaining = Math.max(0, capacity - acceptedSeats);
+    return { owner, coCurators, travelers, pending, acceptedCount: 1 + coCurators.length + travelers.length, acceptedSeats, capacity, seatsRemaining };
+  }
+
   if (path.startsWith('/circle')) {
     await ensureCircleIndexes();
+    await ensureCircleMembersIndexes();
     const me = await getCurrentUser(request);
     const journeys = await getCollection('circle_journeys');
+    const circleMembers = await getCollection('circle_members');
 
     // -------- Live marketplace proxy --------
     // GET /api/circle/marketplace  -> live approved listings, optionally filtered.
@@ -10016,6 +10042,270 @@ Return ONLY valid JSON, no markdown.`;
         journeys.updateOne({ id: doc.id }, { $inc: { viewsCount: 1 } }).catch(() => {});
       }
       return ok({ journey: doc });
+    }
+
+    // -------- Module 2: Collaboration Engine — Members endpoints --------
+    // GET /api/circle/journeys/:id/members  — public members summary (any signed-in or anon can see accepted members if journey is public)
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/members$/);
+      if (m && method === 'GET') {
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const isOwner = me && me.id === doc.curatorId;
+        const isAdmin = me && (me.role === 'admin' || me.role === 'super_admin');
+        if (doc.visibility !== 'public' && !isOwner && !isAdmin) return err('Journey not found', 404);
+        const summary = await getJourneyMemberSummary(jid, doc);
+        // Only curator/admin see pending requests
+        const canManage = isOwner || isAdmin;
+        const myMembership = me ? (await circleMembers.findOne({ journeyId: jid, userId: me.id }, { projection: { _id: 0 } })) : null;
+        return ok({
+          journey: {
+            id: doc.id, slug: doc.slug, name: doc.name, cover: doc.cover,
+            maxMembers: doc.maxMembers, visibility: doc.visibility,
+            registrationsClosed: !!doc.registrationsClosed,
+            curatorId: doc.curatorId, curatorName: doc.curatorName, curatorAvatar: doc.curatorAvatar,
+          },
+          owner: summary.owner,
+          coCurators: summary.coCurators,
+          travelers: summary.travelers,
+          pending: canManage ? summary.pending : [],
+          capacity: summary.capacity,
+          acceptedCount: summary.acceptedCount,
+          acceptedSeats: summary.acceptedSeats,
+          seatsRemaining: summary.seatsRemaining,
+          canManage,
+          myMembership: myMembership || null,
+          isOwner: !!isOwner,
+        });
+      }
+    }
+
+    // POST /api/circle/journeys/:id/join  — traveler requests to join
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/join$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in to request joining', 401);
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        if (doc.curatorId === me.id) return err('You are the curator of this journey', 400);
+        if (doc.visibility !== 'public') return err('This journey is not open for requests', 403);
+        if (doc.registrationsClosed) return err('Registrations are closed for this journey', 403);
+        const b = await readBody(request);
+        const seats = Math.max(1, Math.min(6, Number(b.seats) || 1));
+        const message = (b.message || '').toString().slice(0, 500);
+
+        // Duplicate check: existing pending or accepted request
+        const existing = await circleMembers.findOne({ journeyId: jid, userId: me.id, status: { $in: ['pending', 'accepted'] } });
+        if (existing) {
+          if (existing.status === 'accepted') return err('You are already a member of this journey', 400);
+          return err('You already have a pending request for this journey', 400);
+        }
+
+        // Capacity check
+        const summary = await getJourneyMemberSummary(jid, doc);
+        if (summary.seatsRemaining < seats) return err(`Only ${summary.seatsRemaining} seat(s) remaining`, 400);
+
+        const now = new Date();
+        const memberDoc = {
+          id: uuid(),
+          journeyId: jid,
+          userId: me.id,
+          userName: me.name,
+          userAvatar: me.avatar || null,
+          userReputation: Number(me.reputation) || 0,
+          role: 'traveler',
+          status: 'pending',
+          seats,
+          message,
+          createdAt: now,
+          updatedAt: now,
+          decidedAt: null,
+          decidedBy: null,
+        };
+        await circleMembers.insertOne(memberDoc);
+
+        // Notify curator
+        await mkNotif({
+          userId: doc.curatorId,
+          type: 'circle_join_request',
+          category: 'circle',
+          title: 'New request to join',
+          body: `${me.name} wants to join ${doc.name} (${seats} seat${seats > 1 ? 's' : ''})`,
+          link: `/circle/j/${doc.slug}/members`,
+          meta: { journeyId: jid, memberId: memberDoc.id, requesterId: me.id },
+        });
+
+        const { _id, ...rest } = memberDoc;
+        return ok({ membership: rest }, 201);
+      }
+    }
+
+    // POST /api/circle/journeys/:id/leave  — traveler leaves an accepted journey
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/leave$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const mem = await circleMembers.findOne({ journeyId: jid, userId: me.id, status: 'accepted' });
+        if (!mem) return err('You are not a member of this journey', 404);
+        await circleMembers.updateOne({ id: mem.id }, { $set: { status: 'left', updatedAt: new Date() } });
+        // Notify curator
+        await mkNotif({
+          userId: doc.curatorId,
+          type: 'circle_member_left',
+          category: 'circle',
+          title: 'Member left journey',
+          body: `${me.name} left ${doc.name}`,
+          link: `/circle/j/${doc.slug}/members`,
+          meta: { journeyId: jid, memberId: mem.id, userId: me.id },
+        });
+        return ok({ left: true });
+      }
+    }
+
+    // POST /api/circle/journeys/:id/cancel-request  — traveler cancels pending request
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/cancel-request$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const jid = m[1];
+        const mem = await circleMembers.findOne({ journeyId: jid, userId: me.id, status: 'pending' });
+        if (!mem) return err('No pending request to cancel', 404);
+        await circleMembers.updateOne({ id: mem.id }, { $set: { status: 'cancelled', updatedAt: new Date() } });
+        return ok({ cancelled: true });
+      }
+    }
+
+    // Curator actions on a specific membership record
+    // POST /api/circle/journeys/:id/members/:memberId/{accept|decline|remove|promote|demote}
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/members\/([\w-]+)\/(accept|decline|remove|promote|demote)$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const [, jid, memberId, action] = m;
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const isOwner = me.id === doc.curatorId;
+        const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+        if (!isOwner && !isAdmin) return err('Only the curator can manage members', 403);
+        const mem = await circleMembers.findOne({ id: memberId, journeyId: jid });
+        if (!mem) return err('Membership not found', 404);
+
+        const now = new Date();
+        if (action === 'accept') {
+          if (mem.status !== 'pending') return err('Request is not pending', 400);
+          // Capacity re-check
+          const summary = await getJourneyMemberSummary(jid, doc);
+          if (summary.seatsRemaining < (mem.seats || 1)) return err(`Not enough seats remaining (${summary.seatsRemaining})`, 400);
+          await circleMembers.updateOne({ id: memberId }, { $set: { status: 'accepted', role: 'traveler', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          await mkNotif({
+            userId: mem.userId,
+            type: 'circle_request_accepted',
+            category: 'circle',
+            title: 'Request accepted',
+            body: `You've joined ${doc.name}`,
+            link: `/circle/j/${doc.slug}`,
+            meta: { journeyId: jid, memberId: mem.id },
+          });
+          return ok({ status: 'accepted' });
+        }
+        if (action === 'decline') {
+          if (mem.status !== 'pending') return err('Request is not pending', 400);
+          await circleMembers.updateOne({ id: memberId }, { $set: { status: 'declined', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          await mkNotif({
+            userId: mem.userId,
+            type: 'circle_request_declined',
+            category: 'circle',
+            title: 'Request declined',
+            body: `Your request to join ${doc.name} was declined`,
+            link: `/circle/j/${doc.slug}`,
+            meta: { journeyId: jid, memberId: mem.id },
+          });
+          return ok({ status: 'declined' });
+        }
+        if (action === 'remove') {
+          if (!['pending', 'accepted'].includes(mem.status)) return err('Cannot remove this member', 400);
+          await circleMembers.updateOne({ id: memberId }, { $set: { status: 'removed', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          if (mem.status === 'accepted') {
+            await mkNotif({
+              userId: mem.userId,
+              type: 'circle_member_removed',
+              category: 'circle',
+              title: 'Removed from journey',
+              body: `You were removed from ${doc.name}`,
+              link: `/circle/j/${doc.slug}`,
+              meta: { journeyId: jid, memberId: mem.id },
+            });
+          }
+          return ok({ status: 'removed' });
+        }
+        if (action === 'promote') {
+          if (mem.status !== 'accepted') return err('Only accepted members can be promoted', 400);
+          if (mem.role === 'co_curator') return err('Already a co-curator', 400);
+          await circleMembers.updateOne({ id: memberId }, { $set: { role: 'co_curator', updatedAt: now } });
+          await mkNotif({
+            userId: mem.userId,
+            type: 'circle_promoted_co_curator',
+            category: 'circle',
+            title: 'Promoted to Co-Curator',
+            body: `You are now a Co-Curator on ${doc.name}`,
+            link: `/circle/j/${doc.slug}`,
+            meta: { journeyId: jid, memberId: mem.id },
+          });
+          return ok({ status: 'promoted', role: 'co_curator' });
+        }
+        if (action === 'demote') {
+          if (mem.role !== 'co_curator') return err('Not a co-curator', 400);
+          await circleMembers.updateOne({ id: memberId }, { $set: { role: 'traveler', updatedAt: now } });
+          await mkNotif({
+            userId: mem.userId,
+            type: 'circle_demoted_traveler',
+            category: 'circle',
+            title: 'Role updated',
+            body: `You are now a Traveler on ${doc.name}`,
+            link: `/circle/j/${doc.slug}`,
+            meta: { journeyId: jid, memberId: mem.id },
+          });
+          return ok({ status: 'demoted', role: 'traveler' });
+        }
+        return err('Unknown action', 400);
+      }
+    }
+
+    // PATCH /api/circle/journeys/:id/settings  — curator updates collaboration settings
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/settings$/);
+      if (m && method === 'PATCH') {
+        if (!me) return err('Sign in required', 401);
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const isOwner = me.id === doc.curatorId;
+        const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+        if (!isOwner && !isAdmin) return err('Only the curator can change settings', 403);
+        const b = await readBody(request);
+        const set = { updatedAt: new Date() };
+        if (b.maxMembers != null) {
+          const n = Math.max(1, Math.min(50, Number(b.maxMembers) || 1));
+          // Cannot go below current accepted seats
+          const summary = await getJourneyMemberSummary(jid, doc);
+          if (n < summary.acceptedSeats) return err(`Cannot reduce below current members (${summary.acceptedSeats})`, 400);
+          set.maxMembers = n;
+        }
+        if (b.visibility != null) {
+          if (!CIRCLE_VISIBILITY.includes(b.visibility)) return err('Invalid visibility');
+          set.visibility = b.visibility;
+          if (b.visibility === 'public' && !doc.publishedAt) set.publishedAt = new Date();
+        }
+        if (b.registrationsClosed != null) set.registrationsClosed = !!b.registrationsClosed;
+        await journeys.updateOne({ id: jid }, { $set: set });
+        const updated = await journeys.findOne({ id: jid }, { projection: { _id: 0 } });
+        return ok({ journey: updated });
+      }
     }
 
     // -------- Update / Delete / Visibility --------

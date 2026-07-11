@@ -10,7 +10,8 @@ import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
 import {
   MapPin, CalendarRange, Users, Star, Sparkles, Wallet, Share2, ArrowRight, ShieldCheck,
-  Zap, Eye, Edit3, Trash2, Globe, Lock, Send, ExternalLink, ChevronRight, Circle
+  Zap, Eye, Edit3, Trash2, Globe, Lock, Send, ExternalLink, ChevronRight, Circle,
+  Check, X, LogOut, Loader2, DoorClosed, Settings
 } from 'lucide-react';
 
 export default function JourneyPreview() {
@@ -24,13 +25,27 @@ export default function JourneyPreview() {
   const [shareOpen, setShareOpen] = useState(false);
   const [origin, setOrigin] = useState('');
 
+  // Module 2 — Collaboration state
+  const [memberInfo, setMemberInfo] = useState(null);
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinMessage, setJoinMessage] = useState('');
+  const [joinSeats, setJoinSeats] = useState(1);
+  const [joinLoading, setJoinLoading] = useState(false);
+
   useEffect(() => { if (typeof window !== 'undefined') setOrigin(window.location.origin); }, []);
+
+  const loadMembers = (jid) => {
+    if (!jid) return;
+    circleApi.getMembers(jid)
+      .then(r => setMemberInfo(r))
+      .catch(() => setMemberInfo(null));
+  };
 
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
     circleApi.getBySlug(slug)
-      .then(r => setJ(r.journey))
+      .then(r => { setJ(r.journey); loadMembers(r.journey?.id); })
       .catch(() => setJ(null))
       .finally(() => setLoading(false));
   }, [slug]);
@@ -119,7 +134,10 @@ export default function JourneyPreview() {
           <div className="mt-6 flex flex-wrap items-center gap-4 text-white/80 text-sm">
             <span className="inline-flex items-center gap-1.5"><MapPin className="size-4" /> {j.destination?.name}{j.destination?.district ? `, ${j.destination.district}` : ''}</span>
             <span className="inline-flex items-center gap-1.5"><CalendarRange className="size-4" /> {j.startDate ? new Date(j.startDate).toDateString() : (j.isFlexibleDates ? 'Flexible dates' : 'TBD')}{j.endDate ? ` → ${new Date(j.endDate).toDateString()}` : ''}</span>
-            <span className="inline-flex items-center gap-1.5"><Users className="size-4" /> {j.maxMembers} seats · {j.difficulty}</span>
+            <Link href={`/circle/j/${j.slug}/members`} className="inline-flex items-center gap-1.5 hover:text-white transition">
+              <Users className="size-4" /> {memberInfo?.acceptedCount ?? 1} member{(memberInfo?.acceptedCount ?? 1) !== 1 ? 's' : ''} · {memberInfo?.seatsRemaining ?? j.maxMembers} seat{(memberInfo?.seatsRemaining ?? j.maxMembers) !== 1 ? 's' : ''} left
+            </Link>
+            <span className="inline-flex items-center gap-1.5 capitalize">{j.difficulty}</span>
             <span className="inline-flex items-center gap-1.5"><Eye className="size-4" /> {j.viewsCount || 0} views</span>
           </div>
 
@@ -127,9 +145,25 @@ export default function JourneyPreview() {
             <button onClick={() => setShareOpen(true)} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
               <Share2 className="size-4" /> Share journey
             </button>
-            <button className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
-              <Send className="size-4" /> Request to join <span className="text-white/40 text-[11px] ml-1">(Module 2)</span>
-            </button>
+            <JoinAction
+              user={user}
+              isOwner={isOwner}
+              journey={j}
+              memberInfo={memberInfo}
+              onOpenJoin={() => setJoinOpen(true)}
+              onCancel={async () => {
+                try { await circleApi.cancelRequest(j.id); toast.success('Request cancelled'); loadMembers(j.id); }
+                catch (e) { toast.error(e.message || 'Failed'); }
+              }}
+              onLeave={async () => {
+                if (!confirm('Leave this journey?')) return;
+                try { await circleApi.leaveJourney(j.id); toast.success('You left the journey'); loadMembers(j.id); }
+                catch (e) { toast.error(e.message || 'Failed'); }
+              }}
+            />
+            <Link href={`/circle/j/${j.slug}/members`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
+              <Users className="size-4" /> Members
+            </Link>
             {isOwner && (
               <>
                 <Link href={`/circle/studio`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
@@ -267,17 +301,178 @@ export default function JourneyPreview() {
                   <span className="font-semibold">− {formatINR(j.estimate.estimatedSavings)}</span>
                 </div>
               )}
-              <button onClick={() => setShareOpen(true)} className="mt-6 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+              <button onClick={() => setShareOpen(true)} className="mt-6 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
                 <Share2 className="size-4" /> Share this journey
               </button>
-              <div className="mt-3 text-[11px] text-white/50 text-center">Request-to-join, group chat and expense split arrive in <span className="text-white/70">Module 2</span>.</div>
+              <div className="mt-3">
+                <JoinAction
+                  user={user}
+                  isOwner={isOwner}
+                  journey={j}
+                  memberInfo={memberInfo}
+                  onOpenJoin={() => setJoinOpen(true)}
+                  onCancel={async () => {
+                    try { await circleApi.cancelRequest(j.id); toast.success('Request cancelled'); loadMembers(j.id); }
+                    catch (e) { toast.error(e.message || 'Failed'); }
+                  }}
+                  onLeave={async () => {
+                    if (!confirm('Leave this journey?')) return;
+                    try { await circleApi.leaveJourney(j.id); toast.success('You left the journey'); loadMembers(j.id); }
+                    catch (e) { toast.error(e.message || 'Failed'); }
+                  }}
+                  fullWidth
+                />
+              </div>
+              <div className="mt-3 text-[11px] text-white/50 text-center">
+                {memberInfo?.acceptedCount ?? 1} member{(memberInfo?.acceptedCount ?? 1) !== 1 ? 's' : ''} · {memberInfo?.seatsRemaining ?? j.maxMembers} seat{(memberInfo?.seatsRemaining ?? j.maxMembers) !== 1 ? 's' : ''} remaining
+              </div>
             </div>
           </aside>
         </div>
       </section>
 
       <ShareSheet open={shareOpen} onClose={() => setShareOpen(false)} url={url} title={`Join my Journey: ${j.name}`} description={j.description} />
+
+      <JoinModal
+        open={joinOpen}
+        onClose={() => setJoinOpen(false)}
+        journey={j}
+        memberInfo={memberInfo}
+        seats={joinSeats}
+        setSeats={setJoinSeats}
+        message={joinMessage}
+        setMessage={setJoinMessage}
+        loading={joinLoading}
+        onSubmit={async () => {
+          if (!user) { toast.error('Sign in to request joining'); return; }
+          setJoinLoading(true);
+          try {
+            await circleApi.requestJoin(j.id, { message: joinMessage, seats: joinSeats });
+            toast.success('Request sent to the curator');
+            setJoinOpen(false);
+            setJoinMessage('');
+            setJoinSeats(1);
+            loadMembers(j.id);
+          } catch (e) {
+            toast.error(e.message || 'Failed to send request');
+          } finally {
+            setJoinLoading(false);
+          }
+        }}
+      />
     </main>
+  );
+}
+
+// ————————————————— Module 2 helper components —————————————————
+function JoinAction({ user, isOwner, journey, memberInfo, onOpenJoin, onCancel, onLeave, fullWidth = false }) {
+  const base = 'inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-sm font-semibold ' + (fullWidth ? 'w-full ' : '');
+  if (isOwner) {
+    return (
+      <span className={base + 'bg-emerald-500/15 border border-emerald-400/30 text-emerald-200'}>
+        <ShieldCheck className="size-4" /> You are the Curator
+      </span>
+    );
+  }
+  const mine = memberInfo?.myMembership;
+  const closed = journey?.registrationsClosed || journey?.visibility !== 'public';
+  const full = (memberInfo?.seatsRemaining ?? journey?.maxMembers ?? 0) <= 0;
+
+  if (mine?.status === 'accepted') {
+    return (
+      <div className={fullWidth ? 'grid grid-cols-2 gap-2 w-full' : 'flex items-center gap-2'}>
+        <span className={base + 'bg-emerald-500/15 border border-emerald-400/30 text-emerald-200'}>
+          <Check className="size-4" /> Joined{mine.role === 'co_curator' ? ' · Co-Curator' : ''}
+        </span>
+        {mine.role !== 'co_curator' && (
+          <button onClick={onLeave} className={base + 'bg-red-500/15 border border-red-400/30 text-red-200'}>
+            <LogOut className="size-4" /> Leave
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (mine?.status === 'pending') {
+    return (
+      <div className={fullWidth ? 'grid grid-cols-2 gap-2 w-full' : 'flex items-center gap-2'}>
+        <span className={base + 'bg-amber-500/15 border border-amber-400/30 text-amber-200'}>
+          <Loader2 className="size-4 animate-spin" /> Request Pending
+        </span>
+        <button onClick={onCancel} className={base + 'circle-btn-ghost'}>
+          <X className="size-4" /> Cancel
+        </button>
+      </div>
+    );
+  }
+  if (closed) {
+    return (
+      <span className={base + 'bg-white/5 border border-white/10 text-white/60'}>
+        <DoorClosed className="size-4" /> Registrations Closed
+      </span>
+    );
+  }
+  if (full) {
+    return (
+      <span className={base + 'bg-white/5 border border-white/10 text-white/60'}>
+        <Users className="size-4" /> Journey Full
+      </span>
+    );
+  }
+  return (
+    <button onClick={onOpenJoin} className={base + 'circle-btn-primary'}>
+      <Send className="size-4" /> Request to join
+    </button>
+  );
+}
+
+function JoinModal({ open, onClose, journey, memberInfo, seats, setSeats, message, setMessage, loading, onSubmit }) {
+  if (!open) return null;
+  const maxSeats = Math.max(1, Math.min(6, memberInfo?.seatsRemaining || 1));
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-md circle-glass-strong rounded-t-3xl sm:rounded-3xl p-6 text-white border border-white/10">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="circle-chip">Request to join</div>
+            <h3 className="display text-xl font-bold mt-2">{journey?.name}</h3>
+            <div className="text-xs text-white/60 mt-1">
+              {memberInfo?.seatsRemaining ?? journey?.maxMembers} seat{(memberInfo?.seatsRemaining ?? journey?.maxMembers) !== 1 ? 's' : ''} remaining
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white p-1"><X className="size-5" /></button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          <div>
+            <div className="circle-label mb-1">Seats requested</div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setSeats(Math.max(1, seats - 1))} className="size-9 rounded-full bg-white/10 hover:bg-white/15 grid place-items-center">−</button>
+              <div className="min-w-[3rem] text-center font-semibold display text-lg">{seats}</div>
+              <button onClick={() => setSeats(Math.min(maxSeats, seats + 1))} className="size-9 rounded-full bg-white/10 hover:bg-white/15 grid place-items-center">+</button>
+              <div className="text-xs text-white/50 ml-2">up to {maxSeats}</div>
+            </div>
+          </div>
+          <div>
+            <div className="circle-label mb-1">Message to the curator</div>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value.slice(0, 500))}
+              placeholder="Introduce yourself and tell the curator why you want to join..."
+              className="w-full min-h-[100px] rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/25 resize-none"
+            />
+            <div className="text-[10px] text-white/40 text-right mt-1">{message.length}/500</div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-full circle-btn-ghost text-sm font-semibold">Cancel</button>
+          <button onClick={onSubmit} disabled={loading} className="flex-1 px-4 py-2.5 rounded-full circle-btn-primary text-sm font-semibold disabled:opacity-60 inline-flex items-center justify-center gap-2">
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            Send request
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
