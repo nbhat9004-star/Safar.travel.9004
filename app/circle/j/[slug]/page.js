@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Script from 'next/script';
 import CircleNav from '@/components/circle/CircleNav';
 import ShareSheet from '@/components/circle/ShareSheet';
-import { circleApi, themeLabel, formatINR } from '@/lib/circle-api';
+import { circleApi, themeLabel, formatINR, signInHref } from '@/lib/circle-api';
 import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
 import {
@@ -150,7 +150,10 @@ export default function JourneyPreview() {
               isOwner={isOwner}
               journey={j}
               memberInfo={memberInfo}
-              onOpenJoin={() => setJoinOpen(true)}
+              onOpenJoin={() => {
+                if (!user) { router.push(signInHref(`/circle/j/${j.slug}`)); return; }
+                setJoinOpen(true);
+              }}
               onCancel={async () => {
                 try { await circleApi.cancelRequest(j.id); toast.success('Request cancelled'); loadMembers(j.id); }
                 catch (e) { toast.error(e.message || 'Failed'); }
@@ -315,7 +318,10 @@ export default function JourneyPreview() {
                   isOwner={isOwner}
                   journey={j}
                   memberInfo={memberInfo}
-                  onOpenJoin={() => setJoinOpen(true)}
+                  onOpenJoin={() => {
+                    if (!user) { router.push(signInHref(`/circle/j/${j.slug}`)); return; }
+                    setJoinOpen(true);
+                  }}
                   onCancel={async () => {
                     try { await circleApi.cancelRequest(j.id); toast.success('Request cancelled'); loadMembers(j.id); }
                     catch (e) { toast.error(e.message || 'Failed'); }

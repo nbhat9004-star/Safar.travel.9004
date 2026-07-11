@@ -68,6 +68,24 @@ export default function Navbar({ transparent = false }) {
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  // If we arrive with ?auth=1 (e.g. redirected from Safar Circle), auto-open the
+  // AuthModal. The returnUrl (also in the query string) is picked up by AuthModal
+  // itself after successful auth, then we push the user back to that Circle page.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('auth') === '1' && !user) {
+        setAuthMode('login');
+        // Strip `auth=1` from the visible URL so a refresh doesn't reopen the modal.
+        params.delete('auth');
+        const qs = params.toString();
+        const cleaned = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+        window.history.replaceState({}, '', cleaned);
+      }
+    } catch {}
+  }, [user]);
   
   const loadNotifications = async () => {
     if (!user) return;

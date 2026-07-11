@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import CircleNav from '@/components/circle/CircleNav';
 import { useAuth } from '@/lib/auth-context';
-import { circleApi, THEMES, DIFFICULTY, LANGUAGES, INDIA_DESTINATIONS, formatINR, themeLabel } from '@/lib/circle-api';
+import { circleApi, THEMES, DIFFICULTY, LANGUAGES, INDIA_DESTINATIONS, formatINR, themeLabel, signInHref } from '@/lib/circle-api';
 import { toast } from 'sonner';
 import {
   Sparkles, ArrowLeft, ArrowRight, Check, Image as ImageIcon, MapPin, CalendarRange, Users, Wallet,
@@ -92,7 +92,7 @@ export default function CreateJourney() {
   const submit = async (asVisibility) => {
     if (!user) {
       toast.error('Please sign in first');
-      router.push('/?auth=1');
+      router.push(signInHref('/circle/create'));
       return;
     }
     try {
@@ -131,7 +131,7 @@ export default function CreateJourney() {
             <div className="circle-chip mx-auto">Sign in required</div>
             <h1 className="display text-3xl font-bold mt-4">Only members can curate journeys.</h1>
             <p className="text-white/70 mt-3">Safar Circle uses Single Sign-On from your Safar account.</p>
-            <Link href="/?auth=1" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+            <Link href={signInHref('/circle/create')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
               Continue to sign in <ArrowRight className="size-4" />
             </Link>
           </div>

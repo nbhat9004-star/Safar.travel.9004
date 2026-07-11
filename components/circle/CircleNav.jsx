@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sparkles, Compass, Layers, User2, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { signInHref } from '@/lib/circle-api';
 import { useEffect, useState } from 'react';
 
 export default function CircleNav({ variant = 'default' }) {
@@ -120,7 +121,7 @@ export default function CircleNav({ variant = 'default' }) {
                 )}
               </div>
             ) : (
-              <Link href="/?auth=1" className="hidden md:inline-flex circle-btn-ghost px-4 py-2 rounded-full text-sm font-semibold">Sign in</Link>
+              <Link href={signInHref(pathname)} className="hidden md:inline-flex circle-btn-ghost px-4 py-2 rounded-full text-sm font-semibold">Sign in</Link>
             )}
             <button
               onClick={() => setMenuOpen(v => !v)}
@@ -167,7 +168,7 @@ export default function CircleNav({ variant = 'default' }) {
                 <LogOut className="size-4" /> Sign out
               </button>
             ) : (
-              <Link href="/?auth=1" onClick={closeDrawer}
+              <Link href={signInHref(pathname)} onClick={closeDrawer}
                 className="mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full circle-btn-ghost text-sm font-medium">
                 Sign in
               </Link>

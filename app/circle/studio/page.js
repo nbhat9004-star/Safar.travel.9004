@@ -4,7 +4,7 @@ import Link from 'next/link';
 import CircleNav from '@/components/circle/CircleNav';
 import ShareSheet from '@/components/circle/ShareSheet';
 import { useAuth } from '@/lib/auth-context';
-import { circleApi, themeLabel, formatINR } from '@/lib/circle-api';
+import { circleApi, themeLabel, formatINR, signInHref } from '@/lib/circle-api';
 import { toast } from 'sonner';
 import {
   Sparkles, Layers, Eye, Users, Wallet, Share2, Edit3, Trash2, Send, ArrowRight,
@@ -50,7 +50,7 @@ export default function Studio() {
           <div className="circle-chip mx-auto">Sign in required</div>
           <h1 className="display text-3xl font-bold mt-4">Studio is for Journey Curators.</h1>
           <p className="text-white/70 mt-3">Sign in with your Safar account to start.</p>
-          <Link href="/?auth=1" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href={signInHref('/circle/studio')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Continue to sign in <ArrowRight className="size-4" />
           </Link>
         </div>

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User as UserIcon, Sparkles, MapPin, Shield, ChevronRight, Loader2, Phone, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +10,7 @@ import { useAuth } from '@/lib/auth-context';
 import { auth } from '@/lib/firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { IMG } from '@/lib/data';
+import { safeReturnUrl } from '@/lib/circle-api';
 
 const ROLE_OPTIONS = [
   { id: 'traveler', label: 'Traveler', desc: 'Book stays, experiences & transport', icon: MapPin },
@@ -30,6 +32,28 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
   const [mounted, setMounted] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState(null);
   const { login, register, loginWithPhone, loginWithGoogle } = useAuth();
+  const router = useRouter();
+
+  // Extract and validate an optional `returnUrl` set by callers (e.g. Safar Circle).
+  // Only same-origin relative paths are honoured — see safeReturnUrl().
+  const getReturnUrl = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return safeReturnUrl(params.get('returnUrl'));
+    } catch { return null; }
+  };
+
+  // Called after any successful auth flow. Closes the modal and navigates back
+  // to the origin page if a validated returnUrl exists.
+  const handleAuthSuccess = () => {
+    const returnUrl = getReturnUrl();
+    onClose?.();
+    if (returnUrl) {
+      // Use router.push for client-side navigation so session state is preserved.
+      try { router.push(returnUrl); } catch { window.location.href = returnUrl; }
+    }
+  };
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -96,7 +120,7 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
         return;
       }
       toast.success(`Welcome, ${res.user.name}!`);
-      onClose?.();
+      handleAuthSuccess();
     } catch (error) {
       console.error('OTP verification error:', error);
       toast.error('Invalid OTP. Please try again.');
@@ -117,7 +141,7 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
         return;
       }
       toast.success(`Welcome, ${res.user.name}!`);
-      onClose?.();
+      handleAuthSuccess();
     } catch (error) {
       console.error('Google sign-in error:', error);
       if (error.code === 'auth/popup-closed-by-user') {
@@ -157,7 +181,7 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
           return;
         }
         toast.success('Account created! Please check your email to verify your account.');
-        onClose?.();
+        handleAuthSuccess();
       } else {
         if (!email || !password) {
           toast.error('Please enter email and password');
@@ -169,7 +193,7 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
           return;
         }
         toast.success(`Welcome back, ${res.user.name}!`);
-        onClose?.();
+        handleAuthSuccess();
       }
     } catch (error) {
       console.error('Auth error:', error);

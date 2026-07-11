@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import CircleNav from '@/components/circle/CircleNav';
 import { useAuth } from '@/lib/auth-context';
-import { circleApi, themeLabel } from '@/lib/circle-api';
+import { circleApi, themeLabel, signInHref } from '@/lib/circle-api';
 import { BadgeCheck, MapPin, Sparkles, ArrowRight, Compass, ShieldCheck } from 'lucide-react';
 
 export default function Passport() {
@@ -28,7 +28,7 @@ export default function Passport() {
           <div className="circle-chip mx-auto">Sign in required</div>
           <h1 className="display text-3xl font-bold mt-4">Meet your Traveler Passport.</h1>
           <p className="text-white/70 mt-3">A living record of everywhere you’ve curated, joined, and dreamt about.</p>
-          <Link href="/?auth=1" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href={signInHref('/circle/passport')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Continue to sign in <ArrowRight className="size-4" />
           </Link>
         </div>
