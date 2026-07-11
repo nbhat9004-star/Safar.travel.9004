@@ -10057,7 +10057,7 @@ Return ONLY valid JSON, no markdown.`;
         if (doc.visibility !== 'public' && !isOwner && !isAdmin) return err('Journey not found', 404);
         const summary = await getJourneyMemberSummary(jid, doc);
         // Only curator/admin see pending requests
-        const canManage = isOwner || isAdmin;
+        const canManage = !!(isOwner || isAdmin);
         const myMembership = me ? (await circleMembers.findOne({ journeyId: jid, userId: me.id }, { projection: { _id: 0 } })) : null;
         return ok({
           journey: {
