@@ -473,3 +473,88 @@ body:has(.circle-drawer-open) {
 
 /* Divider gradient */
 .circle-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent); }
+
+/* ---------------------------------------------------------------- */
+/* Responsive tab strip (Studio / any horizontal tab set)            */
+/* ---------------------------------------------------------------- */
+.circle-tabs-wrap {
+  position: relative;
+  margin-left: calc(-1 * var(--tw-space-x-reverse, 0px));
+  /* subtle fade edges to hint horizontal scroll */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+}
+.circle-tabs-scroll {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--c-line);
+  border-radius: 999px;
+  box-shadow: 0 20px 60px -30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+  scrollbar-width: none;
+}
+.circle-tabs-scroll::-webkit-scrollbar { display: none; }
+.circle-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.72);
+  white-space: nowrap;
+  scroll-snap-align: start;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background-color .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.circle-tab:hover { color: white; background: rgba(255,255,255,0.05); }
+.circle-tab:active { transform: scale(0.98); }
+.circle-tab.is-active {
+  background: linear-gradient(120deg, #6ee7b7 0%, #a78bfa 60%, #f0abfc 100%);
+  color: #06080f;
+  font-weight: 600;
+  box-shadow: 0 8px 24px -8px rgba(167,139,250,0.55);
+}
+.circle-tab.is-locked { opacity: 0.55; }
+.circle-tab-label { max-width: none; }
+.circle-tab-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+  color: inherit;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  line-height: 1;
+}
+.circle-tab.is-active .circle-tab-badge {
+  background: rgba(6,8,15,0.18);
+  color: #06080f;
+}
+@media (max-width: 640px) {
+  .circle-tab { padding: 8px 12px; font-size: 12px; }
+  .circle-tabs-scroll { padding: 5px; gap: 4px; }
+}
+
+/* Global mobile guards for Safar Circle pages */
+.circle-root main { width: 100%; max-width: 100vw; }
+@media (max-width: 640px) {
+  .circle-root .display { letter-spacing: -0.018em; }
+  /* Reserve space so bottom nav never covers content */
+  .circle-root main[class*="pb-24"],
+  .circle-root main[class*="pb-32"] { padding-bottom: 120px; }
+}

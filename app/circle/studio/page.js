@@ -79,44 +79,51 @@ export default function Studio() {
   };
 
   return (
-    <main className="min-h-screen text-white pt-24 pb-24">
+    <main className="min-h-screen text-white pt-20 md:pt-24 pb-32">
       <CircleNav />
       <div className="circle-aurora" style={{ opacity: 0.3 }} />
 
-      <div className="max-w-7xl mx-auto px-5 md:px-8 relative">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 relative">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="circle-chip">Journey Studio</div>
-            <h1 className="display text-4xl md:text-5xl font-bold mt-3">Your Journeys, curated.</h1>
+            <h1 className="display text-3xl sm:text-4xl md:text-5xl font-bold mt-3 leading-tight">Your Journeys, curated.</h1>
             <p className="text-white/70 mt-2 text-sm">Every journey you’ve ever crafted — alive in one command center.</p>
           </div>
-          <Link href="/circle/create" className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold w-fit">
+          <Link href="/circle/create" className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold w-full md:w-fit shrink-0">
             <Sparkles className="size-4" /> Create a Journey
           </Link>
         </div>
 
         {/* Stats */}
-        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
           <StatCard icon={Layers} label="Total journeys" value={stats.total || 0} />
           <StatCard icon={Globe} label="Published" value={stats.published || 0} />
           <StatCard icon={FileText} label="Drafts" value={stats.drafts || 0} />
           <StatCard icon={Eye} label="Total views" value={stats.totalViews || 0} />
         </div>
 
-        {/* Tabs */}
-        <div className="mt-8 circle-glass rounded-full p-1.5 overflow-x-auto flex gap-1">
-          {TABS.map(t => {
-            const Icon = t.icon;
-            const active = tab === t.key;
-            return (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs md:text-sm font-medium whitespace-nowrap transition-all ${active ? 'circle-btn-primary' : 'text-white/70 hover:text-white hover:bg-white/5'} ${t.locked ? 'opacity-60' : ''}`}>
-                <Icon className="size-3.5" />
-                {t.label}
-                {t.locked && <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 uppercase tracking-widest">M2</span>}
-              </button>
-            );
-          })}
+        {/* Tabs — mobile: horizontal scroll with fade edges; desktop: pill row */}
+        <div className="mt-6 md:mt-8 circle-tabs-wrap">
+          <div className="circle-tabs-scroll" role="tablist" aria-label="Studio sections">
+            {TABS.map(t => {
+              const Icon = t.icon;
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  role="tab"
+                  aria-selected={active}
+                  className={`circle-tab ${active ? 'is-active' : ''} ${t.locked ? 'is-locked' : ''}`}
+                >
+                  <Icon className="size-[15px] shrink-0" />
+                  <span className="circle-tab-label">{t.label}</span>
+                  {t.locked && <span className="circle-tab-badge">M2</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Tab content */}
@@ -151,9 +158,11 @@ export default function Studio() {
 
 function StatCard({ icon: Icon, label, value }) {
   return (
-    <div className="circle-glass circle-card p-5">
-      <div className="flex items-center gap-2 text-white/60 text-xs"><Icon className="size-3.5" /> {label}</div>
-      <div className="display text-3xl font-bold mt-2 circle-grad-text">{value}</div>
+    <div className="circle-glass circle-card p-3.5 md:p-5">
+      <div className="flex items-center gap-2 text-white/60 text-[11px] md:text-xs min-w-0">
+        <Icon className="size-3.5 shrink-0" /> <span className="truncate">{label}</span>
+      </div>
+      <div className="display text-2xl md:text-3xl font-bold mt-1.5 md:mt-2 circle-grad-text">{value}</div>
     </div>
   );
 }
@@ -196,24 +205,24 @@ function StudioCard({ j, onShare, onDelete, onPublish }) {
         </div>
       </div>
       <div className="p-4">
-        <div className="flex items-center justify-between text-xs text-white/70">
-          <span className="inline-flex items-center gap-1"><Eye className="size-3" /> {j.viewsCount || 0}</span>
-          <span className="inline-flex items-center gap-1"><Users className="size-3" /> {j.maxMembers}</span>
-          <span className="inline-flex items-center gap-1"><Wallet className="size-3" /> {formatINR(j.estimate?.perPerson || 0)}</span>
+        <div className="flex items-center justify-between text-xs text-white/70 gap-2">
+          <span className="inline-flex items-center gap-1 min-w-0"><Eye className="size-3 shrink-0" /> <span className="truncate">{j.viewsCount || 0}</span></span>
+          <span className="inline-flex items-center gap-1 min-w-0"><Users className="size-3 shrink-0" /> <span className="truncate">{j.maxMembers}</span></span>
+          <span className="inline-flex items-center gap-1 min-w-0"><Wallet className="size-3 shrink-0" /> <span className="truncate">{formatINR(j.estimate?.perPerson || 0)}</span></span>
         </div>
-        <div className="mt-4 flex gap-2">
-          <Link href={`/circle/j/${j.slug}`} className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold">
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href={`/circle/j/${j.slug}`} className="flex-1 min-w-[110px] inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold">
             <Eye className="size-3.5" /> Preview
           </Link>
-          <button onClick={onShare} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold">
+          <button onClick={onShare} aria-label="Share" className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0">
             <Share2 className="size-3.5" />
           </button>
           {j.visibility !== 'public' && (
-            <button onClick={onPublish} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-primary text-xs font-semibold">
+            <button onClick={onPublish} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-primary text-xs font-semibold shrink-0">
               <Globe className="size-3.5" /> Publish
             </button>
           )}
-          <button onClick={onDelete} className="inline-flex items-center gap-1 px-3 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-200 text-xs font-semibold">
+          <button onClick={onDelete} aria-label="Delete" className="inline-flex items-center gap-1 px-3 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-200 text-xs font-semibold shrink-0">
             <Trash2 className="size-3.5" />
           </button>
         </div>

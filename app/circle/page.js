@@ -26,28 +26,28 @@ export default function CircleLanding() {
         <div className="circle-orb" style={{ width: 380, height: 380, background: 'radial-gradient(circle, rgba(110,231,183,0.55), transparent 60%)', top: '10%', right: '-6%' }} />
         <div className="circle-orb" style={{ width: 320, height: 320, background: 'radial-gradient(circle, rgba(167,139,250,0.6), transparent 60%)', bottom: '-8%', left: '-6%', animationDelay: '-6s' }} />
 
-        <div className="relative max-w-7xl mx-auto px-5 md:px-8 grid lg:grid-cols-2 gap-10 items-center w-full">
+        <div className="relative max-w-7xl mx-auto px-4 md:px-8 grid lg:grid-cols-2 gap-10 items-center w-full">
           <div className="circle-fade-in">
             <div className="circle-chip">
               <Sparkles className="size-3 text-emerald-300" /> World's first Collaborative Travel OS
             </div>
-            <h1 className="display font-bold mt-6 text-[clamp(2.4rem,6.6vw,5.6rem)] leading-[1.02]">
+            <h1 className="display font-bold mt-5 md:mt-6 text-[clamp(2rem,7vw,5.6rem)] leading-[1.05]">
               Create Journeys<br/>
               <span className="circle-grad-text">Worth Joining.</span>
             </h1>
-            <p className="mt-6 text-lg md:text-xl text-white/80 max-w-xl leading-relaxed">
+            <p className="mt-5 md:mt-6 text-base md:text-xl text-white/80 max-w-xl leading-relaxed">
               Plan incredible trips. Invite amazing people. Book everything through trusted Safar hosts. Travel together.
             </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Link href="/circle/create" className="inline-flex items-center gap-2 px-6 py-4 rounded-full circle-btn-primary text-[15px]">
+            <div className="mt-7 md:mt-9 flex flex-col sm:flex-row flex-wrap gap-3">
+              <Link href="/circle/create" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-4 rounded-full circle-btn-primary text-[15px]">
                 <Sparkles className="size-4" /> Create a Journey
               </Link>
-              <Link href="/circle/discover" className="inline-flex items-center gap-2 px-6 py-4 rounded-full circle-btn-ghost text-[15px]">
+              <Link href="/circle/discover" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-4 rounded-full circle-btn-ghost text-[15px]">
                 <Compass className="size-4" /> Discover Journeys <ArrowRight className="size-4" />
               </Link>
             </div>
 
-            <div className="mt-12 grid grid-cols-3 gap-4 max-w-md">
+            <div className="mt-10 md:mt-12 grid grid-cols-3 gap-3 md:gap-4 max-w-md">
               <Stat n="10" label="Themes" />
               <Stat n="1000+" label="Marketplace services" />
               <Stat n="∞" label="Journeys possible" />

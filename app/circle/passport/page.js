@@ -40,39 +40,43 @@ export default function Passport() {
   const recent = data?.recentJourneys || [];
 
   return (
-    <main className="min-h-screen text-white pt-24 pb-24">
+    <main className="min-h-screen text-white pt-20 md:pt-24 pb-32">
       <CircleNav />
       <div className="circle-aurora" style={{ opacity: 0.35 }} />
 
-      <div className="max-w-6xl mx-auto px-5 md:px-8 relative">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 relative">
         {loading || !p ? (
           <div className="circle-glass circle-card p-16 animate-pulse h-96" />
         ) : (
           <>
             {/* Passport Card */}
-            <div className="relative circle-glass-strong circle-card p-8 md:p-12 overflow-hidden">
+            <div className="relative circle-glass-strong circle-card p-5 sm:p-8 md:p-12 overflow-hidden">
               <div className="circle-aurora" style={{ opacity: 0.7 }} />
-              <div className="relative flex flex-col md:flex-row items-start md:items-center gap-8">
-                <div className="relative">
-                  <div className="size-28 md:size-32 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl">
+              <div className="relative flex flex-col md:flex-row items-start md:items-center gap-5 md:gap-8">
+                <div className="relative shrink-0">
+                  <div className="size-24 sm:size-28 md:size-32 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl">
                     {p.avatar ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
                     ) : <div className="w-full h-full bg-gradient-to-br from-emerald-400 to-violet-500 grid place-items-center display text-3xl font-bold">{p.name?.charAt(0)}</div>}
                   </div>
                   {p.verified && (
-                    <div className="absolute -bottom-1 -right-1 size-9 rounded-full bg-emerald-400 grid place-items-center border-4 border-[#0a0e1a]">
+                    <div className="absolute -bottom-1 -right-1 size-8 sm:size-9 rounded-full bg-emerald-400 grid place-items-center border-4 border-[#0a0e1a]">
                       <BadgeCheck className="size-4 text-black" />
                     </div>
                   )}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0 w-full">
                   <div className="circle-chip">Traveler Passport</div>
-                  <h1 className="display text-4xl md:text-5xl font-bold mt-3">{p.name}</h1>
-                  <div className="text-white/70 text-sm mt-1">{p.email} · since {new Date(p.memberSince).toLocaleDateString()}</div>
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  <h1 className="display text-2xl sm:text-3xl md:text-5xl font-bold mt-3 leading-tight break-words">{p.name}</h1>
+                  <div className="text-white/70 text-xs sm:text-sm mt-1 break-words">
+                    <span className="break-all">{p.email}</span>
+                    <span className="mx-1">·</span>
+                    <span className="whitespace-nowrap">since {new Date(p.memberSince).toLocaleDateString()}</span>
+                  </div>
+                  <div className="mt-4 md:mt-5 flex flex-wrap gap-2">
                     {p.badges.map(b => (
-                      <span key={b.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-medium">
+                      <span key={b.id} className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-white/10 border border-white/20 text-[11px] sm:text-xs font-medium">
                         <span>{b.emoji}</span> {b.name}
                       </span>
                     ))}
@@ -82,7 +86,7 @@ export default function Passport() {
               </div>
 
               {/* Stats grid */}
-              <div className="relative mt-8 grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="relative mt-6 md:mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 md:gap-3">
                 <PassStat label="Journeys curated" value={p.journeysCurated} />
                 <PassStat label="Published" value={p.journeysPublished} />
                 <PassStat label="Cities" value={p.cities} />
@@ -92,13 +96,13 @@ export default function Passport() {
             </div>
 
             {/* Recent journeys */}
-            <div className="mt-8">
-              <div className="flex items-end justify-between">
-                <div>
+            <div className="mt-6 md:mt-8">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
                   <div className="circle-chip">Your recent journeys</div>
-                  <h2 className="display text-2xl font-bold mt-2">Where you’ve been leading</h2>
+                  <h2 className="display text-xl sm:text-2xl font-bold mt-2 leading-tight">Where you’ve been leading</h2>
                 </div>
-                <Link href="/circle/studio" className="text-sm text-white/70 hover:text-white inline-flex items-center gap-1">
+                <Link href="/circle/studio" className="text-xs sm:text-sm text-white/70 hover:text-white inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                   All in Studio <ArrowRight className="size-4" />
                 </Link>
               </div>
@@ -153,9 +157,9 @@ export default function Passport() {
 
 function PassStat({ label, value }) {
   return (
-    <div className="circle-glass circle-card p-4">
-      <div className="text-[11px] uppercase tracking-wider text-white/60">{label}</div>
-      <div className="display text-2xl font-bold mt-1 circle-grad-text">{value}</div>
+    <div className="circle-glass circle-card p-3 sm:p-4">
+      <div className="text-[10px] sm:text-[11px] uppercase tracking-wider text-white/60 leading-tight">{label}</div>
+      <div className="display text-xl sm:text-2xl font-bold mt-1 circle-grad-text">{value}</div>
     </div>
   );
 }
