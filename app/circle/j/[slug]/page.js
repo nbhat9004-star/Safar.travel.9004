@@ -121,7 +121,7 @@ export default function JourneyPreview() {
       <section className="relative min-h-[70svh] overflow-hidden">
         {j.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />
+          <img fetchPriority="high" decoding="async" src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/40 via-violet-500/40 to-pink-400/40" />
         )}
@@ -195,7 +195,7 @@ export default function JourneyPreview() {
               <div className="flex items-center gap-3">
                 {j.curatorAvatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={j.curatorAvatar} alt={j.curatorName} className="size-10 rounded-full" />
+                  <img loading="lazy" decoding="async" src={j.curatorAvatar} alt={j.curatorName} className="size-10 rounded-full" />
                 ) : <div className="size-10 rounded-full bg-white/10 grid place-items-center text-sm">{j.curatorName?.charAt(0)}</div>}
                 <div>
                   <div className="text-xs text-white/60">Journey Curator</div>
@@ -224,7 +224,7 @@ export default function JourneyPreview() {
                     <div className="flex gap-4">
                       {s.image && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.image} alt="" className="size-20 md:size-24 rounded-2xl object-cover shrink-0" />
+                        <img loading="lazy" decoding="async" src={s.image} alt="" className="size-20 md:size-24 rounded-2xl object-cover shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="text-[11px] uppercase tracking-wider text-white/50">{s.subcategory || s.category}</div>

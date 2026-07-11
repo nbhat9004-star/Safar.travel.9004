@@ -63,7 +63,7 @@ export default function ShareSheet({ open, onClose, url, title, description }) {
         <div className="mt-6 circle-glass rounded-2xl p-5 flex flex-col md:flex-row items-center gap-5">
           <div className="size-32 rounded-2xl bg-white p-2 grid place-items-center shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={links.qr} alt="QR code" className="size-full" />
+            <img loading="lazy" decoding="async" src={links.qr} alt="QR code" className="size-full" />
           </div>
           <div className="text-sm text-white/70 text-center md:text-left">
             <div className="circle-label mb-1">QR Code</div>

@@ -166,7 +166,7 @@ export default function CircleNav({ variant = 'default' }) {
                 <span className="circle-nav-trigger-avatar">
                   {user.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.avatar} alt={user.name || 'You'} className="size-full object-cover" />
+                    <img loading="lazy" decoding="async" src={user.avatar} alt={user.name || 'You'} className="size-full object-cover" />
                   ) : (
                     <span className="text-xs font-semibold">{initials}</span>
                   )}
@@ -230,7 +230,7 @@ export default function CircleNav({ variant = 'default' }) {
               <div className="circle-drawer-avatar">
                 {user.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatar} alt={user.name || 'You'} className="size-full object-cover" />
+                  <img loading="lazy" decoding="async" src={user.avatar} alt={user.name || 'You'} className="size-full object-cover" />
                 ) : (
                   <span className="text-lg font-semibold">{initials}</span>
                 )}

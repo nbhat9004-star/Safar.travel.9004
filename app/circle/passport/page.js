@@ -57,7 +57,7 @@ export default function Passport() {
                   <div className="size-24 sm:size-28 md:size-32 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl">
                     {p.avatar ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
                     ) : <div className="w-full h-full bg-gradient-to-br from-emerald-400 to-violet-500 grid place-items-center display text-3xl font-bold">{p.name?.charAt(0)}</div>}
                   </div>
                   {p.verified && (
@@ -121,7 +121,7 @@ export default function Passport() {
                       <Link key={j.id} href={`/circle/j/${j.slug}`} className="relative rounded-3xl overflow-hidden aspect-[16/10] block border border-white/10 circle-magnetic">
                         {j.cover ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />
                         ) : (
                           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/40 via-violet-500/40 to-pink-400/40" />
                         )}

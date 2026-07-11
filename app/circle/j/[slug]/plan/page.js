@@ -246,7 +246,7 @@ function DashboardTab({ journeyId, journey, onJumpTab }) {
           <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
             {data.galleryPreview.map(img => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={img.id} src={img.src} alt={img.caption || ''} className="aspect-square object-cover rounded-xl" />
+              <img loading="lazy" decoding="async" key={img.id} src={img.src} alt={img.caption || ''} className="aspect-square object-cover rounded-xl" />
             ))}
           </div>
         ) : <div className="text-white/60 text-sm">No photos uploaded yet</div>}
@@ -835,7 +835,7 @@ function ChatTab({ journeyId, me }) {
               {!mine && (
                 m.userAvatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.userAvatar} alt="" className="size-7 rounded-full mt-4" />
+                  <img loading="lazy" decoding="async" src={m.userAvatar} alt="" className="size-7 rounded-full mt-4" />
                 ) : <div className="size-7 rounded-full bg-white/10 grid place-items-center text-[10px] mt-4">{(m.userName || '?').charAt(0).toUpperCase()}</div>
               )}
               <div className={`max-w-[75%] ${mine ? 'items-end' : 'items-start'} flex flex-col group`}>
@@ -927,7 +927,7 @@ function GalleryTab({ journeyId, me, canManage }) {
           {images.map(img => (
             <div key={img.id} className="relative group break-inside-avoid">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.src} alt={img.caption || ''} onClick={() => setLightbox(img)} className="w-full rounded-2xl cursor-pointer hover:opacity-90 transition" />
+              <img loading="lazy" decoding="async" src={img.src} alt={img.caption || ''} onClick={() = /> setLightbox(img)} className="w-full rounded-2xl cursor-pointer hover:opacity-90 transition" />
               <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition">
                 <div className="text-[10px] text-white/80 truncate">{img.userName} · {new Date(img.createdAt).toLocaleDateString()}</div>
               </div>
@@ -943,7 +943,7 @@ function GalleryTab({ journeyId, me, canManage }) {
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
           <button onClick={() => setLightbox(null)} className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20"><X className="size-5" /></button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox.src} alt="" className="max-w-full max-h-[90vh] rounded-2xl" />
+          <img loading="lazy" decoding="async" src={lightbox.src} alt="" className="max-w-full max-h-[90vh] rounded-2xl" />
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/80 text-xs bg-black/40 backdrop-blur px-4 py-2 rounded-full">
             {lightbox.userName} · {new Date(lightbox.createdAt).toLocaleDateString()}
           </div>

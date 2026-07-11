@@ -221,7 +221,7 @@ export default function CreateJourney() {
                         <button key={src} type="button" onClick={() => setCover(src)}
                           className={`relative aspect-[16/10] rounded-2xl overflow-hidden border-2 transition ${cover === src ? 'circle-selected' : 'border-white/10 hover:border-white/30'}`}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={src} alt="cover" className="absolute inset-0 w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={src} alt="cover" className="absolute inset-0 w-full h-full object-cover" />
                         </button>
                       ))}
                     </div>
@@ -469,7 +469,7 @@ function EstimatorPanel({ estimate, services }) {
               <div key={s.listingId} className="flex items-center gap-2 text-xs">
                 {s.image && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.image} alt="" className="size-8 rounded-lg object-cover" />
+                  <img loading="lazy" decoding="async" src={s.image} alt="" className="size-8 rounded-lg object-cover" />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="truncate">{s.title}</div>
@@ -625,7 +625,7 @@ function ServiceCard({ item, added, onToggle }) {
       <div className="relative aspect-[16/10] overflow-hidden">
         {item.image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.image} alt={item.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img loading="lazy" decoding="async" src={item.image} alt={item.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/30 via-violet-500/30 to-pink-400/30" />
         )}
@@ -667,7 +667,7 @@ function ReviewStep({ name, description, cover, theme, destination, startDate, e
         <div className="relative aspect-[16/9] bg-white/5">
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={cover} alt={name} className="absolute inset-0 w-full h-full object-cover" />
+            <img loading="lazy" decoding="async" src={cover} alt={name} className="absolute inset-0 w-full h-full object-cover" />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/30 via-violet-500/30 to-pink-400/30" />
           )}
@@ -695,7 +695,7 @@ function ReviewStep({ name, description, cover, theme, destination, startDate, e
             <div key={s.listingId} className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
               {s.image && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.image} alt="" className="size-14 rounded-xl object-cover" />
+                <img loading="lazy" decoding="async" src={s.image} alt="" className="size-14 rounded-xl object-cover" />
               )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold truncate">{s.title}</div>

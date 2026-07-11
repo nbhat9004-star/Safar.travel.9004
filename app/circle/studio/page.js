@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import CircleNav from '@/components/circle/CircleNav';
 import ShareSheet from '@/components/circle/ShareSheet';
@@ -46,6 +46,14 @@ export default function Studio() {
 
   useEffect(() => { if (user) load(); }, [user]);
 
+  // Memoize derived lists BEFORE any conditional return (Rules of Hooks).
+  const { drafts, published, priv, archived } = useMemo(() => ({
+    drafts: journeys.filter(j => j.visibility === 'draft'),
+    published: journeys.filter(j => j.visibility === 'public'),
+    priv: journeys.filter(j => j.visibility === 'private' || j.visibility === 'invite' || j.visibility === 'scheduled'),
+    archived: journeys.filter(j => j.visibility === 'archived'),
+  }), [journeys]);
+
   if (!authLoading && !user) {
     return (
       <main className="min-h-screen text-white pt-24">
@@ -61,11 +69,6 @@ export default function Studio() {
       </main>
     );
   }
-
-  const drafts = journeys.filter(j => j.visibility === 'draft');
-  const published = journeys.filter(j => j.visibility === 'public');
-  const priv = journeys.filter(j => j.visibility === 'private' || j.visibility === 'invite' || j.visibility === 'scheduled');
-  const archived = journeys.filter(j => j.visibility === 'archived');
 
   // Guard against duplicate rapid clicks on the same journey action.
   const guard = async (id, fn, successMsg, failMsg) => {
@@ -235,7 +238,7 @@ function StudioCard({ j, onShare, onDelete, onPublish, onUnpublish, onArchive, o
       <div className="relative aspect-[16/10]">
         {j.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />
+          <img loading="lazy" decoding="async" src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/40 via-violet-500/40 to-pink-400/40" />
         )}
@@ -319,7 +322,7 @@ function ServicesTab({ journeys }) {
               <td className="py-3 px-2 flex items-center gap-3">
                 {s.image && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.image} alt="" className="size-10 rounded-lg object-cover" />
+                  <img loading="lazy" decoding="async" src={s.image} alt="" className="size-10 rounded-lg object-cover" />
                 )}
                 <span className="font-medium">{s.title}</span>
               </td>

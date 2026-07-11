@@ -295,7 +295,7 @@ function MemberCard({ name, avatar, reputation, seats, roleLabel, roleColor, ico
       <div className="flex items-center gap-3">
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt={name} className="size-12 rounded-full object-cover" />
+          <img loading="lazy" decoding="async" src={avatar} alt={name} className="size-12 rounded-full object-cover" />
         ) : (
           <div className="size-12 rounded-full bg-white/10 grid place-items-center text-lg font-semibold">{(name || '?').charAt(0).toUpperCase()}</div>
         )}
@@ -322,7 +322,7 @@ function PendingCard({ member, busy, onAccept, onDecline, onRemove }) {
       <div className="flex items-start gap-3">
         {member.userAvatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={member.userAvatar} alt={member.userName} className="size-12 rounded-full object-cover" />
+          <img loading="lazy" decoding="async" src={member.userAvatar} alt={member.userName} className="size-12 rounded-full object-cover" />
         ) : (
           <div className="size-12 rounded-full bg-white/10 grid place-items-center text-lg font-semibold">{(member.userName || '?').charAt(0).toUpperCase()}</div>
         )}

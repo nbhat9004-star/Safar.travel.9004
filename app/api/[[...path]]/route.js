@@ -10182,7 +10182,11 @@ Return ONLY valid JSON, no markdown.`;
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(limit)
         .toArray();
-      return ok({ journeys: docs, total: docs.length });
+      // Short public cache: keeps CDN warm on hot pages while still refreshing frequently.
+      return NextResponse.json(
+        { ok: true, journeys: docs, total: docs.length },
+        { status: 200, headers: { 'Cache-Control': 'public, max-age=30, s-maxage=120, stale-while-revalidate=300' } },
+      );
     }
 
     // -------- My journeys (Studio) --------

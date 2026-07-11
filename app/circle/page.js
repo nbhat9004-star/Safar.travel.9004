@@ -171,7 +171,7 @@ function FloatingPoster({ img, title, tag, price, style, big }) {
   return (
     <div className={`absolute ${big ? 'w-64 h-80' : 'w-52 h-72'} rounded-3xl overflow-hidden circle-magnetic border border-white/20 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]`} style={style}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={img} alt={title} className="absolute inset-0 w-full h-full object-cover" />
+      <img loading="lazy" decoding="async" src={img} alt={title} className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 p-4">
         <div className="circle-chip !text-[9px] !py-1 !px-2">{tag}</div>
@@ -188,7 +188,7 @@ function JourneyPoster({ j }) {
     <Link href={`/circle/j/${j.slug}`} className="group relative aspect-[3/4] rounded-3xl overflow-hidden block border border-white/10 circle-magnetic">
       {j.cover ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+        <img loading="lazy" decoding="async" src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/40 via-violet-500/40 to-pink-400/40" />
       )}
