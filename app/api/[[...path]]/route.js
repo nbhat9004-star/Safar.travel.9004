@@ -10308,6 +10308,417 @@ Return ONLY valid JSON, no markdown.`;
       }
     }
 
+    // =============================================================================
+    // MODULE 3: Collaborative Planning Engine
+    // Collections: circle_itinerary (embedded days/blocks per journey), circle_checklist,
+    //              circle_polls, circle_chat, circle_gallery.
+    // Access levels:
+    //   - view: journey is public OR user is curator/co-curator/accepted-traveler/admin
+    //   - edit: user is curator/co-curator/admin (co-curator can edit itinerary, checklist, etc.)
+    //   - curator: user is curator or admin (create/close/delete polls, delete others' items)
+    // =============================================================================
+    async function ensureCirclePlanIndexes() {
+      try {
+        const cols = ['circle_itinerary','circle_checklist','circle_polls','circle_chat','circle_gallery'];
+        for (const name of cols) {
+          const c = await getCollection(name);
+          await c.createIndex({ id: 1 }, { unique: true });
+          await c.createIndex({ journeyId: 1, createdAt: -1 });
+        }
+      } catch {}
+    }
+    await ensureCirclePlanIndexes();
+
+    async function getPlanAccess(jid, jdoc) {
+      const isCurator = !!(me && jdoc && me.id === jdoc.curatorId);
+      const isAdmin = !!(me && (me.role === 'admin' || me.role === 'super_admin'));
+      let memberDoc = null;
+      let isCoCurator = false;
+      let isMember = false;
+      if (me && jdoc) {
+        memberDoc = await circleMembers.findOne({ journeyId: jid, userId: me.id, status: 'accepted' }, { projection: { _id: 0 } });
+        if (memberDoc) {
+          isMember = true;
+          isCoCurator = memberDoc.role === 'co_curator';
+        }
+      }
+      const canView = !!(isCurator || isAdmin || isMember || (jdoc && jdoc.visibility === 'public'));
+      const canEdit = !!(isCurator || isCoCurator || isAdmin);
+      const canManage = !!(isCurator || isAdmin);
+      const canParticipate = !!(isCurator || isMember || isAdmin); // can vote / chat / upload / toggle checklist
+      return { canView, canEdit, canManage, canParticipate, isCurator, isCoCurator, isMember, isAdmin, memberDoc };
+    }
+
+    // Match helper — /circle/journeys/:id/(sub)
+    const planMatch = path.match(/^\/circle\/journeys\/([\w-]+)\/(dashboard|itinerary|checklist|polls|chat|gallery)(\/.*)?$/);
+    if (planMatch) {
+      const jid = planMatch[1];
+      const section = planMatch[2];
+      const rest = planMatch[3] || '';
+      const jdoc = await journeys.findOne({ id: jid });
+      if (!jdoc) return err('Journey not found', 404);
+      const access = await getPlanAccess(jid, jdoc);
+      if (!access.canView && !access.canParticipate) return err('Journey not found', 404);
+
+      // ---------------- Dashboard ----------------
+      if (section === 'dashboard' && method === 'GET') {
+        const [iti, checklistCol, pollsCol, chatCol, galleryCol] = await Promise.all([
+          getCollection('circle_itinerary'),
+          getCollection('circle_checklist'),
+          getCollection('circle_polls'),
+          getCollection('circle_chat'),
+          getCollection('circle_gallery'),
+        ]);
+        const summary = await getJourneyMemberSummary(jid, jdoc);
+        const itineraryDoc = await iti.findOne({ journeyId: jid }, { projection: { _id: 0 } });
+        const days = itineraryDoc?.days || [];
+        const totalBlocks = days.reduce((n, d) => n + ['morning','afternoon','evening','night'].reduce((m, s) => m + (d[s]?.length || 0), 0), 0);
+        const checklistItems = await checklistCol.find({ journeyId: jid }, { projection: { _id: 0 } }).sort({ createdAt: 1 }).toArray();
+        const doneCount = checklistItems.filter(i => i.completed).length;
+        const checklistProgress = checklistItems.length ? Math.round((doneCount / checklistItems.length) * 100) : 0;
+        const latestPoll = await pollsCol.findOne({ journeyId: jid }, { projection: { _id: 0 }, sort: { createdAt: -1 } });
+        const latestChat = await chatCol.find({ journeyId: jid }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(3).toArray();
+        const galleryPreview = await galleryCol.find({ journeyId: jid }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(6).toArray();
+        const galleryCount = await galleryCol.countDocuments({ journeyId: jid });
+        const now = new Date();
+        const daysRemaining = jdoc.startDate ? Math.max(0, Math.ceil((new Date(jdoc.startDate) - now) / 86400000)) : null;
+        const totalDaysPlanned = days.length;
+        const tripDays = (jdoc.startDate && jdoc.endDate) ? Math.max(1, Math.ceil((new Date(jdoc.endDate) - new Date(jdoc.startDate)) / 86400000)) : totalDaysPlanned;
+        const planningProgress = tripDays ? Math.min(100, Math.round((totalDaysPlanned / tripDays) * 100)) : 0;
+
+        return ok({
+          access: { canView: access.canView, canEdit: access.canEdit, canManage: access.canManage, canParticipate: access.canParticipate },
+          widgets: {
+            members: { total: summary.acceptedCount, capacity: summary.capacity, seatsRemaining: summary.seatsRemaining },
+            daysRemaining,
+            startDate: jdoc.startDate || null,
+            endDate: jdoc.endDate || null,
+            journeyProgress: planningProgress,
+            checklistProgress,
+            checklistTotal: checklistItems.length,
+            checklistDone: doneCount,
+            itineraryDays: totalDaysPlanned,
+            itineraryBlocks: totalBlocks,
+            latestPoll: latestPoll ? {
+              id: latestPoll.id, question: latestPoll.question, closed: !!latestPoll.closed,
+              options: (latestPoll.options || []).map(o => ({ id: o.id, text: o.text, count: (latestPoll.votes || []).filter(v => v.optionId === o.id).length })),
+              totalVotes: (latestPoll.votes || []).length,
+              createdAt: latestPoll.createdAt,
+            } : null,
+            latestChat: latestChat.reverse(),
+            galleryPreview,
+            galleryCount,
+          },
+        });
+      }
+
+      // ---------------- Itinerary ----------------
+      if (section === 'itinerary') {
+        const iti = await getCollection('circle_itinerary');
+        // GET  /itinerary
+        if (rest === '' && method === 'GET') {
+          const doc = await iti.findOne({ journeyId: jid }, { projection: { _id: 0 } });
+          return ok({ itinerary: doc || { journeyId: jid, days: [] }, canEdit: access.canEdit });
+        }
+        if (!me) return err('Sign in required', 401);
+        // POST /itinerary/blocks — add a block on a given day + timeSlot
+        if (rest === '/blocks' && method === 'POST') {
+          if (!access.canEdit) return err('Only curators can edit the itinerary', 403);
+          const b = await readBody(request);
+          const day = Math.max(1, Number(b.day) || 1);
+          const timeSlot = ['morning','afternoon','evening','night'].includes(b.timeSlot) ? b.timeSlot : 'morning';
+          const block = {
+            id: uuid(),
+            day,
+            timeSlot,
+            location: (b.location || '').slice(0, 200),
+            activity: (b.activity || '').slice(0, 200),
+            description: (b.description || '').slice(0, 800),
+            meetingTime: b.meetingTime || null,
+            notes: (b.notes || '').slice(0, 400),
+            assignedTo: Array.isArray(b.assignedTo) ? b.assignedTo.slice(0, 20) : [],
+            createdBy: me.id,
+            createdByName: me.name,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          const existing = await iti.findOne({ journeyId: jid });
+          if (!existing) {
+            await iti.insertOne({ id: uuid(), journeyId: jid, days: [{ day, morning: [], afternoon: [], evening: [], night: [], [timeSlot]: [block] }], createdAt: new Date(), updatedAt: new Date() });
+          } else {
+            const days = existing.days || [];
+            let dayEntry = days.find(d => d.day === day);
+            if (!dayEntry) {
+              dayEntry = { day, morning: [], afternoon: [], evening: [], night: [] };
+              days.push(dayEntry);
+            }
+            dayEntry[timeSlot] = [...(dayEntry[timeSlot] || []), block];
+            days.sort((a, b2) => a.day - b2.day);
+            await iti.updateOne({ journeyId: jid }, { $set: { days, updatedAt: new Date() } });
+          }
+          // notify members
+          for (const m of [{ userId: jdoc.curatorId }, ...(await circleMembers.find({ journeyId: jid, status: 'accepted' }).toArray())]) {
+            if (m.userId !== me.id) {
+              await mkNotif({ userId: m.userId, type: 'circle_itinerary_updated', category: 'circle', title: 'Itinerary updated', body: `Day ${day} · ${timeSlot} added on ${jdoc.name}`, link: `/circle/j/${jdoc.slug}/plan?tab=itinerary`, meta: { journeyId: jid } });
+            }
+          }
+          return ok({ block }, 201);
+        }
+        // PUT /itinerary/blocks/:blockId
+        const bMatch = rest.match(/^\/blocks\/([\w-]+)$/);
+        if (bMatch && (method === 'PUT' || method === 'DELETE')) {
+          if (!access.canEdit) return err('Only curators can edit the itinerary', 403);
+          const blockId = bMatch[1];
+          const doc = await iti.findOne({ journeyId: jid });
+          if (!doc) return err('Itinerary not found', 404);
+          const days = doc.days || [];
+          let found = false;
+          for (const d of days) {
+            for (const slot of ['morning','afternoon','evening','night']) {
+              const arr = d[slot] || [];
+              const idx = arr.findIndex(x => x.id === blockId);
+              if (idx >= 0) {
+                if (method === 'DELETE') {
+                  arr.splice(idx, 1);
+                } else {
+                  const b = await readBody(request);
+                  const cur = arr[idx];
+                  arr[idx] = {
+                    ...cur,
+                    location: b.location != null ? String(b.location).slice(0, 200) : cur.location,
+                    activity: b.activity != null ? String(b.activity).slice(0, 200) : cur.activity,
+                    description: b.description != null ? String(b.description).slice(0, 800) : cur.description,
+                    meetingTime: b.meetingTime !== undefined ? (b.meetingTime || null) : cur.meetingTime,
+                    notes: b.notes != null ? String(b.notes).slice(0, 400) : cur.notes,
+                    assignedTo: Array.isArray(b.assignedTo) ? b.assignedTo.slice(0, 20) : cur.assignedTo,
+                    updatedAt: new Date(),
+                  };
+                }
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+          if (!found) return err('Block not found', 404);
+          await iti.updateOne({ journeyId: jid }, { $set: { days, updatedAt: new Date() } });
+          return ok({ ok: true });
+        }
+      }
+
+      // ---------------- Checklist ----------------
+      if (section === 'checklist') {
+        const items = await getCollection('circle_checklist');
+        if (rest === '' && method === 'GET') {
+          const docs = await items.find({ journeyId: jid }, { projection: { _id: 0 } }).sort({ createdAt: 1 }).toArray();
+          const total = docs.length;
+          const done = docs.filter(d => d.completed).length;
+          return ok({ items: docs, progress: total ? Math.round((done / total) * 100) : 0, total, done, canEdit: access.canEdit, canParticipate: access.canParticipate });
+        }
+        if (!me) return err('Sign in required', 401);
+        if (rest === '' && method === 'POST') {
+          if (!access.canEdit) return err('Only curators can add checklist items', 403);
+          const b = await readBody(request);
+          const title = (b.title || '').toString().trim().slice(0, 140);
+          if (!title) return err('Title required');
+          const item = {
+            id: uuid(),
+            journeyId: jid,
+            title,
+            note: (b.note || '').slice(0, 200),
+            assignedTo: Array.isArray(b.assignedTo) ? b.assignedTo.slice(0, 20) : [],
+            completed: false,
+            completedBy: null,
+            completedAt: null,
+            createdBy: me.id,
+            createdByName: me.name,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          await items.insertOne(item);
+          const { _id, ...rest2 } = item;
+          return ok({ item: rest2 }, 201);
+        }
+        const iMatch = rest.match(/^\/([\w-]+)$/);
+        if (iMatch) {
+          const iid = iMatch[1];
+          const item = await items.findOne({ id: iid, journeyId: jid });
+          if (!item) return err('Item not found', 404);
+          if (method === 'DELETE') {
+            if (!access.canEdit) return err('Only curators can delete items', 403);
+            await items.deleteOne({ id: iid });
+            return ok({ deleted: true });
+          }
+          if (method === 'PUT') {
+            const b = await readBody(request);
+            // Toggling completion allowed by any participant, but editing title/assignees needs edit rights
+            const set = { updatedAt: new Date() };
+            if (b.completed !== undefined) {
+              if (!access.canParticipate) return err('Not a member', 403);
+              set.completed = !!b.completed;
+              set.completedBy = set.completed ? me.id : null;
+              set.completedByName = set.completed ? me.name : null;
+              set.completedAt = set.completed ? new Date() : null;
+            }
+            if (b.title !== undefined || b.note !== undefined || b.assignedTo !== undefined) {
+              if (!access.canEdit) return err('Only curators can edit item content', 403);
+              if (b.title !== undefined) set.title = String(b.title).slice(0, 140);
+              if (b.note !== undefined) set.note = String(b.note).slice(0, 200);
+              if (b.assignedTo !== undefined) set.assignedTo = Array.isArray(b.assignedTo) ? b.assignedTo.slice(0, 20) : [];
+            }
+            await items.updateOne({ id: iid }, { $set: set });
+            // notify curator if a task got completed by someone else
+            if (b.completed && jdoc.curatorId !== me.id) {
+              await mkNotif({ userId: jdoc.curatorId, type: 'circle_checklist_updated', category: 'circle', title: 'Checklist item completed', body: `${me.name} completed "${item.title}"`, link: `/circle/j/${jdoc.slug}/plan?tab=checklist`, meta: { journeyId: jid, itemId: iid } });
+            }
+            const updated = await items.findOne({ id: iid }, { projection: { _id: 0 } });
+            return ok({ item: updated });
+          }
+        }
+      }
+
+      // ---------------- Polls ----------------
+      if (section === 'polls') {
+        const polls = await getCollection('circle_polls');
+        if (rest === '' && method === 'GET') {
+          const docs = await polls.find({ journeyId: jid }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+          const mapped = docs.map(p => {
+            const totalVotes = (p.votes || []).length;
+            const myVote = me ? (p.votes || []).find(v => v.userId === me.id) : null;
+            const options = (p.options || []).map(o => {
+              const voters = (p.votes || []).filter(v => v.optionId === o.id);
+              return { id: o.id, text: o.text, count: voters.length, voters: voters.map(v => ({ userId: v.userId, name: v.userName })) };
+            });
+            const winning = options.slice().sort((a, b) => b.count - a.count)[0] || null;
+            return { id: p.id, question: p.question, options, totalVotes, myVoteOptionId: myVote?.optionId || null, closed: !!p.closed, winning, createdBy: p.createdBy, createdByName: p.createdByName, createdAt: p.createdAt };
+          });
+          return ok({ polls: mapped, canManage: access.canManage, canParticipate: access.canParticipate });
+        }
+        if (!me) return err('Sign in required', 401);
+        if (rest === '' && method === 'POST') {
+          if (!access.canManage) return err('Only curators can create polls', 403);
+          const b = await readBody(request);
+          const question = (b.question || '').toString().trim().slice(0, 200);
+          const rawOpts = Array.isArray(b.options) ? b.options : [];
+          const options = rawOpts.map(o => ({ id: uuid(), text: String(o).trim().slice(0, 120) })).filter(o => o.text).slice(0, 8);
+          if (!question) return err('Question required');
+          if (options.length < 2) return err('At least 2 options required');
+          const poll = { id: uuid(), journeyId: jid, question, options, votes: [], closed: false, createdBy: me.id, createdByName: me.name, createdAt: new Date(), updatedAt: new Date() };
+          await polls.insertOne(poll);
+          // notify all accepted members (not creator)
+          const membersToNotify = await circleMembers.find({ journeyId: jid, status: 'accepted' }).toArray();
+          for (const m of membersToNotify) {
+            if (m.userId !== me.id) {
+              await mkNotif({ userId: m.userId, type: 'circle_poll_new', category: 'circle', title: 'New poll', body: `${me.name}: ${question}`, link: `/circle/j/${jdoc.slug}/plan?tab=polls`, meta: { journeyId: jid, pollId: poll.id } });
+            }
+          }
+          const { _id, ...rest2 } = poll;
+          return ok({ poll: rest2 }, 201);
+        }
+        const pMatch = rest.match(/^\/([\w-]+)(\/vote|\/close)?$/);
+        if (pMatch) {
+          const pid = pMatch[1];
+          const sub = pMatch[2] || '';
+          const poll = await polls.findOne({ id: pid, journeyId: jid });
+          if (!poll) return err('Poll not found', 404);
+          if (sub === '/vote' && method === 'POST') {
+            if (poll.closed) return err('Poll is closed', 400);
+            if (!access.canParticipate) return err('Only members can vote', 403);
+            const b = await readBody(request);
+            const optionId = b.optionId;
+            const option = (poll.options || []).find(o => o.id === optionId);
+            if (!option) return err('Invalid option', 400);
+            const votes = (poll.votes || []).filter(v => v.userId !== me.id);
+            votes.push({ userId: me.id, userName: me.name, optionId, at: new Date() });
+            await polls.updateOne({ id: pid }, { $set: { votes, updatedAt: new Date() } });
+            return ok({ ok: true });
+          }
+          if (sub === '/close' && method === 'PATCH') {
+            if (!access.canManage) return err('Only curators can close polls', 403);
+            await polls.updateOne({ id: pid }, { $set: { closed: true, updatedAt: new Date() } });
+            return ok({ closed: true });
+          }
+          if (sub === '' && method === 'DELETE') {
+            if (!access.canManage) return err('Only curators can delete polls', 403);
+            await polls.deleteOne({ id: pid });
+            return ok({ deleted: true });
+          }
+        }
+      }
+
+      // ---------------- Chat ----------------
+      if (section === 'chat') {
+        const chat = await getCollection('circle_chat');
+        if (rest === '' && method === 'GET') {
+          if (!access.canParticipate && !access.canManage) return err('Only members can view chat', 403);
+          const limit = Math.min(200, Number(url.searchParams.get('limit')) || 100);
+          const before = url.searchParams.get('before');
+          const filter = { journeyId: jid };
+          if (before) filter.createdAt = { $lt: new Date(before) };
+          const docs = await chat.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(limit).toArray();
+          return ok({ messages: docs.reverse(), canParticipate: access.canParticipate });
+        }
+        if (!me) return err('Sign in required', 401);
+        if (rest === '' && method === 'POST') {
+          if (!access.canParticipate) return err('Only members can chat', 403);
+          const b = await readBody(request);
+          const text = (b.text || '').toString().trim().slice(0, 1000);
+          if (!text) return err('Message required');
+          const msg = { id: uuid(), journeyId: jid, userId: me.id, userName: me.name, userAvatar: me.avatar || null, text, createdAt: new Date() };
+          await chat.insertOne(msg);
+          // Notify curator + members (but keep it light: only send in-app notif to curator; skip if it's curator writing)
+          if (jdoc.curatorId !== me.id) {
+            await mkNotif({ userId: jdoc.curatorId, type: 'circle_chat_new', category: 'circle', title: `New message in ${jdoc.name}`, body: `${me.name}: ${text.slice(0, 80)}`, link: `/circle/j/${jdoc.slug}/plan?tab=chat`, meta: { journeyId: jid } });
+          }
+          const { _id, ...rest2 } = msg;
+          return ok({ message: rest2 }, 201);
+        }
+        const mMatch = rest.match(/^\/([\w-]+)$/);
+        if (mMatch && method === 'DELETE') {
+          const mid = mMatch[1];
+          const msg = await chat.findOne({ id: mid, journeyId: jid });
+          if (!msg) return err('Message not found', 404);
+          if (msg.userId !== me.id && !access.canManage) return err('Only the sender can delete', 403);
+          await chat.deleteOne({ id: mid });
+          return ok({ deleted: true });
+        }
+      }
+
+      // ---------------- Gallery ----------------
+      if (section === 'gallery') {
+        const gallery = await getCollection('circle_gallery');
+        if (rest === '' && method === 'GET') {
+          const limit = Math.min(200, Number(url.searchParams.get('limit')) || 60);
+          const docs = await gallery.find({ journeyId: jid }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(limit).toArray();
+          return ok({ images: docs, canParticipate: access.canParticipate });
+        }
+        if (!me) return err('Sign in required', 401);
+        if (rest === '' && method === 'POST') {
+          if (!access.canParticipate) return err('Only members can upload', 403);
+          const b = await readBody(request);
+          const src = (b.imageUrl || b.dataUrl || '').toString();
+          if (!src || src.length > 6_000_000) return err('Image URL or data required (max ~6MB)');
+          const caption = (b.caption || '').toString().slice(0, 200);
+          const doc = { id: uuid(), journeyId: jid, userId: me.id, userName: me.name, userAvatar: me.avatar || null, src, caption, width: Number(b.width) || null, height: Number(b.height) || null, createdAt: new Date() };
+          await gallery.insertOne(doc);
+          if (jdoc.curatorId !== me.id) {
+            await mkNotif({ userId: jdoc.curatorId, type: 'circle_gallery_upload', category: 'circle', title: 'Gallery upload', body: `${me.name} added a photo to ${jdoc.name}`, link: `/circle/j/${jdoc.slug}/plan?tab=gallery`, meta: { journeyId: jid, imageId: doc.id } });
+          }
+          const { _id, ...rest2 } = doc;
+          return ok({ image: rest2 }, 201);
+        }
+        const gMatch = rest.match(/^\/([\w-]+)$/);
+        if (gMatch && method === 'DELETE') {
+          const gid = gMatch[1];
+          const img = await gallery.findOne({ id: gid, journeyId: jid });
+          if (!img) return err('Image not found', 404);
+          if (img.userId !== me.id && !access.canManage) return err('Only the uploader or curator can delete', 403);
+          await gallery.deleteOne({ id: gid });
+          return ok({ deleted: true });
+        }
+      }
+    }
+
     // -------- Update / Delete / Visibility --------
     const anyIdMatch = path.match(/^\/circle\/journeys\/([\w-]+)(\/visibility)?$/);
     if (anyIdMatch) {

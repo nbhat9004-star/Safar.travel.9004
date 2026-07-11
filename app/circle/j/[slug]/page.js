@@ -164,6 +164,11 @@ export default function JourneyPreview() {
             <Link href={`/circle/j/${j.slug}/members`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
               <Users className="size-4" /> Members
             </Link>
+            {(isOwner || memberInfo?.myMembership?.status === 'accepted') && (
+              <Link href={`/circle/j/${j.slug}/plan`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-emerald-400/25 to-violet-400/25 border border-emerald-400/40 text-white text-sm font-semibold hover:from-emerald-400/40 hover:to-violet-400/40 transition">
+                <Sparkles className="size-4" /> Open Workspace
+              </Link>
+            )}
             {isOwner && (
               <>
                 <Link href={`/circle/studio`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">

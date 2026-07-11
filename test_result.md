@@ -103,20 +103,22 @@
 #====================================================================================================
 
 user_problem_statement: |
-  SAFAR CIRCLE MODULE 2 — Collaboration Engine.
-  Add: Request-to-join, member roles (Curator/Co-Curator/Traveler), members page at
-  /circle/j/[slug]/members, capacity/seat tracking, curator actions (accept/decline/
-  promote/demote/remove), notifications via existing mkNotif helper, and journey settings
-  (maxMembers, visibility, registrationsClosed). No chat, no payments, no AI, no expense
-  splitting. Reuse existing auth, notifications, users collection, and MongoDB.
-  New collection: circle_members. Reuse circle_journeys (add registrationsClosed field).
+  SAFAR CIRCLE MODULE 3 — Collaborative Journey Planning Engine.
+  Add: Collaborative Itinerary Builder (Day × Morning/Afternoon/Evening/Night blocks with
+  location, activity, description, meeting time, notes, member assignments), Shared
+  Packing Checklist with progress %, Journey Polls (curator-created, one vote per member),
+  lightweight Journey Chat (text only, auto-scroll, delete own), Shared Gallery (image
+  masonry + lightbox), and Journey Dashboard widget page. Reuse existing auth,
+  notifications (`mkNotif`), users/circle_journeys/circle_members. Manual testing only —
+  no testing agents. Hard limit 10 credits.
+  New collections: circle_itinerary, circle_checklist, circle_polls, circle_chat, circle_gallery.
 
 test_plan:
   current_focus:
-    - "Safar Circle Module 2 backend endpoints (members, join, settings, notifications)"
+    - "Safar Circle Module 3 — Collaborative planning (itinerary/checklist/polls/chat/gallery/dashboard)"
   stuck_tasks: []
   test_all: false
-  test_priority: "high_first"
+  test_priority: "manual_only"
 
 frontend:
   - task: "Safar Circle — Mobile UI polish (bottom nav, overflow, drawer)"
