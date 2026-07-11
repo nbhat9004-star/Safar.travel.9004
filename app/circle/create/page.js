@@ -15,7 +15,7 @@ const STEPS = [
   { key: 'identity', label: 'Identity' },
   { key: 'plan', label: 'Plan' },
   { key: 'marketplace', label: 'Services' },
-  { key: 'review', label: 'Preview & Publish' },
+  { key: 'review', label: 'Publish' },
 ];
 
 const COVER_SUGGESTIONS = [
@@ -156,21 +156,44 @@ export default function CreateJourney() {
           <Link href="/circle/studio" className="text-sm text-white/70 hover:text-white hidden md:inline-flex items-center gap-1">Cancel <X className="size-4" /></Link>
         </div>
 
-        {/* Stepper */}
-        <div className="mt-8 circle-glass circle-card p-2 flex gap-1 overflow-x-auto">
-          {STEPS.map((s, i) => (
-            <button key={s.key} onClick={() => setStep(i)}
-              className={`flex-1 min-w-[130px] px-4 py-3 rounded-full text-xs md:text-sm font-medium transition-all whitespace-nowrap ${
-                step === i ? 'circle-btn-primary' : (i < step ? 'bg-white/10 text-white' : 'text-white/60 hover:bg-white/5')
-              }`}>
-              <div className="flex items-center justify-center gap-2">
-                <span className={`size-5 rounded-full grid place-items-center text-[10px] ${step === i ? 'bg-black/20 text-black' : i < step ? 'bg-emerald-400/30 text-emerald-200' : 'bg-white/10'}`}>
-                  {i < step ? <Check className="size-3" /> : i + 1}
-                </span>
-                {s.label}
-              </div>
-            </button>
-          ))}
+        {/* Stepper — mobile-first, equal-width columns, no overflow */}
+        <div className="mt-6 md:mt-8 circle-glass circle-card p-2 sm:p-3">
+          <ol className="grid grid-cols-4 gap-1 sm:gap-2" role="list" aria-label="Journey creation progress">
+            {STEPS.map((s, i) => {
+              const isActive = step === i;
+              const isDone = i < step;
+              return (
+                <li key={s.key} className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setStep(i)}
+                    aria-current={isActive ? 'step' : undefined}
+                    aria-label={`Step ${i + 1}: ${s.label}${isDone ? ' (completed)' : isActive ? ' (current)' : ''}`}
+                    className={`group w-full flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 px-1.5 sm:px-3 py-2 sm:py-2.5 rounded-full text-[11px] sm:text-[13px] font-medium transition-all ${
+                      isActive
+                        ? 'circle-btn-primary'
+                        : isDone
+                          ? 'bg-white/10 text-white hover:bg-white/15'
+                          : 'text-white/60 hover:bg-white/5'
+                    }`}
+                  >
+                    <span
+                      className={`shrink-0 size-6 sm:size-5 rounded-full grid place-items-center text-[10px] font-semibold ${
+                        isActive
+                          ? 'bg-black/25 text-black'
+                          : isDone
+                            ? 'bg-emerald-400/30 text-emerald-200'
+                            : 'bg-white/10 text-white/80'
+                      }`}
+                    >
+                      {isDone ? <Check className="size-3" /> : i + 1}
+                    </span>
+                    <span className="truncate max-w-full leading-none">{s.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
         </div>
 
         <div className="mt-8 grid lg:grid-cols-[1fr_360px] gap-8">
