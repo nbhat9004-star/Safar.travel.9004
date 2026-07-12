@@ -1061,7 +1061,7 @@ async function route(request, { params }) {
     const g = requireRole(me, ['host','admin']); if (!g.ok) return err(g.error, g.status);
     const v = requireVerifiedEmail(me); if (!v.ok) return err(v.error, v.status);
     const body = await readBody(request);
-    const { title, description, category, subcategory, location, price, images, amenities, services, duration, inventoryTypes } = body;
+    const { title, description, category, subcategory, location, price, images, amenities, services, duration, inventoryTypes, categoryDetails } = body;
     if (!title || title.trim().length < 3) return err('Title is required (min 3 chars)');
     if (!description || description.trim().length < 10) return err('Description is required (min 10 chars)');
     if (!CATEGORIES.includes(category)) return err(`Category must be one of: ${CATEGORIES.join(', ')}`);
@@ -1129,6 +1129,7 @@ async function route(request, { params }) {
       featured: false,
       isDemo: false,
       inventoryTypes: processedTypes,
+      categoryDetails: (categoryDetails && typeof categoryDetails === 'object') ? categoryDetails : {},
       createdAt: now,
       updatedAt: now,
     };
