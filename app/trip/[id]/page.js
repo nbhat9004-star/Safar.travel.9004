@@ -119,9 +119,9 @@ export default function TripProgressPage() {
 
   if (loading && !data) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white">
+      <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white overflow-x-hidden">
         <Navbar />
-        <div className="pt-24 container">
+        <div className="pt-20 md:pt-24 container px-4 sm:px-6">
           <div className="max-w-4xl mx-auto">
             <div className="h-8 w-40 rounded-full bg-secondary animate-pulse" />
             <div className="mt-4 h-24 rounded-3xl bg-secondary animate-pulse" />
@@ -134,9 +134,9 @@ export default function TripProgressPage() {
   }
   if (error && !data) {
     return (
-      <main className="min-h-screen bg-background">
+      <main className="min-h-screen bg-background overflow-x-hidden">
         <Navbar />
-        <div className="pt-24 container max-w-2xl">
+        <div className="pt-20 md:pt-24 container max-w-2xl px-4 sm:px-6">
           <div className="p-8 rounded-3xl border text-center">
             <AlertTriangle className="size-8 text-amber-500 mx-auto" />
             <div className="mt-3 font-display text-xl font-bold">Trip not found</div>
@@ -159,23 +159,23 @@ export default function TripProgressPage() {
   const totalPrice = services.filter(s => s.status === 'confirmed').reduce((n, s) => n + (Number(s.confirmedPrice) || 0), 0);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white">
+    <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white overflow-x-hidden">
       <Navbar />
-      <div className="pt-24 container pb-16">
-        <Link href="/build-trip" className="text-sm text-muted-foreground hover:text-charcoal inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> Build My Trip</Link>
+      <div className="pt-20 md:pt-24 container pb-10 md:pb-16 px-4 sm:px-6">
+        <Link href="/build-trip" className="text-[13px] md:text-sm text-muted-foreground hover:text-charcoal inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> Build My Trip</Link>
 
         {/* Header */}
-        <div className="mt-4 rounded-3xl border bg-white/80 backdrop-blur shadow-xl p-6 md:p-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="mt-3 md:mt-4 rounded-3xl border bg-white/80 backdrop-blur shadow-xl p-4 sm:p-6 md:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-3 md:gap-4">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald2 text-[11px] uppercase tracking-wider font-semibold border border-emerald-200">
-                <Sparkles className="size-3.5" /> Live orchestration
+              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full bg-emerald-50 text-emerald2 text-[10px] md:text-[11px] uppercase tracking-wider font-semibold border border-emerald-200">
+                <Sparkles className="size-3 md:size-3.5" /> Live orchestration
               </div>
-              <h1 className="font-display text-3xl md:text-4xl font-bold mt-3">{trip.destination}</h1>
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1"><Calendar className="size-4" /> {trip.startDate} → {trip.endDate}{trip.nights ? ` · ${trip.nights} night${trip.nights !== 1 ? 's' : ''}` : ''}</span>
-                <span className="inline-flex items-center gap-1"><Users className="size-4" /> {trip.travelers?.total || 1} traveler{(trip.travelers?.total || 1) !== 1 ? 's' : ''}</span>
-                <span className="inline-flex items-center gap-1"><Wallet className="size-4" /> {trip.budget?.label}</span>
+              <h1 className="font-display text-2xl sm:text-3xl md:text-4xl leading-tight font-bold mt-2 md:mt-3 break-words">{trip.destination}</h1>
+              <div className="mt-1.5 md:mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] md:text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1"><Calendar className="size-3.5 md:size-4" /> {trip.startDate} → {trip.endDate}{trip.nights ? ` · ${trip.nights} night${trip.nights !== 1 ? 's' : ''}` : ''}</span>
+                <span className="inline-flex items-center gap-1"><Users className="size-3.5 md:size-4" /> {trip.travelers?.total || 1} traveler{(trip.travelers?.total || 1) !== 1 ? 's' : ''}</span>
+                <span className="inline-flex items-center gap-1"><Wallet className="size-3.5 md:size-4" /> {trip.budget?.label}</span>
               </div>
             </div>
             <StatusBadge status={status} />
@@ -238,11 +238,11 @@ export default function TripProgressPage() {
         </div>
 
         {/* Services */}
-        <div className="mt-6 grid md:grid-cols-3 gap-6">
+        <div className="mt-4 md:mt-6 grid md:grid-cols-3 gap-4 md:gap-6">
           <div className="md:col-span-2 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-xl font-bold">Services</h2>
-              <span className="text-xs text-muted-foreground">{confirmedCount} confirmed · {pendingCount} pending · {unavailableCount} unavailable</span>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg md:text-xl font-bold">Services</h2>
+              <span className="text-[11px] md:text-xs text-muted-foreground text-right">{confirmedCount} confirmed · {pendingCount} pending · {unavailableCount} unavailable</span>
             </div>
             <AnimatePresence mode="popLayout">
               {services.map((s) => (
@@ -254,8 +254,8 @@ export default function TripProgressPage() {
           </div>
 
           {/* Sidebar summary */}
-          <aside className="space-y-4">
-            <div className="rounded-3xl border bg-white/80 backdrop-blur p-6 shadow-sm sticky top-24">
+          <aside className="space-y-3 md:space-y-4">
+            <div className="rounded-3xl border bg-white/80 backdrop-blur p-4 md:p-6 shadow-sm lg:sticky lg:top-24">
               <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Trip summary</div>
               <div className="font-display font-bold text-lg">{trip.destination}</div>
               <div className="text-xs text-muted-foreground mt-1">{trip.startDate} → {trip.endDate}</div>

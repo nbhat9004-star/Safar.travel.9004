@@ -91,11 +91,11 @@ function Counter({ label, value, onChange, min = 0, max = 20, sub }) {
 function StepHeader({ stepNumber, icon, label, subtitle }) {
   return (
     <div>
-      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald2 text-[11px] uppercase tracking-wider font-semibold border border-emerald-200">
+      <div className="inline-flex items-center gap-2 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full bg-emerald-50 text-emerald2 text-[10px] md:text-[11px] uppercase tracking-wider font-semibold border border-emerald-200">
         {icon} Step {stepNumber}
       </div>
-      <h2 className="font-display text-2xl md:text-3xl font-bold mt-3">{label}</h2>
-      {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+      <h2 className="font-display text-xl sm:text-2xl md:text-3xl leading-tight font-bold mt-2 md:mt-3">{label}</h2>
+      {subtitle && <p className="text-[13px] md:text-sm text-muted-foreground mt-1 leading-relaxed">{subtitle}</p>}
     </div>
   );
 }
@@ -104,12 +104,12 @@ function BigCard({ active, onClick, emoji, title, sub }) {
   return (
     <button
       onClick={onClick}
-      className={`relative overflow-hidden p-4 rounded-2xl border-2 text-left transition ${active ? 'border-emerald2 shadow-xl ring-4 ring-emerald2/10 bg-emerald-50/30' : 'border-border hover:border-emerald2/50 hover:shadow-md bg-white'}`}
+      className={`relative overflow-hidden p-3 md:p-4 rounded-2xl border-2 text-left transition ${active ? 'border-emerald2 shadow-xl ring-4 ring-emerald2/10 bg-emerald-50/30' : 'border-border hover:border-emerald2/50 hover:shadow-md bg-white'}`}
     >
-      <div className="text-2xl">{emoji}</div>
-      <div className="font-display font-bold mt-2">{title}</div>
-      <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>
-      {active && <div className="absolute -top-1 -right-1 size-6 rounded-full bg-emerald2 text-white grid place-items-center shadow"><Check className="size-3.5" /></div>}
+      <div className="text-xl md:text-2xl">{emoji}</div>
+      <div className="font-display font-bold text-sm md:text-base mt-1.5 md:mt-2">{title}</div>
+      <div className="text-[11px] md:text-xs text-muted-foreground mt-0.5 leading-tight">{sub}</div>
+      {active && <div className="absolute -top-1 -right-1 size-5 md:size-6 rounded-full bg-emerald2 text-white grid place-items-center shadow"><Check className="size-3 md:size-3.5" /></div>}
     </button>
   );
 }
@@ -293,18 +293,18 @@ export default function BuildTripPage() {
   const back = () => goto(step - 1);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white">
+    <main className="min-h-screen bg-gradient-to-b from-emerald-50/30 via-white to-white overflow-x-hidden">
       <Navbar />
-      <div className="pt-24 container">
-        <div className="flex items-center gap-2 text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">
-          <Sparkles className="size-4" /> Build My Trip
+      <div className="pt-20 md:pt-24 container px-4 sm:px-6">
+        <div className="flex items-center gap-2 text-emerald2 text-[11px] md:text-xs uppercase tracking-[0.18em] font-semibold">
+          <Sparkles className="size-3.5 md:size-4" /> Build My Trip
         </div>
-        <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">A guided way to plan your Safar</h1>
-        <p className="mt-2 text-muted-foreground max-w-2xl text-sm md:text-base">Answer a few quick questions and we'll tailor the trip to exactly what you need — no marketplace hunting required.</p>
+        <h1 className="font-display text-[26px] sm:text-3xl md:text-5xl leading-tight font-bold mt-1.5 md:mt-2">A guided way to plan your Safar</h1>
+        <p className="mt-1.5 md:mt-2 text-muted-foreground max-w-2xl text-[13px] md:text-base leading-relaxed">Answer a few quick questions and we'll tailor the trip to exactly what you need — no marketplace hunting required.</p>
 
         {/* Progress */}
-        <div className="mt-6 relative">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <div className="mt-4 md:mt-6 relative -mx-4 sm:-mx-6 md:mx-0">
+          <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto pb-2 scrollbar-none px-4 sm:px-6 md:px-0">
             {STEPS.map((s, i) => {
               const active = i === step;
               const done = i < step;
@@ -312,11 +312,11 @@ export default function BuildTripPage() {
                 <button
                   key={s.key}
                   onClick={() => (done ? goto(i) : null)}
-                  className={`flex items-center gap-2 shrink-0 ${done ? 'cursor-pointer' : 'cursor-default'}`}
+                  className={`flex items-center gap-1.5 md:gap-2 shrink-0 ${done ? 'cursor-pointer' : 'cursor-default'}`}
                 >
-                  <div className={`size-8 rounded-full grid place-items-center text-xs font-bold transition ${active ? 'bg-gradient-emerald text-white scale-110 shadow-md' : done ? 'bg-emerald2 text-white' : 'bg-secondary text-muted-foreground'}`}>{done ? <Check className="size-4" /> : i + 1}</div>
-                  <div className={`text-xs md:text-sm ${active ? 'text-charcoal font-semibold' : done ? 'text-charcoal/70' : 'text-muted-foreground'}`}>{s.label}</div>
-                  {i < STEPS.length - 1 && <div className={`w-4 md:w-6 h-px shrink-0 ${done ? 'bg-emerald2' : 'bg-border'}`} />}
+                  <div className={`size-7 md:size-8 rounded-full grid place-items-center text-[11px] md:text-xs font-bold transition ${active ? 'bg-gradient-emerald text-white scale-110 shadow-md' : done ? 'bg-emerald2 text-white' : 'bg-secondary text-muted-foreground'}`}>{done ? <Check className="size-3.5 md:size-4" /> : i + 1}</div>
+                  <div className={`text-[11px] md:text-sm hidden xs:block sm:block ${active ? 'text-charcoal font-semibold' : done ? 'text-charcoal/70' : 'text-muted-foreground'}`}>{s.label}</div>
+                  {i < STEPS.length - 1 && <div className={`w-3 md:w-6 h-px shrink-0 ${done ? 'bg-emerald2' : 'bg-border'}`} />}
                 </button>
               );
             })}
@@ -324,7 +324,7 @@ export default function BuildTripPage() {
         </div>
       </div>
 
-      <div className="container mt-8 grid lg:grid-cols-3 gap-6 pb-16">
+      <div className="container mt-5 md:mt-8 grid lg:grid-cols-3 gap-4 md:gap-6 pb-10 md:pb-16 px-4 sm:px-6">
         <div className="lg:col-span-2">
           <AnimatePresence mode="wait">
             <motion.div
@@ -333,13 +333,13 @@ export default function BuildTripPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.25 }}
-              className="rounded-3xl border bg-white/80 backdrop-blur shadow-xl p-6 md:p-8"
+              className="rounded-3xl border bg-white/80 backdrop-blur shadow-xl p-4 sm:p-6 md:p-8"
             >
               {/* STEP 0: Destination */}
               {step === 0 && (
                 <div>
                   <StepHeader stepNumber={1} icon={<MapPin className="size-3.5" />} label="Where are we heading?" subtitle="Pick a destination or type your own." />
-                  <div className="mt-6 grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="mt-4 md:mt-6 grid sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {DESTINATIONS.map(d => (
                       <BigCard key={d.key} active={destination === d.key} onClick={() => setDestination(d.key)} emoji={d.emoji} title={d.label} sub={d.tag} />
                     ))}
@@ -357,7 +357,7 @@ export default function BuildTripPage() {
               {step === 1 && (
                 <div>
                   <StepHeader stepNumber={2} icon={<Calendar className="size-3.5" />} label="When would you like to travel?" subtitle="Pick your check-in and check-out dates." />
-                  <div className="mt-6 grid sm:grid-cols-2 gap-4">
+                  <div className="mt-4 md:mt-6 grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">Start date</label>
                       <input type="date" value={startDate} min={new Date().toISOString().slice(0,10)} onChange={(e)=>setStartDate(e.target.value)} className="mt-1 w-full px-4 py-3 rounded-xl border outline-none focus:border-emerald2" />
@@ -379,7 +379,7 @@ export default function BuildTripPage() {
               {step === 2 && (
                 <div>
                   <StepHeader stepNumber={3} icon={<Users className="size-3.5" />} label="Who's coming with you?" subtitle="Count everyone joining the trip." />
-                  <div className="mt-6 grid gap-3">
+                  <div className="mt-4 md:mt-6 grid gap-3">
                     <Counter label="Adults" sub="Age 13+" value={adults} onChange={setAdults} min={1} />
                     <Counter label="Children" sub="Age 3 – 12" value={children} onChange={setChildren} />
                     <Counter label="Infants" sub="Under 3" value={infants} onChange={setInfants} />
@@ -392,21 +392,21 @@ export default function BuildTripPage() {
               {step === 3 && (
                 <div>
                   <StepHeader stepNumber={4} icon={<Wallet className="size-3.5" />} label="What's your budget?" subtitle="Rough guide — you'll see actual prices at checkout." />
-                  <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="mt-4 md:mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {BUDGET_TIERS.map(b => {
                       const Ic = b.Icon;
                       const on = budgetTier === b.key;
                       return (
-                        <button key={b.key} onClick={() => setBudgetTier(b.key)} className={`relative overflow-hidden p-4 rounded-2xl border-2 text-left transition ${on ? 'border-emerald2 shadow-xl ring-4 ring-emerald2/10' : 'border-border hover:border-emerald2/50 hover:shadow-md'}`}>
+                        <button key={b.key} onClick={() => setBudgetTier(b.key)} className={`relative overflow-hidden p-3 md:p-4 rounded-2xl border-2 text-left transition ${on ? 'border-emerald2 shadow-xl ring-4 ring-emerald2/10' : 'border-border hover:border-emerald2/50 hover:shadow-md'}`}>
                           <div className={`absolute inset-0 bg-gradient-to-br ${b.hue} transition ${on ? 'opacity-15' : 'opacity-0'}`} />
                           <div className="relative">
-                            <div className={`size-10 rounded-xl bg-gradient-to-br ${b.hue} grid place-items-center text-white shadow`}>
-                              <Ic className="size-5" />
+                            <div className={`size-9 md:size-10 rounded-xl bg-gradient-to-br ${b.hue} grid place-items-center text-white shadow`}>
+                              <Ic className="size-4 md:size-5" />
                             </div>
-                            <div className="font-display font-bold mt-3">{b.label}</div>
-                            <div className="text-xs text-emerald2 font-semibold mt-0.5">{b.range}</div>
-                            <div className="text-[11px] text-muted-foreground mt-1">{b.tip}</div>
-                            {on && <div className="absolute -top-1 -right-1 size-6 rounded-full bg-emerald2 text-white grid place-items-center shadow"><Check className="size-3.5" /></div>}
+                            <div className="font-display font-bold text-sm md:text-base mt-2 md:mt-3">{b.label}</div>
+                            <div className="text-[11px] md:text-xs text-emerald2 font-semibold mt-0.5">{b.range}</div>
+                            <div className="text-[10px] md:text-[11px] text-muted-foreground mt-0.5 md:mt-1 leading-tight">{b.tip}</div>
+                            {on && <div className="absolute -top-1 -right-1 size-5 md:size-6 rounded-full bg-emerald2 text-white grid place-items-center shadow"><Check className="size-3 md:size-3.5" /></div>}
                           </div>
                         </button>
                       );
@@ -428,22 +428,22 @@ export default function BuildTripPage() {
               {step === 4 && (
                 <div>
                   <StepHeader stepNumber={5} icon={<Sparkles className="size-3.5" />} label="What services would you like?" subtitle="Pick everything you need. We'll only ask for relevant preferences next." />
-                  <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  <div className="mt-4 md:mt-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {SERVICES.map(s => {
                       const Ic = s.Icon;
                       const on = services.includes(s.key);
                       return (
-                        <button key={s.key} onClick={() => setServices(on ? services.filter(x => x !== s.key) : [...services, s.key])} className={`relative overflow-hidden p-4 rounded-2xl border-2 text-left transition ${on ? 'border-emerald2 shadow-xl ring-4 ring-emerald2/10' : 'border-border hover:border-emerald2/50 hover:shadow-md'}`}>
+                        <button key={s.key} onClick={() => setServices(on ? services.filter(x => x !== s.key) : [...services, s.key])} className={`relative overflow-hidden p-3 md:p-4 rounded-2xl border-2 text-left transition ${on ? 'border-emerald2 shadow-xl ring-4 ring-emerald2/10' : 'border-border hover:border-emerald2/50 hover:shadow-md'}`}>
                           <div className={`absolute inset-0 bg-gradient-to-br ${s.hue} transition ${on ? 'opacity-15' : 'opacity-0'}`} />
                           <div className="relative">
                             <div className="flex items-start justify-between">
-                              <div className={`size-10 rounded-xl bg-gradient-to-br ${s.hue} grid place-items-center text-white shadow`}>
-                                <Ic className="size-5" />
+                              <div className={`size-9 md:size-10 rounded-xl bg-gradient-to-br ${s.hue} grid place-items-center text-white shadow`}>
+                                <Ic className="size-4 md:size-5" />
                               </div>
-                              <span className="text-xl">{s.emoji}</span>
+                              <span className="text-lg md:text-xl">{s.emoji}</span>
                             </div>
-                            <div className="font-semibold text-sm mt-2.5">{s.label}</div>
-                            {on && <div className="absolute -top-1 -right-1 size-6 rounded-full bg-emerald2 text-white grid place-items-center shadow"><Check className="size-3.5" /></div>}
+                            <div className="font-semibold text-[13px] md:text-sm mt-2 md:mt-2.5 leading-tight">{s.label}</div>
+                            {on && <div className="absolute -top-1 -right-1 size-5 md:size-6 rounded-full bg-emerald2 text-white grid place-items-center shadow"><Check className="size-3 md:size-3.5" /></div>}
                           </div>
                         </button>
                       );
@@ -701,24 +701,24 @@ export default function BuildTripPage() {
                     )}
                   </div>
 
-                  <div className="mt-8 rounded-2xl border bg-gradient-to-br from-amber-50/50 via-orange-50/30 to-rose-50/30 p-5">
+                  <div className="mt-6 md:mt-8 rounded-2xl border bg-gradient-to-br from-amber-50/50 via-orange-50/30 to-rose-50/30 p-4 md:p-5">
                     <div className="flex items-start gap-3">
-                      <div className="size-9 rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 text-white grid place-items-center shrink-0"><Sparkles className="size-5" /></div>
+                      <div className="size-8 md:size-9 rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 text-white grid place-items-center shrink-0"><Sparkles className="size-4 md:size-5" /></div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm">Live host orchestration</div>
-                        <div className="text-xs text-muted-foreground mt-1">When you continue, Safar will instantly match verified hosts for every service you selected, contact the best-ranked providers, and confirm your bookings — all in one live progress screen.</div>
+                        <div className="font-semibold text-[13px] md:text-sm">Live host orchestration</div>
+                        <div className="text-[11px] md:text-xs text-muted-foreground mt-1 leading-relaxed">When you continue, Safar will instantly match verified hosts for every service you selected, contact the best-ranked providers, and confirm your bookings — all in one live progress screen.</div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                    <Button onClick={back} variant="outline" className="rounded-full sm:w-auto" disabled={submitting}>
+                  <div className="mt-4 md:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <Button onClick={back} variant="outline" className="rounded-full sm:w-auto h-11 md:h-10" disabled={submitting}>
                       <ChevronLeft className="size-4 mr-1" /> Back
                     </Button>
                     <Button
                       onClick={handleContinueToBooking}
                       disabled={submitting || services.length === 0}
-                      className="rounded-full flex-1 h-12 font-semibold text-base bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 text-white shadow-lg shadow-orange-500/25 disabled:opacity-60"
+                      className="rounded-full flex-1 h-11 md:h-12 font-semibold text-[14px] md:text-base bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 text-white shadow-lg shadow-orange-500/25 disabled:opacity-60"
                     >
                       {submitting ? (
                         <><span className="mr-2 inline-block size-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Starting orchestration…</>
@@ -732,11 +732,11 @@ export default function BuildTripPage() {
 
               {/* Nav (for steps 0..5) */}
               {step < 6 && (
-                <div className="mt-8 flex justify-between">
-                  <Button variant="outline" className="rounded-full" disabled={step === 0} onClick={back}>
+                <div className="mt-6 md:mt-8 flex justify-between gap-2">
+                  <Button variant="outline" size="sm" className="rounded-full min-w-[92px] md:min-w-0 md:size-default" disabled={step === 0} onClick={back}>
                     <ChevronLeft className="size-4 mr-1" /> Back
                   </Button>
-                  <Button className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold" disabled={!canContinue} onClick={next}>
+                  <Button size="sm" className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold min-w-[110px] md:min-w-0 md:size-default" disabled={!canContinue} onClick={next}>
                     Continue <ChevronRight className="size-4 ml-1" />
                   </Button>
                 </div>
@@ -746,8 +746,8 @@ export default function BuildTripPage() {
         </div>
 
         {/* Sidebar preview */}
-        <aside className="space-y-4">
-          <div className="rounded-3xl border bg-white/80 backdrop-blur p-6 shadow-sm sticky top-24">
+        <aside className="space-y-3 md:space-y-4">
+          <div className="rounded-3xl border bg-white/80 backdrop-blur p-4 md:p-6 shadow-sm lg:sticky lg:top-24">
             <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Trip preview</div>
             <div className="font-display font-bold text-lg">{destLabel || 'Your Kashmir trip'}</div>
             <div className="text-xs text-muted-foreground mt-1">
@@ -776,7 +776,7 @@ export default function BuildTripPage() {
             )}
           </div>
 
-          <div className="rounded-3xl border bg-gradient-to-br from-emerald-50/60 to-white p-5">
+          <div className="rounded-3xl border bg-gradient-to-br from-emerald-50/60 to-white p-4 md:p-5">
             <Sparkles className="size-5 text-emerald2" />
             <div className="font-display font-bold text-base mt-2">Why Build My Trip?</div>
             <ul className="mt-2 space-y-1.5 text-xs text-charcoal/80">
