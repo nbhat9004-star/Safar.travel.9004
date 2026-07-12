@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import {
   Users, Crown, Star, ShieldCheck, ArrowLeft, Check, X, LogOut, Loader2,
   UserPlus, UserMinus, ChevronUp, ChevronDown, Settings, DoorClosed, DoorOpen,
-  Globe, Lock, MailPlus, Send, Sparkles
+  Globe, Lock, MailPlus, Send, Sparkles, Megaphone
 } from 'lucide-react';
 
 const VIS_OPTIONS = [
@@ -28,6 +28,8 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [busyMemberId, setBusyMemberId] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [announceOpen, setAnnounceOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -120,9 +122,17 @@ export default function MembersPage() {
             </div>
           </div>
           {canManage && (
-            <button onClick={() => setSettingsOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
-              <Settings className="size-4" /> Journey settings
-            </button>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button onClick={() => setInviteOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full circle-btn-ghost text-sm font-semibold">
+                <UserPlus className="size-4" /> Invite
+              </button>
+              <button onClick={() => setAnnounceOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-gradient-to-r from-amber-400/25 to-pink-400/25 border border-amber-400/40 text-white text-sm font-semibold">
+                <Megaphone className="size-4" /> Announce
+              </button>
+              <button onClick={() => setSettingsOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
+                <Settings className="size-4" /> Settings
+              </button>
+            </div>
           )}
         </div>
       </section>
@@ -272,6 +282,20 @@ export default function MembersPage() {
           minMembers={acceptedSeats}
           onClose={() => setSettingsOpen(false)}
           onSaved={async () => { setSettingsOpen(false); await load(); }}
+        />
+      )}
+      {inviteOpen && canManage && (
+        <InviteModal
+          journey={journey}
+          onClose={() => setInviteOpen(false)}
+          onSent={async () => { setInviteOpen(false); await load(); }}
+        />
+      )}
+      {announceOpen && canManage && (
+        <AnnounceModal
+          journey={journey}
+          onClose={() => setAnnounceOpen(false)}
+          onPosted={async () => { setAnnounceOpen(false); await load(); }}
         />
       )}
     </main>
@@ -474,3 +498,96 @@ function SettingsModal({ journey, minMembers, onClose, onSaved }) {
     </div>
   );
 }
+
+function InviteModal({ journey, onClose, onSent }) {
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await circleApi.inviteMember(journey.id, { email: email.trim(), message });
+      toast.success('Invitation sent');
+      onSent && onSent();
+    } catch (e) { toast.error(e.message || 'Failed to send invite'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-md circle-glass-strong rounded-t-3xl sm:rounded-3xl p-6 text-white border border-white/10">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="circle-chip">Invite a traveler</div>
+            <h3 className="display text-xl font-bold mt-2">Invite to {journey.name}</h3>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white p-1"><X className="size-5" /></button>
+        </div>
+        <div className="mt-5 space-y-4">
+          <div>
+            <div className="circle-label mb-1">Email address</div>
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="friend@example.com" className="w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/25" />
+          </div>
+          <div>
+            <div className="circle-label mb-1">Personal message (optional)</div>
+            <textarea value={message} onChange={e => setMessage(e.target.value.slice(0, 400))} placeholder="Hey, would love to have you join us on this trip…" className="w-full min-h-[80px] rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/25 resize-none" />
+            <div className="text-[10px] text-white/40 text-right mt-1">{message.length}/400</div>
+          </div>
+          <div className="text-[11px] text-white/50">If they have a Safar account, they'll receive an in-app notification and can request to join with one tap.</div>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-full circle-btn-ghost text-sm font-semibold">Cancel</button>
+          <button onClick={submit} disabled={busy || !email.trim()} className="flex-1 px-4 py-2.5 rounded-full circle-btn-primary text-sm font-semibold disabled:opacity-60 inline-flex items-center justify-center gap-2">
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send invite
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnnounceModal({ journey, onClose, onPosted }) {
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await circleApi.postAnnouncement(journey.id, { title: title.trim(), message: message.trim() });
+      toast.success('Announcement posted');
+      onPosted && onPosted();
+    } catch (e) { toast.error(e.message || 'Failed to post'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-md circle-glass-strong rounded-t-3xl sm:rounded-3xl p-6 text-white border border-white/10">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="circle-chip">Curator announcement</div>
+            <h3 className="display text-xl font-bold mt-2">Broadcast to members</h3>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white p-1"><X className="size-5" /></button>
+        </div>
+        <div className="mt-5 space-y-4">
+          <div>
+            <div className="circle-label mb-1">Title (optional)</div>
+            <input value={title} onChange={e => setTitle(e.target.value.slice(0, 140))} placeholder="e.g. Departure info" className="w-full rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/25" />
+          </div>
+          <div>
+            <div className="circle-label mb-1">Message</div>
+            <textarea value={message} onChange={e => setMessage(e.target.value.slice(0, 800))} placeholder="Share important info with everyone joining this journey…" className="w-full min-h-[120px] rounded-2xl bg-white/5 border border-white/10 px-3 py-2 text-sm outline-none focus:border-white/25 resize-none" />
+            <div className="text-[10px] text-white/40 text-right mt-1">{message.length}/800</div>
+          </div>
+          <div className="text-[11px] text-white/50">Every accepted member will receive an in-app notification. This will also appear on the journey timeline.</div>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-full circle-btn-ghost text-sm font-semibold">Cancel</button>
+          <button onClick={submit} disabled={busy || !message.trim()} className="flex-1 px-4 py-2.5 rounded-full circle-btn-primary text-sm font-semibold disabled:opacity-60 inline-flex items-center justify-center gap-2">
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Megaphone className="size-4" />} Post announcement
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

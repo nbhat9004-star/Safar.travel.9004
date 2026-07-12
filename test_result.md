@@ -4956,3 +4956,101 @@ metadata:
   test_sequence: 4
   run_ui: false
 
+
+# ============================================================================
+# MODULE 6 — Collaboration Engine (Requests, Members, Messages & Timeline)
+# ============================================================================
+
+backend:
+  - task: "Module 6: Timeline, Announcements, Invites, Studio Aggregates"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          MODULE 6 IMPLEMENTED (manual testing done, no testing agents per user request):
+          
+          NEW BACKEND ENDPOINTS (all working, tested with curl):
+          - GET /api/circle/journeys/:id/timeline — per-journey activity feed
+          - POST /api/circle/journeys/:id/announcements — curator broadcast (creates notif + timeline)
+          - POST /api/circle/journeys/:id/invite — invite by email (notif if user exists, timeline entry)
+          - GET /api/circle/studio/requests — aggregate pending requests across curator's journeys
+          - GET /api/circle/studio/members — aggregate accepted members across curator's journeys
+          - GET /api/circle/studio/messages — journey conversation list w/ last msg + unread count
+          - GET /api/circle/studio/timeline — aggregate timeline for curator
+          
+          NEW MongoDB collections:
+          - circle_timeline: id, journeyId, journeySlug, journeyName, curatorId, type, title, body, actorId, actorName, actorAvatar, meta, createdAt
+          - circle_invites: id, journeyId, journeySlug, journeyName, email, inviteeUserId, inviterId, message, status, createdAt
+          
+          Timeline events auto-logged for:
+          - journey_created / journey_updated / journey_published / journey_archived / visibility_changed
+          - request_approved / request_declined
+          - member_removed / member_left / member_promoted / member_demoted
+          - settings_updated
+          - itinerary_updated / checklist_added / poll_created / gallery_upload
+          - booking_received (paid join via Razorpay)
+          - announcement / invite_sent
+          
+          Notifications also work end-to-end (existing mkNotif helper reused).
+          Curl smoke test: 1 request created → studio_requests.total=1 → accept → timeline events=4 → chat sent → studio_messages shows lastMessage=Hello!
+
+frontend:
+  - task: "Module 6: Studio tabs (Requests, Members, Messages, Timeline) + Invite/Announce modals"
+    implemented: true
+    working: "NA"
+    file: "/app/app/circle/studio/page.js, /app/app/circle/j/[slug]/members/page.js, /app/lib/circle-api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          MODULE 6 FRONTEND IMPLEMENTATION:
+          
+          Studio page (/app/app/circle/studio/page.js):
+          - Removed `locked: true` and 'M2' badge from Requests/Members/Messages/Timeline tabs
+          - Replaced "Arriving in Module 2" placeholder with 4 functional panels:
+            * RequestsTab — lists pending requests grouped by traveler (avatar, reputation, seats, message, journey link), Accept/Decline/Manage actions
+            * MembersTab — accepted members grouped by journey (role, seats), link to per-journey Manage
+            * MessagesTab — journey conversation list showing cover, last message preview, timestamps, unread badges; opens plan?tab=chat on click
+            * TimelineTab — unified activity feed with gradient dot icons per event type, links to journey, timeAgo relative timestamps
+          - Existing Drafts/Published/Private/Archived/Services/Analytics tabs unchanged
+          
+          Members page (/app/app/circle/j/[slug]/members/page.js):
+          - Added "Invite" and "Announce" buttons next to "Settings" for curators
+          - New InviteModal: email + personal message; POSTs to /invite; creates notif + timeline event
+          - New AnnounceModal: title + broadcast message; POSTs to /announcements; notifies all members + timeline
+          
+          API helpers (/app/lib/circle-api.js):
+          - Added: getTimeline, postAnnouncement, inviteMember, studioRequests, studioMembers, studioMessages, studioTimeline
+          
+          Also fixed a pre-existing syntax error in plan/page.js (onClick={() = /> ... typo) that prevented workspace from loading.
+          
+          Manual testing to be done by user (per Module 6 instructions: budget 8 credits, no testing agents, no browser automation).
+
+metadata:
+  created_by: "main_agent"
+  version: "6.0"
+  test_sequence: 5
+  run_ui: false
+
+agent_communication:
+  - agent: "main"
+    message: |
+      MODULE 6 COMPLETE — Requests, Members, Messages, Timeline functional; announcements + invites live.
+      
+      Backend curl smoke test passed (see status_history). Frontend awaits your manual QA per instructions.
+      
+      Key paths to check:
+      - /circle/studio → 4 previously-locked tabs (Requests/Members/Messages/Timeline) now show real data
+      - /circle/j/[slug]/members → new "Invite" & "Announce" buttons for curators
+      - /circle/j/[slug]/plan → workspace preserved; pre-existing gallery syntax error fixed
+      
+      Also created /app/.env with MONGO_URL (was missing on fresh restart).

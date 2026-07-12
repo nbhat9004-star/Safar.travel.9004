@@ -927,7 +927,7 @@ function GalleryTab({ journeyId, me, canManage }) {
           {images.map(img => (
             <div key={img.id} className="relative group break-inside-avoid">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img loading="lazy" decoding="async" src={img.src} alt={img.caption || ''} onClick={() = /> setLightbox(img)} className="w-full rounded-2xl cursor-pointer hover:opacity-90 transition" />
+              <img loading="lazy" decoding="async" src={img.src} alt={img.caption || ''} onClick={() => setLightbox(img)} className="w-full rounded-2xl cursor-pointer hover:opacity-90 transition" />
               <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition">
                 <div className="text-[10px] text-white/80 truncate">{img.userName} · {new Date(img.createdAt).toLocaleDateString()}</div>
               </div>

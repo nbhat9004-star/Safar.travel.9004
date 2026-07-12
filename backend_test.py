@@ -11,7 +11,7 @@ import sys
 import os
 
 # Get base URL from environment
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://safar-drawer-ui.preview.emergentagent.com')
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://collab-engine-4.preview.emergentagent.com')
 API_URL = f"{BASE_URL}/api"
 
 # Test counters

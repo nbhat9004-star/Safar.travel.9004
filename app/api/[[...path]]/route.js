@@ -9952,9 +9952,40 @@ Return ONLY valid JSON, no markdown.`;
     return { owner, coCurators, travelers, pending, acceptedCount: 1 + coCurators.length + travelers.length, acceptedSeats, capacity, seatsRemaining };
   }
 
+  // -------- Circle Timeline helpers (Module 6: activity feed) --------
+  async function ensureCircleTimelineIndexes() {
+    try {
+      const col = await getCollection('circle_timeline');
+      await col.createIndex({ id: 1 }, { unique: true });
+      await col.createIndex({ journeyId: 1, createdAt: -1 });
+      await col.createIndex({ curatorId: 1, createdAt: -1 });
+    } catch {}
+  }
+  async function logCircleEvent({ journeyId, journey, type, actor, title, body = '', meta = {} }) {
+    try {
+      const col = await getCollection('circle_timeline');
+      await col.insertOne({
+        id: uuid(),
+        journeyId,
+        journeySlug: journey?.slug || null,
+        journeyName: journey?.name || null,
+        curatorId: journey?.curatorId || null,
+        type,
+        title: (title || '').toString().slice(0, 200),
+        body: (body || '').toString().slice(0, 500),
+        actorId: actor?.id || null,
+        actorName: actor?.name || null,
+        actorAvatar: actor?.avatar || null,
+        meta: meta || {},
+        createdAt: new Date(),
+      });
+    } catch (e) { console.error('logCircleEvent error', e); }
+  }
+
   if (path.startsWith('/circle')) {
     await ensureCircleIndexes();
     await ensureCircleMembersIndexes();
+    await ensureCircleTimelineIndexes();
     const me = await getCurrentUser(request);
     const journeys = await getCollection('circle_journeys');
     const circleMembers = await getCollection('circle_members');
@@ -10148,6 +10179,7 @@ Return ONLY valid JSON, no markdown.`;
         updatedAt: now,
       };
       await journeys.insertOne(doc);
+      await logCircleEvent({ journeyId: doc.id, journey: doc, type: 'journey_created', actor: me, title: 'Journey created', body: doc.name });
       const { _id, ...rest } = doc;
       return ok({ journey: rest }, 201);
     }
@@ -10465,6 +10497,8 @@ Return ONLY valid JSON, no markdown.`;
           status: 'approved',
         }, { name: me.name, email: me.email }).catch(() => {});
 
+        await logCircleEvent({ journeyId: jid, journey: doc, type: 'booking_received', actor: me, title: 'Booking received', body: `${me.name} paid to join (${seats} seat${seats > 1 ? 's' : ''})`, meta: { amount: record.amount, seats, memberId: memberDoc.id } });
+
         const { _id, ...rest } = memberDoc;
         return ok({ membership: rest, payment: { orderId, paymentId, amount: record.amount } }, 201);
       }
@@ -10481,6 +10515,7 @@ Return ONLY valid JSON, no markdown.`;
         const mem = await circleMembers.findOne({ journeyId: jid, userId: me.id, status: 'accepted' });
         if (!mem) return err('You are not a member of this journey', 404);
         await circleMembers.updateOne({ id: mem.id }, { $set: { status: 'left', updatedAt: new Date() } });
+        await logCircleEvent({ journeyId: jid, journey: doc, type: 'member_left', actor: me, title: 'Member left', body: `${me.name} left the journey`, meta: { memberId: mem.id, userId: me.id } });
         // Notify curator
         await mkNotif({
           userId: doc.curatorId,
@@ -10530,6 +10565,7 @@ Return ONLY valid JSON, no markdown.`;
           const summary = await getJourneyMemberSummary(jid, doc);
           if (summary.seatsRemaining < (mem.seats || 1)) return err(`Not enough seats remaining (${summary.seatsRemaining})`, 400);
           await circleMembers.updateOne({ id: memberId }, { $set: { status: 'accepted', role: 'traveler', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          await logCircleEvent({ journeyId: jid, journey: doc, type: 'request_approved', actor: me, title: 'Request approved', body: `${mem.userName} joined the journey`, meta: { memberId: mem.id, userId: mem.userId } });
           await mkNotif({
             userId: mem.userId,
             type: 'circle_request_accepted',
@@ -10544,6 +10580,7 @@ Return ONLY valid JSON, no markdown.`;
         if (action === 'decline') {
           if (mem.status !== 'pending') return err('Request is not pending', 400);
           await circleMembers.updateOne({ id: memberId }, { $set: { status: 'declined', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          await logCircleEvent({ journeyId: jid, journey: doc, type: 'request_declined', actor: me, title: 'Request declined', body: `${mem.userName}'s request was declined`, meta: { memberId: mem.id, userId: mem.userId } });
           await mkNotif({
             userId: mem.userId,
             type: 'circle_request_declined',
@@ -10558,6 +10595,7 @@ Return ONLY valid JSON, no markdown.`;
         if (action === 'remove') {
           if (!['pending', 'accepted'].includes(mem.status)) return err('Cannot remove this member', 400);
           await circleMembers.updateOne({ id: memberId }, { $set: { status: 'removed', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          await logCircleEvent({ journeyId: jid, journey: doc, type: 'member_removed', actor: me, title: 'Member removed', body: `${mem.userName} was removed`, meta: { memberId: mem.id, userId: mem.userId } });
           if (mem.status === 'accepted') {
             await mkNotif({
               userId: mem.userId,
@@ -10575,6 +10613,7 @@ Return ONLY valid JSON, no markdown.`;
           if (mem.status !== 'accepted') return err('Only accepted members can be promoted', 400);
           if (mem.role === 'co_curator') return err('Already a co-curator', 400);
           await circleMembers.updateOne({ id: memberId }, { $set: { role: 'co_curator', updatedAt: now } });
+          await logCircleEvent({ journeyId: jid, journey: doc, type: 'member_promoted', actor: me, title: 'Promoted to Co-Curator', body: `${mem.userName} is now a Co-Curator`, meta: { memberId: mem.id, userId: mem.userId } });
           await mkNotif({
             userId: mem.userId,
             type: 'circle_promoted_co_curator',
@@ -10589,6 +10628,7 @@ Return ONLY valid JSON, no markdown.`;
         if (action === 'demote') {
           if (mem.role !== 'co_curator') return err('Not a co-curator', 400);
           await circleMembers.updateOne({ id: memberId }, { $set: { role: 'traveler', updatedAt: now } });
+          await logCircleEvent({ journeyId: jid, journey: doc, type: 'member_demoted', actor: me, title: 'Demoted to Traveler', body: `${mem.userName} is now a Traveler`, meta: { memberId: mem.id, userId: mem.userId } });
           await mkNotif({
             userId: mem.userId,
             type: 'circle_demoted_traveler',
@@ -10631,13 +10671,206 @@ Return ONLY valid JSON, no markdown.`;
         }
         if (b.registrationsClosed != null) set.registrationsClosed = !!b.registrationsClosed;
         await journeys.updateOne({ id: jid }, { $set: set });
+        await logCircleEvent({ journeyId: jid, journey: doc, type: 'settings_updated', actor: me, title: 'Settings updated', body: Object.keys(set).filter(k => k !== 'updatedAt').join(', '), meta: { changes: Object.keys(set).filter(k => k !== 'updatedAt') } });
         const updated = await journeys.findOne({ id: jid }, { projection: { _id: 0 } });
         return ok({ journey: updated });
       }
     }
 
+    // MODULE 6 NEW ENDPOINTS INSERTED BELOW
     // =============================================================================
-    // MODULE 3: Collaborative Planning Engine
+    // MODULE 6: Collaboration Engine (Timeline, Announcements, Invites, Studio Aggregates)
+    // =============================================================================
+    // =============================================================================
+
+    // GET /api/circle/journeys/:id/timeline  — per-journey activity feed
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/timeline$/);
+      if (m && method === 'GET') {
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const isOwner = me && me.id === doc.curatorId;
+        const isAdmin = me && (me.role === 'admin' || me.role === 'super_admin');
+        const mem = me ? await circleMembers.findOne({ journeyId: jid, userId: me.id, status: 'accepted' }) : null;
+        const canView = isOwner || isAdmin || !!mem || doc.visibility === 'public';
+        if (!canView) return err('Not authorized', 403);
+        const col = await getCollection('circle_timeline');
+        const limit = Math.min(200, Number(url.searchParams.get('limit')) || 100);
+        const events = await col.find({ journeyId: jid }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(limit).toArray();
+        return ok({ events, canManage: !!(isOwner || isAdmin) });
+      }
+    }
+
+    // POST /api/circle/journeys/:id/announcements — curator broadcasts a message to all members
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/announcements$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const isOwner = me.id === doc.curatorId;
+        const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+        if (!isOwner && !isAdmin) return err('Only the curator can post announcements', 403);
+        const b = await readBody(request);
+        const title = (b.title || '').toString().trim().slice(0, 140);
+        const message = (b.message || '').toString().trim().slice(0, 800);
+        if (!message) return err('Announcement message required');
+        // Log timeline event
+        await logCircleEvent({
+          journeyId: jid, journey: doc, type: 'announcement', actor: me,
+          title: title || 'Announcement from curator', body: message,
+        });
+        // Notify all accepted members
+        const members = await circleMembers.find({ journeyId: jid, status: 'accepted' }).toArray();
+        for (const mm of members) {
+          if (mm.userId !== me.id) {
+            await mkNotif({
+              userId: mm.userId, type: 'circle_announcement', category: 'circle',
+              title: `Announcement in ${doc.name}`, body: (title ? title + ' — ' : '') + message.slice(0, 120),
+              link: `/circle/j/${doc.slug}/plan?tab=chat`, meta: { journeyId: jid },
+            });
+          }
+        }
+        return ok({ posted: true }, 201);
+      }
+    }
+
+    // POST /api/circle/journeys/:id/invite — curator invites a user by email
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/invite$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const jid = m[1];
+        const doc = await journeys.findOne({ id: jid });
+        if (!doc) return err('Journey not found', 404);
+        const isOwner = me.id === doc.curatorId;
+        const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+        if (!isOwner && !isAdmin) return err('Only the curator can invite members', 403);
+        const b = await readBody(request);
+        const email = (b.email || '').toString().trim().toLowerCase();
+        const message = (b.message || '').toString().slice(0, 400);
+        if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return err('Valid email required');
+        // Capacity check
+        const summary = await getJourneyMemberSummary(jid, doc);
+        if (summary.seatsRemaining <= 0) return err('Journey is full', 400);
+        // Try to find user
+        const users = await getCollection('users');
+        const invitee = await users.findOne({ email });
+        // Store invite
+        const invites = await getCollection('circle_invites');
+        try { await invites.createIndex({ id: 1 }, { unique: true }); await invites.createIndex({ journeyId: 1, email: 1 }); } catch {}
+        const existing = await invites.findOne({ journeyId: jid, email, status: 'pending' });
+        if (existing) return err('An invitation is already pending for this email', 400);
+        const inviteDoc = {
+          id: uuid(), journeyId: jid, journeySlug: doc.slug, journeyName: doc.name,
+          email, inviteeUserId: invitee?.id || null, inviteeUserName: invitee?.name || null,
+          inviterId: me.id, inviterName: me.name, message,
+          status: 'pending', createdAt: new Date(),
+        };
+        await invites.insertOne(inviteDoc);
+        // Notify if user exists
+        if (invitee) {
+          await mkNotif({
+            userId: invitee.id, type: 'circle_invite', category: 'circle',
+            title: `${me.name} invited you to a Journey`,
+            body: `${doc.name}${message ? ' — ' + message.slice(0, 80) : ''}`,
+            link: `/circle/j/${doc.slug}`,
+            meta: { journeyId: jid, inviteId: inviteDoc.id },
+          });
+        }
+        // Timeline event
+        await logCircleEvent({
+          journeyId: jid, journey: doc, type: 'invite_sent', actor: me,
+          title: 'Invitation sent', body: `Invited ${email}`,
+          meta: { email, inviteeUserId: invitee?.id || null },
+        });
+        const { _id, ...rest2 } = inviteDoc;
+        return ok({ invite: rest2 }, 201);
+      }
+    }
+
+    // ---------- Studio aggregate endpoints ----------
+    // GET /api/circle/studio/requests — all pending requests across my journeys
+    if (path === '/circle/studio/requests' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const myJourneys = await journeys.find({ curatorId: me.id }, { projection: { _id: 0, id: 1, name: 1, slug: 1, cover: 1, maxMembers: 1 } }).toArray();
+      const ids = myJourneys.map(j => j.id);
+      if (ids.length === 0) return ok({ requests: [], journeys: [], total: 0 });
+      const pending = await circleMembers.find({ journeyId: { $in: ids }, status: 'pending' }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+      const byId = Object.fromEntries(myJourneys.map(j => [j.id, j]));
+      const enriched = pending.map(p => ({ ...p, journey: byId[p.journeyId] || null }));
+      return ok({ requests: enriched, journeys: myJourneys, total: pending.length });
+    }
+
+    // GET /api/circle/studio/members — accepted members across my journeys
+    if (path === '/circle/studio/members' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const myJourneys = await journeys.find({ curatorId: me.id }, { projection: { _id: 0, id: 1, name: 1, slug: 1, cover: 1, maxMembers: 1 } }).toArray();
+      const ids = myJourneys.map(j => j.id);
+      if (ids.length === 0) return ok({ groups: [], total: 0 });
+      const members = await circleMembers.find({ journeyId: { $in: ids }, status: 'accepted' }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+      const groups = myJourneys.map(j => ({
+        journey: j,
+        members: members.filter(m => m.journeyId === j.id),
+      }));
+      return ok({ groups, total: members.length });
+    }
+
+    // GET /api/circle/studio/messages — journey conversations for curator (recent message + unread count)
+    if (path === '/circle/studio/messages' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const myJourneys = await journeys.find({ curatorId: me.id }, { projection: { _id: 0, id: 1, name: 1, slug: 1, cover: 1 } }).toArray();
+      const ids = myJourneys.map(j => j.id);
+      if (ids.length === 0) return ok({ conversations: [] });
+      const chatCol = await getCollection('circle_chat');
+      // Fetch last message per journey via aggregation
+      const lastMessages = await chatCol.aggregate([
+        { $match: { journeyId: { $in: ids } } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: '$journeyId', last: { $first: '$$ROOT' }, total: { $sum: 1 } } },
+      ]).toArray();
+      const lmMap = Object.fromEntries(lastMessages.map(x => [x._id, x]));
+      // Get unread counts via notifications (chat notifications for this user, unread)
+      const notifs = await getCollection('notifications');
+      const unreadNotifs = await notifs.find({ userId: me.id, type: 'circle_chat_new', read: false }, { projection: { meta: 1 } }).toArray();
+      const unreadMap = {};
+      unreadNotifs.forEach(n => {
+        const jid = n?.meta?.journeyId;
+        if (jid) unreadMap[jid] = (unreadMap[jid] || 0) + 1;
+      });
+      const conversations = myJourneys.map(j => {
+        const lm = lmMap[j.id];
+        return {
+          journey: j,
+          lastMessage: lm ? {
+            text: lm.last.text,
+            userName: lm.last.userName,
+            userAvatar: lm.last.userAvatar,
+            createdAt: lm.last.createdAt,
+          } : null,
+          totalMessages: lm ? lm.total : 0,
+          unreadCount: unreadMap[j.id] || 0,
+        };
+      }).sort((a, b) => {
+        const at = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+        const bt = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+        return bt - at;
+      });
+      return ok({ conversations });
+    }
+
+    // GET /api/circle/studio/timeline — aggregated activity across my journeys
+    if (path === '/circle/studio/timeline' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const col = await getCollection('circle_timeline');
+      const limit = Math.min(300, Number(url.searchParams.get('limit')) || 100);
+      const events = await col.find({ curatorId: me.id }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(limit).toArray();
+      return ok({ events });
+    }
+
+
     // Collections: circle_itinerary (embedded days/blocks per journey), circle_checklist,
     //              circle_polls, circle_chat, circle_gallery.
     // Access levels:
@@ -10790,8 +11023,10 @@ Return ONLY valid JSON, no markdown.`;
               await mkNotif({ userId: m.userId, type: 'circle_itinerary_updated', category: 'circle', title: 'Itinerary updated', body: `Day ${day} · ${timeSlot} added on ${jdoc.name}`, link: `/circle/j/${jdoc.slug}/plan?tab=itinerary`, meta: { journeyId: jid } });
             }
           }
+          await logCircleEvent({ journeyId: jid, journey: jdoc, type: 'itinerary_updated', actor: me, title: 'Itinerary block added', body: `Day ${day} · ${timeSlot}${block.activity ? ' · ' + block.activity : ''}`, meta: { day, timeSlot, blockId: block.id } });
           return ok({ block }, 201);
         }
+        // (timeline logging for itinerary blocks)
         // PUT /itinerary/blocks/:blockId
         const bMatch = rest.match(/^\/blocks\/([\w-]+)$/);
         if (bMatch && (method === 'PUT' || method === 'DELETE')) {
@@ -10864,6 +11099,7 @@ Return ONLY valid JSON, no markdown.`;
             updatedAt: new Date(),
           };
           await items.insertOne(item);
+          await logCircleEvent({ journeyId: jid, journey: jdoc, type: 'checklist_added', actor: me, title: 'Checklist item added', body: item.title, meta: { itemId: item.id } });
           const { _id, ...rest2 } = item;
           return ok({ item: rest2 }, 201);
         }
@@ -10933,6 +11169,7 @@ Return ONLY valid JSON, no markdown.`;
           if (options.length < 2) return err('At least 2 options required');
           const poll = { id: uuid(), journeyId: jid, question, options, votes: [], closed: false, createdBy: me.id, createdByName: me.name, createdAt: new Date(), updatedAt: new Date() };
           await polls.insertOne(poll);
+          await logCircleEvent({ journeyId: jid, journey: jdoc, type: 'poll_created', actor: me, title: 'Poll created', body: poll.question, meta: { pollId: poll.id } });
           // notify all accepted members (not creator)
           const membersToNotify = await circleMembers.find({ journeyId: jid, status: 'accepted' }).toArray();
           for (const m of membersToNotify) {
@@ -11029,6 +11266,7 @@ Return ONLY valid JSON, no markdown.`;
           const caption = (b.caption || '').toString().slice(0, 200);
           const doc = { id: uuid(), journeyId: jid, userId: me.id, userName: me.name, userAvatar: me.avatar || null, src, caption, width: Number(b.width) || null, height: Number(b.height) || null, createdAt: new Date() };
           await gallery.insertOne(doc);
+          await logCircleEvent({ journeyId: jid, journey: jdoc, type: 'gallery_upload', actor: me, title: 'Photo uploaded to gallery', body: doc.caption || 'New photo', meta: { imageId: doc.id } });
           if (jdoc.curatorId !== me.id) {
             await mkNotif({ userId: jdoc.curatorId, type: 'circle_gallery_upload', category: 'circle', title: 'Gallery upload', body: `${me.name} added a photo to ${jdoc.name}`, link: `/circle/j/${jdoc.slug}/plan?tab=gallery`, meta: { journeyId: jid, imageId: doc.id } });
           }
@@ -11070,6 +11308,14 @@ Return ONLY valid JSON, no markdown.`;
           if (b.visibility === 'scheduled' && b.scheduledFor) set.scheduledFor = new Date(b.scheduledFor);
           if (b.visibility === 'archived') set.archivedAt = new Date();
           await journeys.updateOne({ id: jid }, { $set: set });
+          // Timeline logging for visibility change
+          if (b.visibility === 'public' && !wasPublic) {
+            await logCircleEvent({ journeyId: jid, journey: { ...doc, ...set }, type: 'journey_published', actor: me, title: 'Journey published', body: doc.name });
+          } else if (b.visibility === 'archived') {
+            await logCircleEvent({ journeyId: jid, journey: { ...doc, ...set }, type: 'journey_archived', actor: me, title: 'Journey archived', body: doc.name });
+          } else {
+            await logCircleEvent({ journeyId: jid, journey: { ...doc, ...set }, type: 'visibility_changed', actor: me, title: `Visibility → ${b.visibility}`, body: doc.name });
+          }
           // Email curator on transition to public (first publish or re-publish)
           if (b.visibility === 'public' && !wasPublic && me?.email) {
             sendJourneyPublishedEmail(me, { ...doc, ...set }).catch(() => {});
@@ -11121,6 +11367,7 @@ Return ONLY valid JSON, no markdown.`;
           set.estimate = computeEstimate(services, members, days);
           if (set.visibility === 'public' && !doc.publishedAt) set.publishedAt = new Date();
           await journeys.updateOne({ id: jid }, { $set: set });
+          await logCircleEvent({ journeyId: jid, journey: { ...doc, ...set }, type: 'journey_updated', actor: me, title: 'Journey updated', body: Object.keys(set).filter(k => !['updatedAt','estimate'].includes(k)).slice(0, 6).join(', ') });
           const updated = await journeys.findOne({ id: jid }, { projection: { _id: 0 } });
           return ok({ journey: updated });
         }
