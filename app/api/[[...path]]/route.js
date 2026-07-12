@@ -9983,6 +9983,441 @@ Return ONLY valid JSON, no markdown.`;
     } catch (e) { console.error('logCircleEvent error', e); }
   }
 
+  // =========================================================================
+  // MODULE — SAFAR CURATED AI BOOKING ORCHESTRATION ENGINE
+  // =========================================================================
+  async function ensureOrchestrationIndexes() {
+    try {
+      const trips = await getCollection('safar_trips');
+      await trips.createIndex({ id: 1 }, { unique: true });
+      await trips.createIndex({ userId: 1, createdAt: -1 });
+      const orches = await getCollection('safar_trip_orchestrations');
+      await orches.createIndex({ id: 1 }, { unique: true });
+      await orches.createIndex({ tripId: 1 });
+      await orches.createIndex({ userId: 1, createdAt: -1 });
+      await orches.createIndex({ status: 1 });
+      const preqs = await getCollection('safar_provider_requests');
+      await preqs.createIndex({ id: 1 }, { unique: true });
+      await preqs.createIndex({ hostId: 1, status: 1, createdAt: -1 });
+      await preqs.createIndex({ tripId: 1 });
+      await preqs.createIndex({ orchestrationId: 1 });
+      await preqs.createIndex({ deadlineAt: 1, status: 1 });
+    } catch {}
+  }
+
+  const SERVICE_LABELS = {
+    accommodation: 'Accommodation', cab: 'Cab', bike: 'Bike Rental',
+    guide: 'Tour Guide', food: 'Food', photography: 'Photography',
+    adventure: 'Adventure', shopping: 'Shopping', airport: 'Airport Pickup',
+    experience: 'Experiences',
+  };
+  function serviceToListingFilter(serviceKey) {
+    switch (serviceKey) {
+      case 'accommodation': return { category: 'stay' };
+      case 'cab':           return { category: 'transport', subcategory: 'cab' };
+      case 'bike':          return { category: 'transport', subcategory: 'bike' };
+      case 'guide':         return { category: 'tour', subcategory: 'guide' };
+      case 'food':          return { category: 'experience', subcategory: 'food' };
+      case 'photography':   return { category: 'tour', subcategory: 'photography' };
+      case 'adventure':     return { category: 'experience', subcategory: 'adventure' };
+      case 'shopping':      return { category: 'tour', subcategory: 'shopping' };
+      case 'airport':       return { category: 'transport', subcategory: 'cab' };
+      case 'experience':    return { category: 'experience' };
+      default:              return {};
+    }
+  }
+  function escRe(s) { return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function scoreListingForTrip(l, trip) {
+    const rating = Number(l.rating) || 0;
+    const reviews = Math.min(Number(l.reviewsCount) || 0, 100);
+    const verified = l.isVerified ? 15 : 0;
+    const price = Number(l.price) || 0;
+    const targets = { budget: 1500, standard: 5000, premium: 12000, luxury: 25000 };
+    const target = trip.budget?.tier === 'custom'
+      ? (Number(trip.budget?.custom) || 5000)
+      : (targets[trip.budget?.tier] || 5000);
+    const priceProx = target > 0 ? (1 - Math.min(1, Math.abs(price - target) / target)) : 0.5;
+    return rating * 20 + reviews * 0.5 + verified + priceProx * 20;
+  }
+  async function matchAndRankListings(trip, serviceKey) {
+    const listings = await getCollection('listings');
+    const base = { status: 'approved', ...serviceToListingFilter(serviceKey) };
+    const proj = { projection: { _id: 0, id: 1, title: 1, hostId: 1, price: 1, rating: 1, reviewsCount: 1, images: 1, location: 1, category: 1, subcategory: 1, isVerified: 1 } };
+    // Try tight (destination-scoped)
+    let pool = [];
+    if (trip.destination) {
+      const city = String(trip.destination).split(',')[0].trim();
+      if (city) {
+        pool = await listings.find({ ...base, location: { $regex: escRe(city), $options: 'i' } }, proj).limit(50).toArray();
+      }
+    }
+    // Fallback to any location if empty
+    if (pool.length === 0) pool = await listings.find(base, proj).limit(50).toArray();
+    return pool
+      .map(l => ({ ...l, _score: scoreListingForTrip(l, trip) }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 12);
+  }
+
+  async function createProviderRequest({ orchestration, service, listing, trip, traveler }) {
+    const preqs = await getCollection('safar_provider_requests');
+    const now = new Date();
+    const doc = {
+      id: uuid(),
+      orchestrationId: orchestration.id,
+      tripId: trip.id,
+      serviceKey: service.key,
+      serviceLabel: SERVICE_LABELS[service.key] || service.key,
+      listingId: listing.id,
+      listingTitle: listing.title,
+      listingImage: (listing.images && listing.images[0]) || null,
+      hostId: listing.hostId,
+      travelerId: traveler.id,
+      travelerName: traveler.name,
+      travelerEmail: traveler.email,
+      snapshot: {
+        destination: trip.destination,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        nights: trip.nights,
+        travelers: trip.travelers,
+        guests: (trip.travelers?.adults || 0) + (trip.travelers?.children || 0),
+        budgetLabel: trip.budget?.label,
+        preferences: (trip.filters || {})[service.key] || {},
+      },
+      price: listing.price,
+      status: 'pending',
+      createdAt: now,
+      deadlineAt: new Date(now.getTime() + 5 * 60 * 1000),
+      respondedAt: null,
+      respondedByHostId: null,
+    };
+    await preqs.insertOne(doc);
+    await mkNotif({
+      userId: listing.hostId, type: 'trip_provider_request', category: 'booking',
+      title: `New booking request from ${traveler.name}`,
+      body: `${doc.serviceLabel} · ${trip.destination} · ${trip.startDate} → ${trip.endDate}`,
+      link: `/dashboard/host/requests`,
+      meta: { providerRequestId: doc.id, tripId: trip.id, listingId: listing.id, serviceKey: service.key, deadlineAt: doc.deadlineAt },
+    });
+    return doc;
+  }
+
+  async function expireStaleProviderRequests() {
+    try {
+      const preqs = await getCollection('safar_provider_requests');
+      await preqs.updateMany(
+        { status: 'pending', deadlineAt: { $lt: new Date() } },
+        { $set: { status: 'expired', respondedAt: new Date() } }
+      );
+    } catch {}
+  }
+
+  async function advanceOrchestration(orchestrationId) {
+    await expireStaleProviderRequests();
+    const orches = await getCollection('safar_trip_orchestrations');
+    const trips = await getCollection('safar_trips');
+    const preqs = await getCollection('safar_provider_requests');
+    const users = await getCollection('users');
+    const listings = await getCollection('listings');
+
+    const o = await orches.findOne({ id: orchestrationId });
+    if (!o) return null;
+    if (['confirmed', 'partial', 'cancelled'].includes(o.status)) return o;
+    const trip = await trips.findOne({ id: o.tripId });
+    if (!trip) return o;
+    const traveler = await users.findOne({ id: o.userId }) || { id: o.userId, name: 'Traveler', email: '' };
+
+    const services = (o.services || []).map(s => ({ ...s }));
+    const now = new Date();
+
+    for (let i = 0; i < services.length; i++) {
+      let s = services[i];
+      if (['confirmed', 'unavailable'].includes(s.status)) continue;
+
+      // SEARCHING → find + rank candidates
+      if (s.status === 'searching' || !s.candidateIds || s.candidateIds.length === 0) {
+        const ranked = await matchAndRankListings(trip, s.key);
+        s.candidateIds = ranked.map(r => r.id);
+        s.candidateSnapshots = ranked.slice(0, 5).map(r => ({
+          id: r.id, title: r.title, price: r.price, rating: r.rating,
+          reviewsCount: r.reviewsCount, hostId: r.hostId, image: (r.images && r.images[0]) || null,
+        }));
+        s.attemptedIds = s.attemptedIds || [];
+        s.status = 'contacting';
+      }
+
+      // WAITING → check current request outcome
+      if (s.status === 'waiting' && s.currentRequestId) {
+        const cr = await preqs.findOne({ id: s.currentRequestId });
+        if (cr) {
+          if (cr.status === 'accepted') {
+            s.status = 'confirmed';
+            s.confirmedListingId = cr.listingId;
+            s.confirmedRequestId = cr.id;
+            s.confirmedListingTitle = cr.listingTitle;
+            s.confirmedListingImage = cr.listingImage;
+            s.confirmedHostId = cr.hostId;
+            s.confirmedPrice = cr.price;
+            s.confirmedAt = cr.respondedAt || now;
+          } else if (cr.status === 'rejected' || cr.status === 'expired') {
+            s.currentRequestId = null;
+            s.status = 'contacting';
+          }
+        }
+      }
+
+      // CONTACTING → dispatch to next-best candidate
+      if (s.status === 'contacting') {
+        const remaining = (s.candidateIds || []).filter(id => !(s.attemptedIds || []).includes(id));
+        if (remaining.length === 0) {
+          s.status = 'unavailable';
+          continue;
+        }
+        const nextId = remaining[0];
+        const listing = await listings.findOne({ id: nextId });
+        if (!listing) {
+          s.attemptedIds = [...(s.attemptedIds || []), nextId];
+          continue;
+        }
+        const created = await createProviderRequest({ orchestration: o, service: s, listing, trip, traveler });
+        s.currentRequestId = created.id;
+        s.currentRequestDeadlineAt = created.deadlineAt;
+        s.attemptedIds = [...(s.attemptedIds || []), nextId];
+        s.status = 'waiting';
+      }
+      services[i] = s;
+    }
+
+    let newStatus = 'orchestrating';
+    if (services.every(s => s.status === 'confirmed')) newStatus = 'confirmed';
+    else if (services.every(s => s.status === 'confirmed' || s.status === 'unavailable') && services.some(s => s.status === 'unavailable')) newStatus = 'partial';
+
+    const patch = { services, status: newStatus, updatedAt: now };
+    if ((newStatus === 'confirmed' || newStatus === 'partial') && !o.completedAt) {
+      patch.completedAt = now;
+      patch.bookingReference = 'SAFAR-' + String(o.id).slice(0, 8).toUpperCase();
+      const totalPrice = services.filter(s => s.status === 'confirmed').reduce((n, s) => n + (Number(s.confirmedPrice) || 0), 0);
+      patch.totalPrice = totalPrice;
+      await trips.updateOne({ id: o.tripId }, { $set: { status: newStatus, updatedAt: now, bookingReference: patch.bookingReference, totalPrice } });
+      if (newStatus === 'confirmed') {
+        await mkNotif({
+          userId: o.userId, type: 'trip_confirmed', category: 'booking',
+          title: 'Your trip is fully confirmed!',
+          body: `All services locked in for ${trip.destination}. Ref: ${patch.bookingReference}`,
+          link: `/trip/${o.tripId}`, meta: { orchestrationId: o.id, tripId: o.tripId },
+        });
+      } else {
+        const unavailable = services.filter(s => s.status === 'unavailable').map(s => SERVICE_LABELS[s.key] || s.key);
+        await mkNotif({
+          userId: o.userId, type: 'trip_partial', category: 'booking',
+          title: 'Trip partially confirmed',
+          body: `Couldn't secure: ${unavailable.join(', ')}. Retry or replace those services.`,
+          link: `/trip/${o.tripId}`, meta: { orchestrationId: o.id, tripId: o.tripId },
+        });
+      }
+    }
+    await orches.updateOne({ id: orchestrationId }, { $set: patch });
+    return { ...o, ...patch };
+  }
+
+  function estimateSecondsRemaining(o) {
+    if (!o || o.status !== 'orchestrating') return 0;
+    const services = o.services || [];
+    let sec = 0;
+    for (const s of services) {
+      if (s.status === 'confirmed' || s.status === 'unavailable') continue;
+      if (s.status === 'waiting' && s.currentRequestDeadlineAt) {
+        const rem = Math.max(0, Math.floor((new Date(s.currentRequestDeadlineAt).getTime() - Date.now()) / 1000));
+        sec += rem;
+      } else {
+        sec += 300; // 5-min budget per pending phase
+      }
+    }
+    return sec;
+  }
+
+  // ---------- TRIP ORCHESTRATION ENDPOINTS ----------
+
+  // POST /api/trip-orchestrations — start orchestration from a saved Build My Trip draft
+  if (path === '/trip-orchestrations' && method === 'POST') {
+    await ensureOrchestrationIndexes();
+    const me = await getCurrentUser(request);
+    if (!me) return err('Sign in required', 401);
+    const b = await readBody(request);
+    const d = b.draft || b || {};
+    if (!d.destination || !d.startDate || !d.endDate || !Array.isArray(d.services) || d.services.length === 0) {
+      return err('Trip is missing required fields');
+    }
+    const trips = await getCollection('safar_trips');
+    const orches = await getCollection('safar_trip_orchestrations');
+    const now = new Date();
+    const tripDoc = {
+      id: uuid(), userId: me.id,
+      destination: d.destination, destinationKey: d.destinationKey || null,
+      startDate: d.startDate, endDate: d.endDate, nights: d.nights || 0,
+      travelers: d.travelers || { adults: 1, children: 0, infants: 0, total: 1 },
+      budget: d.budget || { tier: 'standard', label: 'Standard' },
+      services: d.services, filters: d.filters || {},
+      status: 'orchestrating', createdAt: now, updatedAt: now,
+    };
+    await trips.insertOne(tripDoc);
+    const orchDoc = {
+      id: uuid(), tripId: tripDoc.id, userId: me.id,
+      status: 'orchestrating',
+      services: d.services.map(k => ({ key: k, status: 'searching', candidateIds: [], attemptedIds: [] })),
+      createdAt: now, updatedAt: now, completedAt: null,
+    };
+    await orches.insertOne(orchDoc);
+    await trips.updateOne({ id: tripDoc.id }, { $set: { orchestrationId: orchDoc.id } });
+    await mkNotif({
+      userId: me.id, type: 'trip_started', category: 'booking',
+      title: 'Trip orchestration started',
+      body: `Finding hosts for ${d.services.length} service${d.services.length !== 1 ? 's' : ''} to ${d.destination}`,
+      link: `/trip/${tripDoc.id}`, meta: { orchestrationId: orchDoc.id, tripId: tripDoc.id },
+    });
+    const advanced = await advanceOrchestration(orchDoc.id);
+    return ok({ tripId: tripDoc.id, orchestrationId: orchDoc.id, trip: tripDoc, orchestration: advanced }, 201);
+  }
+
+  // GET /api/trip-orchestrations/:id — poll live progress
+  {
+    const m = path.match(/^\/trip-orchestrations\/([\w-]+)$/);
+    if (m && method === 'GET') {
+      await ensureOrchestrationIndexes();
+      const me = await getCurrentUser(request);
+      if (!me) return err('Sign in required', 401);
+      const orches = await getCollection('safar_trip_orchestrations');
+      let o = await orches.findOne({ id: m[1] });
+      if (!o) return err('Orchestration not found', 404);
+      if (o.userId !== me.id && me.role !== 'admin' && me.role !== 'super_admin') return err('Not authorized', 403);
+      if (o.status === 'orchestrating') o = await advanceOrchestration(o.id);
+      const trips = await getCollection('safar_trips');
+      const trip = await trips.findOne({ id: o.tripId }, { projection: { _id: 0 } });
+      const preqs = await getCollection('safar_provider_requests');
+      const rids = [...new Set([
+        ...(o.services || []).map(s => s.currentRequestId).filter(Boolean),
+        ...(o.services || []).map(s => s.confirmedRequestId).filter(Boolean),
+      ])];
+      const requests = rids.length ? await preqs.find({ id: { $in: rids } }, { projection: { _id: 0 } }).toArray() : [];
+      const rmap = Object.fromEntries(requests.map(r => [r.id, r]));
+      const services = (o.services || []).map(s => ({
+        ...s,
+        label: SERVICE_LABELS[s.key] || s.key,
+        currentRequest: s.currentRequestId ? rmap[s.currentRequestId] : null,
+        confirmedRequest: s.confirmedRequestId ? rmap[s.confirmedRequestId] : null,
+      }));
+      const { _id, ...oClean } = o;
+      return ok({ orchestration: { ...oClean, services }, trip, estimatedSecondsRemaining: estimateSecondsRemaining(o) });
+    }
+  }
+
+  // GET /api/trip-orchestrations/by-trip/:tripId
+  {
+    const m = path.match(/^\/trip-orchestrations\/by-trip\/([\w-]+)$/);
+    if (m && method === 'GET') {
+      await ensureOrchestrationIndexes();
+      const me = await getCurrentUser(request);
+      if (!me) return err('Sign in required', 401);
+      const orches = await getCollection('safar_trip_orchestrations');
+      const o = await orches.findOne({ tripId: m[1] });
+      if (!o) return err('Not found', 404);
+      if (o.userId !== me.id && me.role !== 'admin' && me.role !== 'super_admin') return err('Not authorized', 403);
+      const advanced = o.status === 'orchestrating' ? await advanceOrchestration(o.id) : o;
+      const trips = await getCollection('safar_trips');
+      const trip = await trips.findOne({ id: o.tripId }, { projection: { _id: 0 } });
+      const { _id, ...clean } = advanced;
+      return ok({ orchestration: clean, trip });
+    }
+  }
+
+  // POST /api/trip-orchestrations/:id/retry — retry all unavailable services
+  {
+    const m = path.match(/^\/trip-orchestrations\/([\w-]+)\/retry$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Sign in required', 401);
+      const orches = await getCollection('safar_trip_orchestrations');
+      const o = await orches.findOne({ id: m[1] });
+      if (!o) return err('Orchestration not found', 404);
+      if (o.userId !== me.id) return err('Not authorized', 403);
+      const services = (o.services || []).map(s => s.status === 'unavailable'
+        ? { ...s, status: 'searching', attemptedIds: [], candidateIds: [], currentRequestId: null }
+        : s);
+      await orches.updateOne({ id: o.id }, { $set: { services, status: 'orchestrating', updatedAt: new Date(), completedAt: null } });
+      const advanced = await advanceOrchestration(o.id);
+      return ok({ orchestration: advanced });
+    }
+  }
+
+  // POST /api/trip-orchestrations/:id/replace/:serviceKey — retry just one service
+  {
+    const m = path.match(/^\/trip-orchestrations\/([\w-]+)\/replace\/([\w-]+)$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Sign in required', 401);
+      const orches = await getCollection('safar_trip_orchestrations');
+      const o = await orches.findOne({ id: m[1] });
+      if (!o) return err('Orchestration not found', 404);
+      if (o.userId !== me.id) return err('Not authorized', 403);
+      const key = m[2];
+      const services = (o.services || []).map(s => s.key === key
+        ? { ...s, status: 'searching', attemptedIds: [], candidateIds: [], currentRequestId: null, confirmedListingId: null, confirmedRequestId: null }
+        : s);
+      await orches.updateOne({ id: o.id }, { $set: { services, status: 'orchestrating', updatedAt: new Date(), completedAt: null } });
+      const advanced = await advanceOrchestration(o.id);
+      return ok({ orchestration: advanced });
+    }
+  }
+
+  // POST /api/provider-requests/:id/(accept|reject) — host action
+  {
+    const m = path.match(/^\/provider-requests\/([\w-]+)\/(accept|reject)$/);
+    if (m && method === 'POST') {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Sign in required', 401);
+      const preqs = await getCollection('safar_provider_requests');
+      const doc = await preqs.findOne({ id: m[1] });
+      if (!doc) return err('Request not found', 404);
+      if (doc.hostId !== me.id && me.role !== 'admin' && me.role !== 'super_admin') return err('Not authorized', 403);
+      if (doc.status !== 'pending') return err(`Already ${doc.status}`, 400);
+      if (new Date(doc.deadlineAt) < new Date()) {
+        await preqs.updateOne({ id: doc.id }, { $set: { status: 'expired', respondedAt: new Date() } });
+        if (doc.orchestrationId) await advanceOrchestration(doc.orchestrationId);
+        return err('Request expired', 400);
+      }
+      const action = m[2];
+      const patch = { status: action === 'accept' ? 'accepted' : 'rejected', respondedAt: new Date(), respondedByHostId: me.id };
+      await preqs.updateOne({ id: doc.id }, { $set: patch });
+      if (action === 'accept') {
+        await mkNotif({
+          userId: doc.travelerId, type: 'trip_service_confirmed', category: 'booking',
+          title: `${doc.serviceLabel} confirmed`,
+          body: `${doc.listingTitle} is locked in for your trip.`,
+          link: `/trip/${doc.tripId}`,
+          meta: { providerRequestId: doc.id, tripId: doc.tripId, orchestrationId: doc.orchestrationId },
+        });
+      }
+      if (doc.orchestrationId) await advanceOrchestration(doc.orchestrationId);
+      const fresh = await preqs.findOne({ id: doc.id }, { projection: { _id: 0 } });
+      return ok({ providerRequest: fresh });
+    }
+  }
+
+  // GET /api/host/provider-requests — pending & recent for the current host
+  if (path === '/host/provider-requests' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Sign in required', 401);
+    await ensureOrchestrationIndexes();
+    await expireStaleProviderRequests();
+    const preqs = await getCollection('safar_provider_requests');
+    const status = url.searchParams.get('status') || 'pending';
+    const filter = { hostId: me.id };
+    if (status !== 'all') filter.status = status;
+    const list = await preqs.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
+    return ok({ requests: list });
+  }
+
   if (path.startsWith('/circle')) {
     await ensureCircleIndexes();
     await ensureCircleMembersIndexes();

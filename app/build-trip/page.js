@@ -247,7 +247,10 @@ export default function BuildTripPage() {
     });
   };
 
-  const handleContinueToBooking = () => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleContinueToBooking = async () => {
+    if (submitting) return;
     const draft = {
       destination: destLabel,
       destinationKey: destination,
@@ -259,7 +262,30 @@ export default function BuildTripPage() {
       createdAt: new Date().toISOString(),
     };
     try { localStorage.setItem('safar_pending_trip', JSON.stringify(draft)); } catch {}
-    toast.success('Trip saved! Booking orchestration is coming in the next module.');
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/trip-orchestrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ draft }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        if (res.status === 401) {
+          toast.error('Please sign in to continue booking');
+          router.push('/login?next=/build-trip');
+          return;
+        }
+        throw new Error(data.error || 'Failed to start orchestration');
+      }
+      toast.success('Finding hosts for your trip…');
+      router.push(`/trip/${data.tripId}`);
+    } catch (e) {
+      toast.error(e.message || 'Something went wrong');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const goto = (i) => setStep(Math.min(STEPS.length - 1, Math.max(0, i)));
@@ -679,21 +705,26 @@ export default function BuildTripPage() {
                     <div className="flex items-start gap-3">
                       <div className="size-9 rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 text-white grid place-items-center shrink-0"><Sparkles className="size-5" /></div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm">Booking orchestration arriving next</div>
-                        <div className="text-xs text-muted-foreground mt-1">When you continue, we'll save your trip. In the next module we'll auto-match verified Safar hosts across all your chosen services and confirm bookings in one flow.</div>
+                        <div className="font-semibold text-sm">Live host orchestration</div>
+                        <div className="text-xs text-muted-foreground mt-1">When you continue, Safar will instantly match verified hosts for every service you selected, contact the best-ranked providers, and confirm your bookings — all in one live progress screen.</div>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                    <Button onClick={back} variant="outline" className="rounded-full sm:w-auto">
+                    <Button onClick={back} variant="outline" className="rounded-full sm:w-auto" disabled={submitting}>
                       <ChevronLeft className="size-4 mr-1" /> Back
                     </Button>
                     <Button
                       onClick={handleContinueToBooking}
-                      className="rounded-full flex-1 h-12 font-semibold text-base bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 text-white shadow-lg shadow-orange-500/25"
+                      disabled={submitting || services.length === 0}
+                      className="rounded-full flex-1 h-12 font-semibold text-base bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 text-white shadow-lg shadow-orange-500/25 disabled:opacity-60"
                     >
-                      Continue to Booking <ChevronRight className="size-4 ml-1" />
+                      {submitting ? (
+                        <><span className="mr-2 inline-block size-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Starting orchestration…</>
+                      ) : (
+                        <>Continue to Booking <ChevronRight className="size-4 ml-1" /></>
+                      )}
                     </Button>
                   </div>
                 </div>
