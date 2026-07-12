@@ -430,7 +430,7 @@ function RequestsTab({ onChange }) {
             <div className="flex items-start gap-3">
               {r.userAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={r.userAvatar} alt={r.userName} className="size-12 rounded-full object-cover" />
+                <img loading="lazy" decoding="async" src={r.userAvatar} alt={r.userName} className="size-12 rounded-full object-cover" />
               ) : (
                 <div className="size-12 rounded-full bg-white/10 grid place-items-center text-lg font-semibold">{(r.userName || '?').charAt(0).toUpperCase()}</div>
               )}
@@ -501,7 +501,7 @@ function MembersTab() {
               <div key={m.id} className="rounded-2xl bg-white/5 border border-white/10 p-3 flex items-center gap-3">
                 {m.userAvatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.userAvatar} alt={m.userName} className="size-10 rounded-full object-cover" />
+                  <img loading="lazy" decoding="async" src={m.userAvatar} alt={m.userName} className="size-10 rounded-full object-cover" />
                 ) : (
                   <div className="size-10 rounded-full bg-white/10 grid place-items-center font-semibold">{(m.userName || '?').charAt(0).toUpperCase()}</div>
                 )}
@@ -541,7 +541,7 @@ function MessagesTab() {
             <div className="size-14 rounded-2xl overflow-hidden bg-white/10 shrink-0">
               {c.journey.cover ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.journey.cover} alt={c.journey.name} className="w-full h-full object-cover" />
+                <img loading="lazy" decoding="async" src={c.journey.cover} alt={c.journey.name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-emerald-500/40 via-violet-500/40 to-pink-400/40" />
               )}
