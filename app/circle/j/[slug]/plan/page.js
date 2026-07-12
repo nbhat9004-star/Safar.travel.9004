@@ -138,27 +138,36 @@ export default function JourneyWorkspace() {
         </div>
       </section>
 
-      {/* Tabs */}
-      <section className="max-w-6xl mx-auto px-4 md:px-5 mt-5">
-        <div className="flex overflow-x-auto no-scrollbar gap-2 -mx-1 px-1">
-          {TABS.map(t => {
-            const Icon = t.icon;
-            const active = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition ${active ? 'circle-btn-primary' : 'circle-btn-ghost'}`}
-              >
-                <Icon className="size-4" /> {t.label}
-              </button>
-            );
-          })}
+      {/* Tabs — sticky below top nav on scroll, premium native-app feel on mobile */}
+      <section className="sticky top-16 z-30 mt-5">
+        <div className="workspace-tab-bar">
+          <div className="workspace-tab-bar-inner">
+            <div className="max-w-6xl mx-auto px-2 md:px-5">
+              <div className="workspace-tabs-scroll no-scrollbar" role="tablist" aria-label="Workspace sections">
+                {TABS.map(t => {
+                  const Icon = t.icon;
+                  const active = tab === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setTab(t.key)}
+                      className={`workspace-tab ${active ? 'is-active' : ''}`}
+                    >
+                      <Icon className="size-[15px] shrink-0" />
+                      <span className="workspace-tab-label">{t.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Tab content */}
-      <section className="max-w-6xl mx-auto px-4 md:px-5 mt-6">
+      <section className="max-w-6xl mx-auto px-4 md:px-5 mt-6 workspace-content">
         {tab === 'dashboard' && <DashboardTab journeyId={journey.id} journey={journey} onJumpTab={setTab} />}
         {tab === 'itinerary' && <ItineraryTab journeyId={journey.id} canEdit={canEdit} members={members} />}
         {tab === 'checklist' && <ChecklistTab journeyId={journey.id} canEdit={canEdit} members={members} />}
@@ -824,7 +833,7 @@ function ChatTab({ journeyId, me }) {
   };
 
   return (
-    <div className="circle-glass circle-card p-0 overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 260px)', minHeight: 400 }}>
+    <div className="circle-glass circle-card p-0 overflow-hidden flex flex-col workspace-chat">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {loading ? <div className="text-white/50 text-sm">Loading…</div> : messages.length === 0 ? (
           <div className="text-center text-white/50 text-sm py-10">No messages yet. Say hi 👋</div>
