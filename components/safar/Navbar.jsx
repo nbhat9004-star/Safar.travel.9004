@@ -172,6 +172,18 @@ export default function Navbar({ transparent = false }) {
               {n.label}
             </Link>
           ))}
+          {/* Build My Trip — primary CTA */}
+          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
+            <Link
+              href="/build-trip"
+              className={`group relative ml-1.5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13.5px] font-semibold tracking-tight transition-all ${solid
+                ? 'text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 shadow-md shadow-orange-500/25 hover:shadow-lg hover:shadow-orange-500/40'
+                : 'text-white bg-gradient-to-r from-amber-400/40 via-orange-400/40 to-rose-400/40 border border-white/25 backdrop-blur hover:from-amber-400/60 hover:via-orange-400/60 hover:to-rose-400/60'}`}
+            >
+              <Sparkles className="size-3.5" />
+              Build My Trip
+            </Link>
+          )}
           {/* Safar Circle — premium highlighted nav item */}
           {!(user?.role === 'admin' || user?.role === 'super_admin') && (
             <Link
@@ -341,6 +353,24 @@ export default function Navbar({ transparent = false }) {
               {/* Scrollable Navigation Content */}
               <div className="flex-1 overflow-y-auto">
                 <div className="p-3 pb-6">
+                  {/* Build My Trip — featured highlight */}
+                  {!(user?.role === 'admin' || user?.role === 'super_admin') && (
+                    <Link
+                      href="/build-trip"
+                      onClick={() => setOpen(false)}
+                      className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl mb-3 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-md shadow-orange-500/25 hover:shadow-lg hover:shadow-orange-500/40 transition"
+                    >
+                      <div className="size-9 rounded-xl bg-white/20 grid place-items-center backdrop-blur">
+                        <Sparkles className="size-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-[15px]">Build My Trip</div>
+                        <div className="text-[11px] text-white/80 mt-0.5">A guided way to design your perfect trip</div>
+                      </div>
+                      <ChevronDown className="size-4 rotate-[-90deg] text-white/80" />
+                    </Link>
+                  )}
+
                   {/* Safar Circle — featured highlight (near top) */}
                   {!(user?.role === 'admin' || user?.role === 'super_admin') && (
                     <Link
