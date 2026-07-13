@@ -103,22 +103,22 @@
 #====================================================================================================
 
 user_problem_statement: |
-  SAFAR CIRCLE MODULE 3 — Collaborative Journey Planning Engine.
-  Add: Collaborative Itinerary Builder (Day × Morning/Afternoon/Evening/Night blocks with
-  location, activity, description, meeting time, notes, member assignments), Shared
-  Packing Checklist with progress %, Journey Polls (curator-created, one vote per member),
-  lightweight Journey Chat (text only, auto-scroll, delete own), Shared Gallery (image
-  masonry + lightbox), and Journey Dashboard widget page. Reuse existing auth,
-  notifications (`mkNotif`), users/circle_journeys/circle_members. Manual testing only —
-  no testing agents. Hard limit 10 credits.
-  New collections: circle_itinerary, circle_checklist, circle_polls, circle_chat, circle_gallery.
+  Safar Platform — Production Performance Engineering (max 5 credits).
+  Optimise both Safar Curated Marketplace AND Safar Circle for blazing-fast
+  loading on mobile & desktop WITHOUT changing UI, animations, routes, APIs,
+  auth, DB, booking, payment, SEO or business logic. Targets: Mobile Lighthouse
+  90+, Desktop 95-100. Apply code-splitting, lazy-loading, memoization, image
+  optimisation, bundle-size reduction, aggressive caching, deferred non-critical
+  JS/CSS/fonts, and dynamic imports for heavy modules (Host Dashboard, Build My
+  Trip, AI Concierge, AI Planner, Circle Workspace, Chat, Gallery, Polls,
+  Checklist, Marketplace, Admin, Maps, Calendars, Charts, Image galleries).
 
 test_plan:
   current_focus:
-    - "Safar Circle Module 3 — Collaborative planning (itinerary/checklist/polls/chat/gallery/dashboard)"
+    - "Perf regression check: verify no functional/UI breakage on core routes after code-splitting pass"
   stuck_tasks: []
   test_all: false
-  test_priority: "manual_only"
+  test_priority: "high_first"
 
 frontend:
   - task: "Safar Circle — Mobile UI polish (bottom nav, overflow, drawer)"
@@ -507,6 +507,70 @@ metadata:
   version: "1.1"
   test_sequence: 2
   run_ui: true
+
+# ---------------------------------------------------------------------------
+# PERF PASS (2026-07-13) — agent_communication (main → testing)
+# ---------------------------------------------------------------------------
+agent_communication_perf_pass:
+  - agent: "main"
+    message: |
+      PERFORMANCE OPTIMISATION PASS COMPLETE — please run a regression check on
+      the following critical user flows to confirm nothing broke. NO functional
+      or UI changes were made; only code-splitting + tree-shaking + lazy imports.
+
+      Files changed in this pass:
+        * /app/next.config.js  — expanded optimizePackageImports (42 packages
+          incl. all Radix UI, recharts, date-fns, embla, cmdk, vaul, sonner,
+          react-hook-form, react-day-picker, etc.); enabled
+          experimental.scrollRestoration; productionBrowserSourceMaps=false.
+        * /app/app/page.js — RewardsPromoStrip extracted to
+          /app/app/_home-rewards-strip.jsx and lazy-loaded via next/dynamic;
+          SectionRenderer also converted to dynamic import.
+        * /app/app/_home-rewards-strip.jsx — NEW extracted module.
+        * /app/app/circle/studio/page.js — trimmed from 663 → 318 lines;
+          six heavy tab components (ServicesTab, AnalyticsTab, RequestsTab,
+          MembersTab, MessagesTab, TimelineTab) extracted to _tabs.jsx and
+          converted to next/dynamic. ShareSheet also dynamic.
+        * /app/app/circle/studio/_tabs.jsx — NEW extracted tabs module.
+        * /app/app/circle/j/[slug]/page.js — Leaflet script strategy switched
+          to lazyOnload + gated by j.destination.lat existence; leaflet.css
+          uses media=print onLoad→all trick to avoid render-blocking;
+          ShareSheet dynamic-imported.
+        * /app/app/build-trip/page.js — Footer dynamic-imported.
+        * /app/components/safar/Navbar.jsx — AuthModal dynamic-imported (only
+          mounts when sign-in/sign-up opened).
+
+      Please Playwright-verify (no functional testing — regression only, existing
+      credentials in /app/memory/test_credentials.md):
+
+      1) Homepage (/): loads, hero slideshow rotates, search form works, category
+         pills filter listings, footer visible on scroll, no console errors, no
+         layout shift, RewardsPromoStrip renders below-the-fold.
+      2) Navbar Sign-in modal: click "Sign in" → modal opens (dynamic chunk),
+         switch between Sign-In/Sign-Up tabs, close modal.
+      3) Explore (/explore): listing grid renders, filters work.
+      4) Property details (/property/[id]): use one of the demo ids (e.g. l1)
+         from /api/listings — page loads, image gallery works, book button.
+      5) Build-Trip (/build-trip): step navigation works, ChevronLeft/Right,
+         all 7 steps reachable, footer appears at end.
+      6) Circle landing (/circle): loads, animations preserved.
+      7) Circle Discover (/circle/discover): journey grid loads.
+      8) Circle Studio (/circle/studio) — after sign-in:
+         - Default "Published" tab renders.
+         - Click each tab (Drafts, Private/Invite, Archived, Marketplace
+           services, Analytics, Requests, Members, Messages, Timeline). Each
+           lazy tab chunk loads with skeleton then content.
+      9) Circle Journey preview (/circle/j/[slug]): hero image, meta info,
+         Share button opens ShareSheet, Leaflet map loads (verify iframe/tile),
+         join flow visible.
+      10) Circle Workspace (/circle/j/[slug]/plan): dashboard tab loads,
+          switching to Itinerary/Checklist/Polls/Chat/Gallery lazy-loads chunks.
+      11) Mobile viewport (390×844): bottom nav visible on Circle, no
+          horizontal overflow, drawer works.
+
+      Confirm ALL previously-working features still work. Report back with a
+      per-flow PASS/FAIL and any console errors.
+
 
 # ---------------------------------------------------------------------------
 # LEGACY HISTORY BELOW (preserved verbatim — do not edit)

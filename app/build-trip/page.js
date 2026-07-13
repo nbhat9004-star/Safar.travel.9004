@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -10,8 +11,12 @@ import {
   Wifi, ParkingCircle, Coffee, Wind, Image as ImageIcon, ListChecks, Star
 } from 'lucide-react';
 import Navbar from '@/components/safar/Navbar';
-import Footer from '@/components/safar/Footer';
 import { Button } from '@/components/ui/button';
+
+// PERF: Footer is far below the fold on a wizard-style page — dynamic import
+// keeps the initial Build-Trip JS bundle lean; only the current step's data
+// blocks first paint.
+const Footer = dynamic(() => import('@/components/safar/Footer'), { ssr: true });
 
 // ---------- Config ----------
 const DESTINATIONS = [

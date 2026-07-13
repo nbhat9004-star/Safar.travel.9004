@@ -1,14 +1,19 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 
 import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
-import AuthModal from '@/components/safar/AuthModal';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
+
+// PERF: AuthModal is only mounted when the user opens the sign-in/sign-up
+// dialog. Splitting it out means the ~15KB Radix Dialog + form + validation
+// bundle no longer ships on the initial paint of every marketplace page.
+const AuthModal = dynamic(() => import('@/components/safar/AuthModal'), { ssr: false });
 
 export default function Navbar({ transparent = false }) {
   const { user } = useAuth();

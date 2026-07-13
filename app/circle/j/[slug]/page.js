@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Script from 'next/script';
+import dynamic from 'next/dynamic';
 import CircleNav from '@/components/circle/CircleNav';
-import ShareSheet from '@/components/circle/ShareSheet';
 import { circleApi, themeLabel, formatINR, signInHref } from '@/lib/circle-api';
 import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
@@ -13,6 +13,10 @@ import {
   Zap, Eye, Edit3, Trash2, Globe, Lock, Send, ExternalLink, ChevronRight, Circle,
   Check, X, LogOut, Loader2, DoorClosed, Settings
 } from 'lucide-react';
+
+// PERF: ShareSheet is only mounted when user taps "Share journey" — split into
+// its own chunk so the initial preview bundle is smaller.
+const ShareSheet = dynamic(() => import('@/components/circle/ShareSheet'), { ssr: false });
 
 export default function JourneyPreview() {
   const params = useParams();
@@ -112,9 +116,18 @@ export default function JourneyPreview() {
 
   return (
     <main className="min-h-screen text-white pt-16 pb-24">
-      <Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="afterInteractive" onLoad={() => setLeafletReady(true)} />
-      {/* eslint-disable-next-line @next/next/no-css-tags */}
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      {/* PERF: Leaflet is a ~140KB library only needed for the destination map card.
+          `lazyOnload` defers script fetch until after all above-the-fold resources
+          (hero image, gradient text, meta) are painted, and CSS is loaded via
+          media-print swap trick so it doesn't render-block the initial paint. */}
+      {j?.destination?.lat && (
+        <>
+          <Script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" strategy="lazyOnload" onLoad={() => setLeafletReady(true)} />
+          {/* eslint-disable-next-line @next/next/no-css-tags */}
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onLoad={(e) => { e.currentTarget.media = 'all'; }} />
+          <noscript>{/* eslint-disable-next-line @next/next/no-css-tags */}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /></noscript>
+        </>
+      )}
       <CircleNav />
 
       {/* HERO */}
