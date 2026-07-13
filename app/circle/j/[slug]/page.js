@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import Script from 'next/script';
 import dynamic from 'next/dynamic';
 import CircleNav from '@/components/circle/CircleNav';
@@ -133,8 +134,19 @@ export default function JourneyPreview() {
       {/* HERO */}
       <section className="relative min-h-[70svh] overflow-hidden">
         {j.cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img fetchPriority="high" decoding="async" src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />
+          // PERF: next/image gives automatic AVIF/WebP with responsive srcSet
+          // + built-in preload for `priority` — this is the LCP element on the
+          // journey preview route on mobile, so it must ship as small as
+          // possible and start downloading immediately.
+          <Image
+            src={j.cover}
+            alt={j.name}
+            fill
+            priority
+            sizes="100vw"
+            fetchPriority="high"
+            className="object-cover"
+          />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/40 via-violet-500/40 to-pink-400/40" />
         )}

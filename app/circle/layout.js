@@ -97,6 +97,19 @@ export default function CircleLayout({ children }) {
   };
   return (
     <div className="circle-root min-h-screen">
+      {/* PERF: Pre-establish TCP/TLS to image CDNs before HTML parsing finishes.
+          Every Circle page displays imagery hosted on these origins — hero
+          journey covers, curator avatars, marketplace service photos — so
+          eliminating the ~200-400ms handshake overhead on mobile networks
+          measurably improves LCP without any layout / functional changes. */}
+      <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="" />
+      <link rel="preconnect" href="https://images.pexels.com" crossOrigin="" />
+      <link rel="preconnect" href="https://images.unsplash.com" crossOrigin="" />
+      <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+      <link rel="dns-prefetch" href="https://images.pexels.com" />
+      <link rel="dns-prefetch" href="https://images.unsplash.com" />
+      <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
+
       {/* Structured data for search engines */}
       <script
         type="application/ld+json"
