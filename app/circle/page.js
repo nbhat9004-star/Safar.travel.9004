@@ -5,7 +5,8 @@ import CircleNav from '@/components/circle/CircleNav';
 import { ArrowRight, Sparkles, Compass, MapPin, Users, Shield, Wand2, Zap } from 'lucide-react';
 import { circleApi, themeLabel, formatINR } from '@/lib/circle-api';
 
-const HERO_IMG = 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=1920';
+// PERF: Poster URLs kept only for the desktop floating deco (hidden lg:block).
+// On mobile these images are never rendered, so we skip preloading them.
 const POSTER_1 = 'https://images.pexels.com/photos/14262339/pexels-photo-14262339.jpeg?auto=compress&cs=tinysrgb&w=1200';
 const POSTER_2 = 'https://images.pexels.com/photos/25786776/pexels-photo-25786776.jpeg?auto=compress&cs=tinysrgb&w=1200';
 const POSTER_3 = 'https://images.pexels.com/photos/32620987/pexels-photo-32620987.jpeg?auto=compress&cs=tinysrgb&w=1200';
@@ -170,8 +171,11 @@ function FeelCard({ icon: Icon, title, body }) {
 function FloatingPoster({ img, title, tag, price, style, big }) {
   return (
     <div className={`absolute ${big ? 'w-64 h-80' : 'w-52 h-72'} rounded-3xl overflow-hidden circle-magnetic border border-white/20 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]`} style={style}>
+      {/* PERF: explicit width/height matches Tailwind container ratio to
+          eliminate CLS. Hidden on mobile via `hidden lg:block` on parent —
+          so no mobile bytes wasted regardless. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img loading="lazy" decoding="async" src={img} alt={title} className="absolute inset-0 w-full h-full object-cover" />
+      <img loading="lazy" decoding="async" width={big ? 256 : 208} height={big ? 320 : 288} src={img} alt={title} className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 p-4">
         <div className="circle-chip !text-[9px] !py-1 !px-2">{tag}</div>
@@ -187,8 +191,11 @@ function JourneyPoster({ j }) {
   return (
     <Link href={`/circle/j/${j.slug}`} className="group relative aspect-[3/4] rounded-3xl overflow-hidden block border border-white/10 circle-magnetic">
       {j.cover ? (
+        // PERF: explicit width/height (3:4 ratio) so the browser reserves
+        // the exact aspect box before the image decodes → zero CLS on the
+        // featured grid below the fold.
         // eslint-disable-next-line @next/next/no-img-element
-        <img loading="lazy" decoding="async" src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+        <img loading="lazy" decoding="async" width={600} height={800} src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/40 via-violet-500/40 to-pink-400/40" />
       )}
