@@ -190,14 +190,7 @@ function AppInner() {
 
         <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
           <div className="max-w-3xl text-white">
-            <div
-              key={currentImageIndex}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark text-[11px] uppercase tracking-[0.22em] font-semibold"
-            >
-              <Sparkles className="size-3.5 text-gold" />
-              Curated by locals • Trusted by travelers • {SEASONAL_IMAGES[currentImageIndex].emoji} {SEASONAL_IMAGES[currentImageIndex].season} in Kashmir
-            </div>
-            <h1 className="font-display font-bold mt-6 text-[clamp(2.6rem,6.4vw,5.6rem)] leading-[1.02] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
+            <h1 className="font-display font-bold text-[clamp(2.6rem,6.4vw,5.6rem)] leading-[1.02] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.
             </h1>
             <p className="mt-5 text-lg md:text-xl text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
@@ -217,10 +210,16 @@ function AppInner() {
             </div>
           </div>
 
+          {/* Premium trust badge — repositioned from the top pill. Sits between the CTAs and the search card, above the fold. */}
+          <div className="mt-8 inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full glass-dark text-white/95 text-[11px] uppercase tracking-[0.22em] font-semibold w-fit">
+            <ShieldCheck className="size-3.5 text-gold" aria-hidden="true" />
+            Curated by locals · Trusted by travelers
+          </div>
+
           {/* Search Card — responsive, fully contained at all viewports */}
           <form
             onSubmit={onSearch}
-            className="mt-10 md:mt-14 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl"
+            className="mt-4 md:mt-6 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl"
           >
             {/* Fields wrapper: stack on mobile, 2x2 grid on sm-tablet, inline row on lg+ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-1 lg:items-stretch gap-2 lg:gap-0 min-w-0">

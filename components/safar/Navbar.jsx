@@ -288,6 +288,11 @@ export default function Navbar({ transparent = false }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Season Card — compact, desktop-only. Auto-switches by month with
+              lightweight CSS-only seasonal ambience animation. Rendered
+              client-side to avoid SSR/TZ hydration edge cases. */}
+          <SeasonCard solid={solid} />
+
           {/* Notification Bell */}
           {user && (
             <div className="relative">
@@ -566,5 +571,52 @@ export default function Navbar({ transparent = false }) {
       {/* Root-level AuthModal so Radix Sheet's pointer-events lock doesn't pass clicks through to nav Links underneath. */}
       <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={()=>setAuthMode(null)} />
     </header>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// SeasonCard — compact seasonal indicator rendered on the far-right of the
+// desktop nav (before Sign In). Auto-selects the current Kashmir season from
+// the visitor's local month. Hidden on tablet/mobile to keep spacing tight.
+// Ambience animation is 100% CSS (see `.season-card` rules in globals.css).
+// -----------------------------------------------------------------------------
+const SEASONS_BY_MONTH = {
+  0:  { key: 'winter', icon: '❄️', title: 'Winter in Kashmir', subtitle: 'Snowfall Season' },
+  1:  { key: 'winter', icon: '❄️', title: 'Winter in Kashmir', subtitle: 'Snowfall Season' },
+  2:  { key: 'spring', icon: '🌸', title: 'Spring in Kashmir', subtitle: 'Tulip Season' },
+  3:  { key: 'spring', icon: '🌸', title: 'Spring in Kashmir', subtitle: 'Tulip Season' },
+  4:  { key: 'spring', icon: '🌸', title: 'Spring in Kashmir', subtitle: 'Tulip Season' },
+  5:  { key: 'summer', icon: '☀️', title: 'Summer in Kashmir', subtitle: 'Valley Escape' },
+  6:  { key: 'summer', icon: '☀️', title: 'Summer in Kashmir', subtitle: 'Valley Escape' },
+  7:  { key: 'summer', icon: '☀️', title: 'Summer in Kashmir', subtitle: 'Valley Escape' },
+  8:  { key: 'autumn', icon: '🍁', title: 'Autumn in Kashmir', subtitle: 'Golden Chinars' },
+  9:  { key: 'autumn', icon: '🍁', title: 'Autumn in Kashmir', subtitle: 'Golden Chinars' },
+  10: { key: 'autumn', icon: '🍁', title: 'Autumn in Kashmir', subtitle: 'Golden Chinars' },
+  11: { key: 'winter', icon: '❄️', title: 'Winter in Kashmir', subtitle: 'Snowfall Season' },
+};
+
+function SeasonCard({ solid }) {
+  // Compute on client to avoid server/client TZ drift causing hydration diffs.
+  const [season, setSeason] = useState(null);
+  useEffect(() => {
+    setSeason(SEASONS_BY_MONTH[new Date().getMonth()]);
+  }, []);
+  // Reserve exact layout footprint on SSR so no CLS occurs when the card mounts.
+  if (!season) {
+    return <div className="hidden xl:block h-11 w-[168px]" aria-hidden="true" />;
+  }
+  return (
+    <div
+      className={`season-card season-${season.key} hidden xl:flex items-center gap-2 h-11 px-3 rounded-full border ${solid ? 'bg-white/80 border-border/60 text-charcoal' : 'bg-white/10 border-white/25 text-white backdrop-blur'}`}
+      aria-label={`${season.title} — ${season.subtitle}`}
+      role="img"
+    >
+      <span className="season-card-icon text-lg leading-none select-none" aria-hidden="true">{season.icon}</span>
+      <span className="flex flex-col leading-tight text-left">
+        <span className="text-[11.5px] font-semibold tracking-tight whitespace-nowrap">{season.title}</span>
+        <span className={`text-[9.5px] uppercase tracking-[0.14em] font-medium whitespace-nowrap ${solid ? 'text-charcoal/60' : 'text-white/70'}`}>{season.subtitle}</span>
+      </span>
+      <span className="season-card-fx" aria-hidden="true" />
+    </div>
   );
 }
