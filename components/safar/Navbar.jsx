@@ -27,6 +27,18 @@ export default function Navbar({ transparent = false }) {
   const [showNotifications, setShowNotifications] = useState(false);
   // Module 11A — "More" dropdown (desktop)
   const [showMore, setShowMore] = useState(false);
+  // Desktop nav — "Experience" (marketplace) dropdown
+  const [showExperience, setShowExperience] = useState(false);
+
+  // Marketplace categories, consolidated behind a single "Experience" entry
+  // point in the desktop nav to reduce header clutter without changing routes.
+  const EXPERIENCE_CATEGORIES = [
+    { href: '/explore?cat=all',        label: 'Stays' },
+    { href: '/explore?cat=experience', label: 'Experiences' },
+    { href: '/explore?cat=transport',  label: 'Bikes & Cars' },
+    { href: '/explore?cat=tour',       label: 'Tour Guides' },
+    { href: '/explore?cat=shopping',   label: 'Shopping' },
+  ];
   
   // Module 11A — informational + placeholder links shared by desktop dropdown and mobile drawer
   const MORE_LINKS = [
@@ -48,13 +60,16 @@ export default function Navbar({ transparent = false }) {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     
-    // Close notifications / more menu on outside click
+    // Close notifications / more / experience menu on outside click
     const handleClick = (e) => {
       if (showNotifications && !e.target.closest('.notification-dropdown')) {
         setShowNotifications(false);
       }
       if (showMore && !e.target.closest('.more-dropdown')) {
         setShowMore(false);
+      }
+      if (showExperience && !e.target.closest('.experience-dropdown')) {
+        setShowExperience(false);
       }
     };
     document.addEventListener('click', handleClick);
@@ -63,7 +78,7 @@ export default function Navbar({ transparent = false }) {
       window.removeEventListener('scroll', onScroll);
       document.removeEventListener('click', handleClick);
     };
-  }, [showNotifications, showMore]);
+  }, [showNotifications, showMore, showExperience]);
   
   useEffect(() => {
     fetch('/api/settings/safar-together').then(r => r.json()).then(d => setSafarTogetherEnabled(d.enabled));
@@ -123,19 +138,18 @@ export default function Navbar({ transparent = false }) {
       ];
     }
 
-    // Customer navigation (for travelers, hosts, and guests)
+    // Customer navigation (for travelers, hosts, and guests).
+    // NOTE: Marketplace categories (Stays / Experiences / Bikes & Cars /
+    // Tour Guides / Shopping) are surfaced via the "Experience" dropdown
+    // rendered separately in the desktop nav — see EXPERIENCE_CATEGORIES.
     const baseNav = [
-      { href: '/explore?cat=all',         label: 'Stays' },
-      { href: '/explore?cat=experience',  label: 'Experiences' },
-      { href: '/explore?cat=transport',   label: 'Bikes & Cars' },
-      { href: '/explore?cat=tour',        label: 'Tour Guides' },
-      { href: '/explore?nearme=true',     label: 'Near Me' },
-      { href: '/ai-planner',              label: 'AI Planner' },
+      { href: '/explore?nearme=true', label: 'Near Me' },
+      { href: '/ai-planner',          label: 'AI Planner' },
     ];
 
     // Add Safar Together if enabled and user is logged in
     if (safarTogetherEnabled && user) {
-      baseNav.splice(5, 0, { href: '/safar-together', label: '🤝 Safar Together' });
+      baseNav.push({ href: '/safar-together', label: '🤝 Safar Together' });
     }
 
     // Add role-specific items
@@ -171,6 +185,40 @@ export default function Navbar({ transparent = false }) {
         </Link>
 
         <nav className="hidden xl:flex items-center gap-0.5">
+          {/* Experience — consolidated marketplace entry point (dropdown).
+              Items are only mounted when the dropdown is open, so the header
+              DOM stays minimal on initial paint. */}
+          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
+            <div className="relative experience-dropdown">
+              <button
+                type="button"
+                onClick={() => setShowExperience((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={showExperience}
+                aria-label="Experience — browse marketplace categories"
+                className={`inline-flex items-center gap-1 px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
+              >
+                Experience
+                <ChevronDown className={`size-3.5 transition-transform ${showExperience ? 'rotate-180' : ''}`} />
+              </button>
+              {showExperience && (
+                <div role="menu" className="absolute left-0 top-full mt-2 w-56 bg-white rounded-2xl border shadow-xl z-50 overflow-hidden">
+                  <div className="p-2">
+                    {EXPERIENCE_CATEGORIES.map((it) => (
+                      <Link
+                        key={it.href}
+                        href={it.href}
+                        onClick={() => setShowExperience(false)}
+                        className="flex items-center px-3 py-2.5 rounded-xl text-sm text-charcoal hover:bg-secondary transition"
+                      >
+                        {it.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {visibleNav.map((n) => (
             <Link key={n.href} href={n.href}
               className={`px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}>
