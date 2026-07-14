@@ -78,11 +78,9 @@ const nextConfig = {
     ],
     // PERF: Load only ~5KB React runtime shell per navigation instead of full page bundle.
     scrollRestoration: true,
-    // PERF: Inline critical CSS and lazy-load the rest via Critters — big LCP win on mobile.
-    optimizeCss: true,
   },
 
-  // PERF: Strip console.* calls in production (keep errors for observability). Reduces JS bundle.
+  // PERF: Strip console.* calls in production (keep errors/warns for observability). Reduces JS bundle.
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   },
