@@ -40,6 +40,23 @@ export default function ProtectedRoute({ roles, children }) {
   }
 
   if (allowed && !allowed.includes(user.role)) {
+    // Special-case: user has a pending host application (signed in as
+    // traveler after clicking "Become a Host" via Google). Show the
+    // awaiting-approval message instead of the generic access-restricted view.
+    const isPendingHost =
+      user.hostApplicationStatus === 'pending' && allowed.some((r) => r === 'host');
+    if (isPendingHost) {
+      return (
+        <div className="min-h-[70vh] grid place-items-center px-4">
+          <div className="text-center max-w-md">
+            <div className="size-14 mx-auto rounded-2xl bg-amber-50 grid place-items-center"><Lock className="size-6 text-amber-600" /></div>
+            <h2 className="font-display text-2xl font-bold mt-4">Awaiting admin approval</h2>
+            <p className="text-muted-foreground text-sm mt-2">Thanks for applying to become a Safar host. Your application is under review — you&rsquo;ll receive an email as soon as it&rsquo;s approved (usually within 24 hours).</p>
+            <Button asChild className="mt-5 rounded-full bg-emerald2 hover:bg-emerald2-deep"><Link href="/">Back to home</Link></Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-[70vh] grid place-items-center px-4">
         <div className="text-center max-w-md">

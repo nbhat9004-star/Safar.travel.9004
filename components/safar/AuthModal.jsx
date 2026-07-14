@@ -174,12 +174,28 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
-      const res = await loginWithGoogle(idToken);
+      // Signal host-signup intent to the backend when this Google sign-in
+      // was triggered from the "Become a Host" flow — currently detected by
+      // the modal being opened on the /add-listing route. Backend will then
+      // create the account with hostApplicationStatus='pending' and email
+      // the user an "awaiting admin approval" confirmation.
+      const intent =
+        typeof window !== 'undefined' && window.location.pathname === '/add-listing'
+          ? 'host'
+          : undefined;
+      const res = await loginWithGoogle(idToken, intent);
       if (!res.success) {
         toast.error(res.error || 'Google sign-in failed');
         return;
       }
-      toast.success(`Welcome, ${res.user.name}!`);
+      if (res.hostApplicationPending) {
+        toast.success(
+          `Thanks ${res.user.name}! Your host application is awaiting admin approval — check your email for confirmation.`,
+          { duration: 6000 }
+        );
+      } else {
+        toast.success(`Welcome, ${res.user.name}!`);
+      }
       handleAuthSuccess();
     } catch (error) {
       console.error('Google sign-in error:', error);

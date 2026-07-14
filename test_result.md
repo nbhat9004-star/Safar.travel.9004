@@ -115,10 +115,160 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Desktop hero overlap fix — verify navbar logo, hero H1, trust badge, CTAs, search card, and Season Card all sit on their own visual layers with no overlap at 1366x768, 1440x900, 1920x1080."
+    - "Google Become-a-Host flow — verify pending host application creation, email trigger, awaiting-approval UI, admin approval, and role promotion end-to-end."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend:
+  - task: "Google Become-a-Host — pending application flow + admin approval"
+    implemented: true
+    working: "NA"
+    file: "/app/app/api/[[...path]]/route.js, /app/lib/auth-context.js, /app/components/safar/AuthModal.jsx, /app/components/safar/ProtectedRoute.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          BUG SUMMARY (user report):
+            Google OAuth "Become a Host" flow was broken. Clicking "Become a Host" then
+            signing in with Google produced a traveler account with no host-application
+            record, no confirmation email, no admin approval path. Users had no way to
+            actually become a host via Google.
+
+          ROOT CAUSE:
+            POST /api/auth/verify-google hardcoded every new user to role:'traveler' and
+            had no notion of a "host application". There was also no signal from the
+            client indicating the user's intent was to become a host. The admin role-
+            change endpoint existed (PATCH /api/admin/users/:id/role) but had no hook to
+            clear a pending-host flag or send an approval email.
+
+          FILES MODIFIED (minimum set — 4 files, no new services):
+
+          1) /app/app/api/[[...path]]/route.js  (3 focused edits)
+             a) POST /auth/verify-google — accepts optional `intent` body param. When
+                intent === 'host':
+                  - NEW user: created with role:'traveler' AND
+                    hostApplicationStatus:'pending' + hostApplicationAt:Date.
+                    Sends "host application received" email (reuses lib/email sendEmail).
+                  - EXISTING traveler: attaches hostApplicationStatus:'pending' to
+                    their account (no new row) and sends the same email.
+                  - EXISTING host/admin: no change (they are already a host).
+                Response now includes `hostApplicationPending:boolean`.
+             b) PATCH /admin/users/:id/role — when admin sets role='host' AND user was
+                previously hostApplicationStatus:'pending', flag is transitioned to
+                'approved' with approver id and timestamp, and an approval email is
+                sent to the user. Reuses lib/email sendEmail.
+             c) GET /users — admin queue support. Now accepts optional query filter
+                `?hostApplicationStatus=pending` so admins can list pending host apps.
+
+          2) /app/lib/auth-context.js
+             - loginWithGoogle(idToken, intent) now forwards `intent` in body.
+             - Returns { success, user, hostApplicationPending } so UI can branch.
+
+          3) /app/components/safar/AuthModal.jsx
+             - handleGoogleSignIn detects intent by inspecting window.location.pathname
+               (=== '/add-listing' means the auth was triggered by "Become a Host"
+               protected route). Passes intent:'host' when true.
+             - Shows a distinct 6-second "awaiting admin approval — check your email"
+               toast when hostApplicationPending is true; otherwise the normal welcome.
+
+          4) /app/components/safar/ProtectedRoute.jsx
+             - When a signed-in user with hostApplicationStatus:'pending' visits a
+               host-only page (e.g. /add-listing), shows an "Awaiting admin approval"
+               screen with amber Lock icon instead of the generic red access-restricted
+               screen. No functional change for users without a pending application.
+
+          REUSED (not duplicated):
+            * lib/email.js `sendEmail` — reused as-is with inline HTML for the two
+              new host-application emails.
+            * existing PATCH /admin/users/:id/role — extended by 6 lines to also
+              clear the pending flag and trigger email; no new admin route.
+            * existing GET /users — extended by 3 lines with an optional filter.
+            * existing loginWithGoogle context method — extended to forward intent.
+            * existing AuthModal Google button — no new button; existing button is
+              intent-aware via pathname.
+
+          NOT TOUCHED:
+            * Email/password register flow (unchanged).
+            * Existing host role promotion in AI wizard (add-listing/create-listing-ai).
+            * Traveler / general Google sign-in behaviour (still auto-creates traveler
+              and welcomes normally).
+            * UI / UX / animations / SEO / routes / DB schema (only additive new fields
+              on the users collection).
+            * Payment, booking, Circle, AI Planner, marketplace.
+
+          WHAT TESTING AGENT MUST VERIFY (backend only — this is a backend workflow bug):
+
+          Setup:
+            * Get an admin user token (either use an existing admin from
+              /app/memory/test_credentials.md or promote a fresh user via the
+              existing seed / MongoDB update — main agent expects admin credentials
+              to already exist).
+
+          A) NEW USER via Google + intent='host' (mocked Firebase token path):
+             This flow uses Firebase Admin SDK to verify tokens; the testing agent
+             CANNOT easily mint a real Firebase token. Instead, verify the endpoint's
+             CONTRACT with a stubbed / invalid token flow:
+               a1) POST /api/auth/verify-google  {}                     -> 400 "Firebase ID token is required"
+               a2) POST /api/auth/verify-google  { idToken:'bad' }      -> 401 "Invalid Firebase token"
+               a3) POST /api/auth/verify-google  { idToken:'bad', intent:'host' } -> 401 (proves intent doesn't bypass verification)
+
+             This is sufficient to confirm the endpoint accepts the new field
+             without crashing and preserves auth guardrails.
+
+          B) DIRECT DB SIMULATION of the pending-host state, then admin approval:
+             Since Firebase-verified Google sign-in cannot be triggered from a
+             backend test, simulate the end-state instead:
+               b1) Register a new traveler via the standard email flow
+                   POST /api/auth/register  { name:'Pending Host Test', email:<unique>,
+                                              password:'password123', role:'traveler' } -> 201
+               b2) With admin auth, promote the test user to host directly via the
+                   admin endpoint to demonstrate the WHOLE role transition works:
+                   PATCH /api/admin/users/<userId>/role  { role:'host' }  -> 200
+                   Response.user.role must be 'host'.
+                   (This exercises the PATCH endpoint that is now also responsible
+                   for clearing hostApplicationStatus when set.)
+
+          C) PENDING-HOST APPROVAL PATH (the key new logic):
+             Simulate a Google host signup by inserting hostApplicationStatus:'pending'
+             directly on a fresh user (main agent will do this via the MongoDB
+             connection since testing agent cannot mint Firebase tokens):
+               c1) Create a test user via /api/auth/register with role='traveler'.
+               c2) Manually PATCH the DB user doc to set hostApplicationStatus='pending'
+                   (the testing agent can do this by hitting the admin PATCH /users/:id
+                   endpoint IF it accepts arbitrary fields, or by running a small
+                   node script via bash; if neither is possible, skip c2 and rely on
+                   c3's admin-side observation).
+               c3) With admin auth, PATCH /admin/users/<userId>/role  { role:'host' }
+                   -> 200; response.user.role === 'host';
+                              response.user.hostApplicationStatus === 'approved';
+                              response.user.hostApplicationApprovedAt is a valid date.
+               c4) The GET /users?hostApplicationStatus=pending admin filter must
+                   NOT return this user (they were transitioned to 'approved').
+
+          D) FILTER endpoint:
+               d1) Without auth  GET /users?hostApplicationStatus=pending  -> 401
+               d2) As traveler   GET /users?hostApplicationStatus=pending  -> 403
+               d3) As admin      GET /users?hostApplicationStatus=pending  -> 200 with users array
+
+          E) Regression checks (must still pass — unchanged behaviour):
+               e1) POST /auth/register  standard traveler                    -> 200
+               e2) POST /auth/register  standard host (role='host' in body)  -> 200 (immediate host)
+               e3) POST /auth/login     valid credentials                    -> 200
+               e4) GET  /auth/me        with token                           -> 200
+
+          Emails: Resend/SMTP will only send in production. In this preview the
+          email helper logs errors to console when RESEND_API_KEY is missing;
+          testing agent does NOT need to verify actual email delivery — verify
+          the endpoints don't 500 when the email helper fails and that the DB
+          transitions happen correctly.
+
+          Credentials: /app/memory/test_credentials.md
+          Base URL: NEXT_PUBLIC_BASE_URL from /app/.env (fall back to http://localhost:3000
+          if not set).
 
 frontend:
   - task: "Desktop hero overlap fix (Navbar logo vs hero heading vs trust badge)"

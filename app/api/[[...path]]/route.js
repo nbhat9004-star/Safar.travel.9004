@@ -748,8 +748,16 @@ async function route(request, { params }) {
   }
 
   // POST /api/auth/verify-google - Firebase Google Authentication
+  //
+  // Supports an optional `intent` parameter:
+  //   - 'host'     -> user clicked "Become a Host" and signed in with Google.
+  //                   Account is CREATED but role stays 'traveler' and
+  //                   hostApplicationStatus is set to 'pending' so an admin
+  //                   must approve before host tools unlock. Confirmation
+  //                   email is sent.
+  //   - otherwise  -> normal traveler signup / login (unchanged behaviour).
   if (path === '/auth/verify-google' && method === 'POST') {
-    const { idToken } = await readBody(request);
+    const { idToken, intent } = await readBody(request);
     if (!idToken) return err('Firebase ID token is required');
     
     // Verify token with Firebase Admin SDK
@@ -765,6 +773,8 @@ async function route(request, { params }) {
     
     const users = await getCollection('users');
     let user = await users.findOne({ email: email.toLowerCase() });
+    const isHostSignup = intent === 'host';
+    let pendingHostCreated = false;
     
     // Auto-create user if first time login
     if (!user) {
@@ -777,20 +787,52 @@ async function route(request, { params }) {
         emailVerified: true, // Google has already verified the email
         createdAt: new Date(),
         updatedAt: new Date(),
+        // Host-application flag — set only when this signup came from
+        // "Become a Host". Role stays 'traveler' until an admin approves.
+        ...(isHostSignup ? { hostApplicationStatus: 'pending', hostApplicationAt: new Date() } : {}),
       };
       await users.insertOne(user);
+      pendingHostCreated = isHostSignup;
       
-      // Send welcome email — AWAITED (Vercel serverless)
+      // Send welcome / host-application confirmation email — AWAITED (Vercel serverless)
       try {
-        await sendWelcomeEmail(user);
+        if (isHostSignup) {
+          const { sendEmail } = await import('@/lib/email');
+          await sendEmail({
+            to: user.email,
+            subject: 'Your Safar host application has been received',
+            html: `<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a"><h2 style="margin:0 0 12px;color:#0F3D2E">Welcome to Safar, ${user.name}!</h2><p>Thanks for applying to become a Safar Kashmir host. We&rsquo;ve received your application and it&rsquo;s now <strong>awaiting admin approval</strong>.</p><p>You&rsquo;ll get another email as soon as your host account is approved — usually within 24 hours. Until then you can explore Safar as a traveler.</p><p style="margin-top:24px;color:#6b7280;font-size:13px">— The Safar Kashmir team</p></div>`,
+          });
+        } else {
+          await sendWelcomeEmail(user);
+        }
       } catch (error) {
-        console.error('Failed to send welcome email:', error);
+        console.error('Failed to send welcome / host-application email:', error);
+      }
+    } else if (isHostSignup && user.role === 'traveler' && !user.hostApplicationStatus) {
+      // Existing traveler clicked "Become a Host" via Google — attach a
+      // pending host application to their existing account (no new user row).
+      await users.updateOne(
+        { id: user.id },
+        { $set: { hostApplicationStatus: 'pending', hostApplicationAt: new Date(), updatedAt: new Date() } }
+      );
+      user = { ...user, hostApplicationStatus: 'pending' };
+      pendingHostCreated = true;
+      try {
+        const { sendEmail } = await import('@/lib/email');
+        await sendEmail({
+          to: user.email,
+          subject: 'Your Safar host application has been received',
+          html: `<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a"><h2 style="margin:0 0 12px;color:#0F3D2E">Host application received</h2><p>Hi ${user.name}, your Safar Kashmir host application is now <strong>awaiting admin approval</strong>.</p><p>You&rsquo;ll receive another email once approved — usually within 24 hours.</p><p style="margin-top:24px;color:#6b7280;font-size:13px">— The Safar Kashmir team</p></div>`,
+        });
+      } catch (error) {
+        console.error('Failed to send host-application email:', error);
       }
     }
     
-    // Return JWT token (same as email/password flow)
+    // Return JWT token (same as email/password flow) + hostApplicationPending flag
     const token = signToken({ uid: user.id, role: user.role });
-    const res = ok({ user: publicUser(user), token });
+    const res = ok({ user: publicUser(user), token, hostApplicationPending: pendingHostCreated || user.hostApplicationStatus === 'pending' });
     return setAuthCookie(res, token);
   }
 
@@ -801,7 +843,11 @@ async function route(request, { params }) {
     const users = await getCollection('users');
     const listings = await getCollection('listings');
     const bookings = await getCollection('bookings');
-    const list = await users.find({}, { projection: { passwordHash: 0, _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
+    // Optional filter — admin queue for pending host applications.
+    const filter = {};
+    const has = url.searchParams.get('hostApplicationStatus');
+    if (has) filter.hostApplicationStatus = has;
+    const list = await users.find(filter, { projection: { passwordHash: 0, _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
     
     // Enrich with counts
     const enriched = await Promise.all(list.map(async (u) => {
@@ -922,7 +968,28 @@ async function route(request, { params }) {
     const users = await getCollection('users');
     const user = await users.findOne({ id: userId });
     if (!user) return err('User not found', 404);
-    await users.updateOne({ id: userId }, { $set: { role, updatedAt: new Date() } });
+    const wasPendingHost = user.hostApplicationStatus === 'pending';
+    const update = { role, updatedAt: new Date() };
+    // If admin is approving a pending host application, clear the flag.
+    if (role === 'host' && wasPendingHost) {
+      update.hostApplicationStatus = 'approved';
+      update.hostApplicationApprovedAt = new Date();
+      update.hostApplicationApprovedBy = me.id;
+    }
+    await users.updateOne({ id: userId }, { $set: update });
+    // Send approval email — reuse the existing email helper. Best-effort.
+    if (role === 'host' && wasPendingHost) {
+      try {
+        const { sendEmail } = await import('@/lib/email');
+        await sendEmail({
+          to: user.email,
+          subject: 'You are now a Safar Host',
+          html: `<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a"><h2 style="margin:0 0 12px;color:#0F3D2E">Approved — welcome to hosting on Safar!</h2><p>Hi ${user.name}, your host application has been approved. You can now list your stay, transport or experience on Safar Kashmir.</p><p><a href="${(process.env.NEXT_PUBLIC_BASE_URL || 'https://safarcurated.com').replace(/\/$/, '')}/add-listing" style="display:inline-block;margin-top:12px;padding:12px 24px;background:#0F3D2E;color:#fff;border-radius:9999px;text-decoration:none;font-weight:600">Create your first listing</a></p><p style="margin-top:24px;color:#6b7280;font-size:13px">— The Safar Kashmir team</p></div>`,
+        });
+      } catch (error) {
+        console.error('Failed to send host approval email:', error);
+      }
+    }
     const fresh = await users.findOne({ id: userId }, { projection: { passwordHash: 0, _id: 0 } });
     return ok({ user: fresh });
   }
