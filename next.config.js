@@ -78,6 +78,13 @@ const nextConfig = {
     ],
     // PERF: Load only ~5KB React runtime shell per navigation instead of full page bundle.
     scrollRestoration: true,
+    // PERF: Inline critical CSS and lazy-load the rest via Critters — big LCP win on mobile.
+    optimizeCss: true,
+  },
+
+  // PERF: Strip console.* calls in production (keep errors for observability). Reduces JS bundle.
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   },
 
   // PERF: Reduce production bundle size by avoiding React 18 dev-only strict double-invoke overhead.
@@ -113,6 +120,13 @@ const nextConfig = {
         source: '/_next/image(.*)',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=2592000, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        // PERF: Long-cache static assets served from /public (favicons, og images, fonts, downloads).
+        source: '/:file(.*\\.(?:ico|png|jpg|jpeg|svg|webp|avif|woff2|woff|ttf|otf|zip))',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
       {
