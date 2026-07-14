@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta
 
 # Base URL from supervisor config
-BASE_URL = "https://github-connect-122.preview.emergentagent.com/api"
+BASE_URL = "https://github-link-9.preview.emergentagent.com/api"
 
 # Test results
 results = {
