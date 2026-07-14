@@ -797,12 +797,8 @@ async function route(request, { params }) {
       // Send welcome / host-application confirmation email — AWAITED (Vercel serverless)
       try {
         if (isHostSignup) {
-          const { sendEmail } = await import('@/lib/email');
-          await sendEmail({
-            to: user.email,
-            subject: 'Your Safar host application has been received',
-            html: `<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a"><h2 style="margin:0 0 12px;color:#0F3D2E">Welcome to Safar, ${user.name}!</h2><p>Thanks for applying to become a Safar Kashmir host. We&rsquo;ve received your application and it&rsquo;s now <strong>awaiting admin approval</strong>.</p><p>You&rsquo;ll get another email as soon as your host account is approved — usually within 24 hours. Until then you can explore Safar as a traveler.</p><p style="margin-top:24px;color:#6b7280;font-size:13px">— The Safar Kashmir team</p></div>`,
-          });
+          const { sendHostApplicationReceivedEmail } = await import('@/lib/email');
+          await sendHostApplicationReceivedEmail(user);
         } else {
           await sendWelcomeEmail(user);
         }
@@ -819,12 +815,8 @@ async function route(request, { params }) {
       user = { ...user, hostApplicationStatus: 'pending' };
       pendingHostCreated = true;
       try {
-        const { sendEmail } = await import('@/lib/email');
-        await sendEmail({
-          to: user.email,
-          subject: 'Your Safar host application has been received',
-          html: `<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a"><h2 style="margin:0 0 12px;color:#0F3D2E">Host application received</h2><p>Hi ${user.name}, your Safar Kashmir host application is now <strong>awaiting admin approval</strong>.</p><p>You&rsquo;ll receive another email once approved — usually within 24 hours.</p><p style="margin-top:24px;color:#6b7280;font-size:13px">— The Safar Kashmir team</p></div>`,
-        });
+        const { sendHostApplicationReceivedEmail } = await import('@/lib/email');
+        await sendHostApplicationReceivedEmail(user);
       } catch (error) {
         console.error('Failed to send host-application email:', error);
       }
@@ -977,15 +969,11 @@ async function route(request, { params }) {
       update.hostApplicationApprovedBy = me.id;
     }
     await users.updateOne({ id: userId }, { $set: update });
-    // Send approval email — reuse the existing email helper. Best-effort.
+    // Send approval email — reuses the branded SafarEmailTemplate. Best-effort.
     if (role === 'host' && wasPendingHost) {
       try {
-        const { sendEmail } = await import('@/lib/email');
-        await sendEmail({
-          to: user.email,
-          subject: 'You are now a Safar Host',
-          html: `<div style="font-family:Inter,system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a"><h2 style="margin:0 0 12px;color:#0F3D2E">Approved — welcome to hosting on Safar!</h2><p>Hi ${user.name}, your host application has been approved. You can now list your stay, transport or experience on Safar Kashmir.</p><p><a href="${(process.env.NEXT_PUBLIC_BASE_URL || 'https://safarcurated.com').replace(/\/$/, '')}/add-listing" style="display:inline-block;margin-top:12px;padding:12px 24px;background:#0F3D2E;color:#fff;border-radius:9999px;text-decoration:none;font-weight:600">Create your first listing</a></p><p style="margin-top:24px;color:#6b7280;font-size:13px">— The Safar Kashmir team</p></div>`,
-        });
+        const { sendHostApplicationApprovedEmail } = await import('@/lib/email');
+        await sendHostApplicationApprovedEmail(user);
       } catch (error) {
         console.error('Failed to send host approval email:', error);
       }

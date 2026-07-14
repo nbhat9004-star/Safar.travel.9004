@@ -115,10 +115,87 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Google Become-a-Host flow — verify pending host application creation, email trigger, awaiting-approval UI, admin approval, and role promotion end-to-end."
+    - "Host Application Received email — verify it uses the branded SafarEmailTemplate (same as Welcome) and that verify-google + admin-approval routes still succeed end-to-end."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend:
+  - task: "Host Application Received / Approved emails — reuse Welcome branded template"
+    implemented: true
+    working: "NA"
+    file: "/app/lib/email.js, /app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Change:
+            The two host-application emails (received + approved) previously used
+            small inline HTML strings. They now reuse the existing branded
+            SafarEmailTemplate (same header/gradient/logo/typography/footer as
+            the Welcome email) and the EmailButton + AlertBox components.
+
+          Files modified:
+            1) /app/lib/email.js
+               - Added EmailTemplates.hostApplicationReceived(name)
+                 * title:    "Host Application Received"
+                 * subtitle: "Your host application is awaiting review."
+                 * Body copy explains: application received, awaiting admin
+                   review, usually 24 hours, another email will follow on approval.
+                 * Status card via AlertBox({ type:'warning' }) displaying
+                   "🟡 Pending Admin Approval" + sub-copy.
+                 * CTA to /explore so applicant can keep browsing while pending.
+               - Added EmailTemplates.hostApplicationApproved(name)
+                 * Same template, success alert "🟢 Host Access Unlocked", CTA to
+                   /add-listing.
+               - Added sendHostApplicationReceivedEmail(user) and
+                 sendHostApplicationApprovedEmail(user) convenience helpers.
+               - Welcome template and all OTHER templates UNTOUCHED.
+            2) /app/app/api/[[...path]]/route.js
+               - Both verify-google branches (new-user host-signup and existing-
+                 traveler-attaches-host-intent) now call
+                 sendHostApplicationReceivedEmail(user) instead of the inline HTML.
+               - PATCH /admin/users/:id/role approval branch now calls
+                 sendHostApplicationApprovedEmail(user) instead of inline HTML.
+               - All other logic (DB writes, response shape, hostApplicationStatus
+                 transitions, admin queue filter) UNCHANGED.
+
+          What testing agent should verify (backend only):
+            1) Endpoint contract regression — same test suite as the previous
+               task; nothing about the response shape or DB writes changed:
+                 A1) POST /api/auth/verify-google {}                        -> 400
+                 A2) POST /api/auth/verify-google { idToken:'bad' }         -> 401
+                 A3) POST /api/auth/verify-google { idToken:'bad', intent:'host' } -> 401
+                 B1) POST /api/auth/register  standard traveler             -> 200
+                 B2) POST /api/auth/register  standard host                 -> 200
+                 B3) POST /api/auth/login     valid creds                   -> 200
+                 B4) GET  /api/auth/me        with bearer token             -> 200
+            2) Admin approval end-to-end (uses new sendHostApplicationApprovedEmail):
+                 - Register a fresh traveler.
+                 - Get admin auth (from /app/memory/test_credentials.md or seed).
+                 - PATCH /admin/users/<id>/role  { role:'host' }            -> 200
+                 - Response.user.role === 'host'.
+                 - Endpoint MUST NOT 500 even if RESEND_API_KEY is missing
+                   (email helper catches its own errors).
+            3) Pending-queue filter still works:
+                 - GET /users?hostApplicationStatus=pending  without auth   -> 401
+                 - GET /users?hostApplicationStatus=pending  as traveler    -> 403
+                 - GET /users?hostApplicationStatus=pending  as admin       -> 200
+
+          Emails: cannot be delivered in the preview (no RESEND_API_KEY). Testing
+          agent MUST NOT try to intercept real emails. Just verify HTTP codes.
+
+          Prereqs the testing agent flagged last run (env/credentials missing) —
+          if MONGO_URL / test_credentials.md are still absent, testing agent
+          should skip the flow tests but STILL run the contract tests A1-A3 and
+          B1-B4 which don't require an admin user or DB writes beyond /api/auth/*.
+
+          If contract tests all pass, mark this task working:true — the email
+          content change is HTML-only and cannot be functionally verified from
+          the backend beyond ensuring no 500s.
 
 backend:
   - task: "Google Become-a-Host — pending application flow + admin approval"
