@@ -7,8 +7,12 @@ import { X, Mail, Lock, User as UserIcon, Sparkles, MapPin, Shield, ChevronRight
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
-import { auth } from '@/lib/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+// PERF: Firebase SDK is loaded lazily via getFirebaseAuth() only when the
+// user actually triggers Google Sign-In or Phone OTP. The `firebase/auth`
+// helpers (RecaptchaVerifier, signInWithPhoneNumber, GoogleAuthProvider,
+// signInWithPopup) are also dynamic-imported inside those handlers so the
+// SDK never appears in the initial bundle.
+import { getFirebaseAuth } from '@/lib/firebase';
 import { IMG } from '@/lib/data';
 
 // Validate a redirect destination to prevent open-redirect attacks.
@@ -114,8 +118,11 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
 
   if (!open) return null;
 
-  const setupRecaptcha = () => {
+  const setupRecaptcha = async () => {
     if (typeof window !== 'undefined' && !window.recaptchaVerifier) {
+      const auth = await getFirebaseAuth();
+      if (!auth) throw new Error('Firebase Auth is not configured');
+      const { RecaptchaVerifier } = await import('firebase/auth');
       window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
         callback: () => {},
@@ -130,7 +137,9 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
     }
     setLoading(true);
     try {
-      setupRecaptcha();
+      await setupRecaptcha();
+      const auth = await getFirebaseAuth();
+      const { signInWithPhoneNumber } = await import('firebase/auth');
       const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
       const confirmation = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
       setConfirmationResult(confirmation);
@@ -171,6 +180,12 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
+      const auth = await getFirebaseAuth();
+      if (!auth) {
+        toast.error('Google sign-in is not configured');
+        return;
+      }
+      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
