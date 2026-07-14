@@ -9,6 +9,11 @@ import { getCollection } from '@/lib/db';
 const STATIC_ROUTES = [
   { path: '', priority: 1.0, changeFrequency: 'daily' },
   { path: '/explore', priority: 0.85, changeFrequency: 'daily' },
+  { path: '/explore/home', priority: 0.9, changeFrequency: 'daily' },
+  { path: '/explore/community', priority: 0.8, changeFrequency: 'daily' },
+  { path: '/explore/journey', priority: 0.8, changeFrequency: 'weekly' },
+  { path: '/explore/stories', priority: 0.75, changeFrequency: 'daily' },
+  { path: '/explore/passport', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/guides', priority: 0.7, changeFrequency: 'weekly' },
   { path: '/about', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/contact', priority: 0.5, changeFrequency: 'monthly' },
@@ -30,20 +35,8 @@ export default async function sitemap() {
     priority: r.priority,
   }));
 
-  // Append public Safar Circle journeys (best-effort). Never crash the sitemap.
-  // Circle now lives on a separate origin (circle.safarcurated.com); include a
-  // link to the Circle site root and skip per-journey deep-links (owned by
-  // the Circle app's own sitemap).
+  // The main marketplace `/explore/*` routes are already listed above.
   try {
-    const circleBase = (process.env.NEXT_PUBLIC_CIRCLE_URL || 'https://circle.safarcurated.com').replace(/\/$/, '');
-    entries.push({
-      url: circleBase,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.95,
-    });
-
-    // Approved public listings (property pages)
     const listings = await getCollection('listings');
     const listingDocs = await listings
       .find({ status: 'approved' }, { projection: { id: 1, slug: 1, updatedAt: 1 } })

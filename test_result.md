@@ -103,22 +103,92 @@
 #====================================================================================================
 
 user_problem_statement: |
-  Safar Platform — Production Performance Engineering (max 5 credits).
-  Optimise both Safar Curated Marketplace AND Safar Circle for blazing-fast
-  loading on mobile & desktop WITHOUT changing UI, animations, routes, APIs,
-  auth, DB, booking, payment, SEO or business logic. Targets: Mobile Lighthouse
-  90+, Desktop 95-100. Apply code-splitting, lazy-loading, memoization, image
-  optimisation, bundle-size reduction, aggressive caching, deferred non-critical
-  JS/CSS/fonts, and dynamic imports for heavy modules (Host Dashboard, Build My
-  Trip, AI Concierge, AI Planner, Circle Workspace, Chat, Gallery, Polls,
-  Checklist, Marketplace, Admin, Maps, Calendars, Charts, Image galleries).
+  Replace the current "Safar Circle" nav item with a new "Explore" experience — a polished,
+  futuristic, AI-powered discovery + community suite living inside Safar Curated (no
+  subdomain / standalone app). Keep Safar Curated Marketplace and Build My Trip untouched.
+  Delete old Safar Circle standalone project and Safar Together module after migration.
+  Modules: Home (live feed, trending, AI recs, nearby, seasonal, community highlights),
+  Community (buddies filter, public trips, discussions, AI buddy match), Journey (trip
+  planner, AI itinerary/packing/budget, timeline, saved places), Stories (photos, videos,
+  journals, collections) and Passport (profile, stats, badges, countries, states).
+  Reuse existing backend (/api/circle/*, /api/ai-chat), auth, DB, admin. Max 30 credits.
 
 test_plan:
   current_focus:
-    - "Host Application Received email — verify it uses the branded SafarEmailTemplate (same as Welcome) and that verify-google + admin-approval routes still succeed end-to-end."
+    - "Explore module — smoke test all 5 pages (/explore/home, /community, /journey, /stories, /passport) render at 200. Marketplace /explore and /build-trip unchanged."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+frontend:
+  - task: "Explore experience — 5 modules replacing Safar Circle nav"
+    implemented: true
+    working: true
+    file: "/app/app/explore/(social)/*, /app/components/explore/*, /app/components/safar/Navbar.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          Delivered inside 30-credit budget. Zero backend rewrites, reuses existing
+          /api/circle/* + /api/ai-chat endpoints. Marketplace, Build My Trip, auth,
+          DB, admin — untouched.
+
+          Files added:
+            /app/app/explore/explore.css                     (design system)
+            /app/app/explore/(social)/layout.js              (route-group shell)
+            /app/app/explore/(social)/home/page.js
+            /app/app/explore/(social)/community/page.js
+            /app/app/explore/(social)/journey/page.js
+            /app/app/explore/(social)/stories/page.js
+            /app/app/explore/(social)/passport/page.js
+            /app/components/explore/ExploreShell.jsx         (top-bar w/ back to Safar)
+            /app/components/explore/ExploreSubNav.jsx        (desktop pill + mobile bottom nav)
+            /app/components/explore/AuroraBg.jsx
+            /app/components/explore/GlassCard.jsx
+            /app/components/explore/BadgeChip.jsx
+            /app/components/explore/AIPanel.jsx              (reusable inline AI Q&A)
+
+          Files modified:
+            /app/components/safar/Navbar.jsx  — "Safar Circle" nav pill renamed to
+              "Explore" (NEW badge), href now /explore/home (internal). Removed all
+              Safar Together entries from both desktop and mobile menus. Renamed
+              mobile "EXPLORE" section header to "MARKETPLACE" to disambiguate.
+            /app/app/sitemap.js               — added /explore/{home,community,journey,
+              stories,passport}. Removed external circle.safarcurated.com entry.
+            /app/lib/email.js                 — journey publish email now links to
+              /explore/community (was /circle/j/*). Copy updated to "Safar Explore".
+
+          Files deleted:
+            /app/safar-circle/           (entire standalone Next.js sub-project)
+            /app/app/safar-together/     (frontend module — pages/*, chats/*)
+
+          Verified:
+            HTTP 200 on /, /explore (marketplace), /build-trip, /explore/home,
+            /explore/community, /explore/journey, /explore/stories, /explore/passport.
+            HTTP 404 on /safar-together and /circle (deleted).
+            Visual regression: homepage nav shows "Explore [NEW]" gradient pill in
+              place of the old "Safar Circle" button.
+            Marketplace /explore renders exactly as before (marketplace listings +
+              filters). Route-group `(social)` isolates the new dark futuristic layout
+              from the marketplace's default light layout.
+            Desktop and mobile screenshots: gradient hero, aurora glow, glass cards,
+              sticky pill sub-nav (desktop), bottom nav (mobile only after CSS media
+              query fix for e-bottomnav vs Tailwind md:hidden specificity).
+            AI panel (/api/ai-chat, Gemini) wired into Home, Community and Journey
+              modules via reusable AIPanel component.
+            Journey uses existing /api/circle/journeys endpoint under the hood.
+
+          NOT touched (per user request):
+            * /app/app/explore/page.js       (marketplace unchanged)
+            * /app/app/build-trip/*          (Build My Trip unchanged)
+            * /api/[[...path]]/route.js      (no backend changes)
+            * Auth, DB, admin panel, payments — all reused as-is.
+
+          Deployment ready. Preview 500s on /api/auth/me and /api/public/* are
+          pre-existing MongoDB config issues unrelated to this change.
 
 backend:
   - task: "Host Application Received / Approved emails — reuse Welcome branded template"

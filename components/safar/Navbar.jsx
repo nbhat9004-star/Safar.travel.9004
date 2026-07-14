@@ -147,11 +147,6 @@ export default function Navbar({ transparent = false }) {
       { href: '/ai-planner',          label: 'AI Planner' },
     ];
 
-    // Add Safar Together if enabled and user is logged in
-    if (safarTogetherEnabled && user) {
-      baseNav.push({ href: '/safar-together', label: '🤝 Safar Together' });
-    }
-
     // Add role-specific items
     if (user?.role === 'traveler') {
       baseNav.push({ href: '/dashboard/traveler/bookings', label: 'My Bookings' });
@@ -237,18 +232,18 @@ export default function Navbar({ transparent = false }) {
               Build My Trip
             </Link>
           )}
-          {/* Safar Circle — premium highlighted nav item (external subdomain) */}
+          {/* Explore — new social/discovery experience (replaces Safar Circle) */}
           {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-            <a
-              href={process.env.NEXT_PUBLIC_CIRCLE_URL || 'https://circle.safarcurated.com'}
+            <Link
+              href="/explore/home"
               className={`group relative ml-1.5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13.5px] font-semibold tracking-tight transition-all ${solid
                 ? 'text-white bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40'
                 : 'text-white bg-gradient-to-r from-emerald-400/40 via-violet-400/40 to-pink-400/40 border border-white/25 backdrop-blur hover:from-emerald-400/60 hover:via-violet-400/60 hover:to-pink-400/60'}`}
             >
               <Sparkles className="size-3.5" />
-              Safar Circle
-              <span className="ml-0.5 text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">Beta</span>
-            </a>
+              Explore
+              <span className="ml-0.5 text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">New</span>
+            </Link>
           )}
           {/* Module 11A — More menu (informational + policy links) */}
           {!(user?.role === 'admin' || user?.role === 'super_admin') && (
@@ -429,10 +424,10 @@ export default function Navbar({ transparent = false }) {
                     </Link>
                   )}
 
-                  {/* Safar Circle — featured highlight (near top, external subdomain) */}
+                  {/* Explore — new social/discovery experience (replaces Safar Circle) */}
                   {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <a
-                      href={process.env.NEXT_PUBLIC_CIRCLE_URL || 'https://circle.safarcurated.com'}
+                    <Link
+                      href="/explore/home"
                       onClick={() => setOpen(false)}
                       className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl mb-4 bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40 transition"
                     >
@@ -441,18 +436,18 @@ export default function Navbar({ transparent = false }) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-[15px]">Safar Circle</span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">Beta</span>
+                          <span className="font-semibold text-[15px]">Explore</span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">New</span>
                         </div>
-                        <div className="text-[11px] text-white/80 mt-0.5">Plan trips together with fellow travelers</div>
+                        <div className="text-[11px] text-white/80 mt-0.5">Community, journeys, stories & AI</div>
                       </div>
                       <ChevronDown className="size-4 rotate-[-90deg] text-white/80" />
-                    </a>
+                    </Link>
                   )}
 
-                  {/* EXPLORE Section */}
+                  {/* MARKETPLACE Section */}
                   <div className="mb-4">
-                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Explore</div>
+                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Marketplace</div>
                     <Link href="/explore?cat=all" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
                       Stays
                     </Link>
@@ -475,22 +470,12 @@ export default function Navbar({ transparent = false }) {
                   {/* TRAVEL Section */}
                   <div className="mb-4">
                     <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Travel</div>
-                    {safarTogetherEnabled && user && (
-                      <Link href="/safar-together" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                        🤝 Safar Together
-                      </Link>
-                    )}
                     <Link href="/ai-planner" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
                       AI Planner
                     </Link>
                     {(user?.role === 'traveler' || user?.role === 'admin' || user?.role === 'super_admin') && (
                       <Link href="/dashboard/traveler/bookings" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
                         My Bookings
-                      </Link>
-                    )}
-                    {user && safarTogetherEnabled && (
-                      <Link href="/safar-together/chats" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                        <span className="flex items-center gap-2"><MessageCircle className="size-4" /> My Chats</span>
                       </Link>
                     )}
                   </div>
