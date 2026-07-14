@@ -188,7 +188,7 @@ function AppInner() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.50)_0%,rgba(15,20,25,0.35)_35%,rgba(15,20,25,0.60)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
-        <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-0 pb-16 md:pb-24">
+        <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-28 lg:pt-32 pb-16 md:pb-24">
           <div className="max-w-3xl text-white">
             <h1 className="font-display font-bold text-[clamp(2.6rem,6.4vw,5.6rem)] leading-[1.02] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.

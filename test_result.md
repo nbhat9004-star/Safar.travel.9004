@@ -114,13 +114,85 @@ user_problem_statement: |
   Checklist, Marketplace, Admin, Maps, Calendars, Charts, Image galleries).
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Desktop hero overlap fix — verify navbar logo, hero H1, trust badge, CTAs, search card, and Season Card all sit on their own visual layers with no overlap at 1366x768, 1440x900, 1920x1080."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 frontend:
-  - task: "Post-revert regression check (Safar Curated mobile) — verify no functional breakage after reverting experimental.optimizeCss"
+  - task: "Desktop hero overlap fix (Navbar logo vs hero heading vs trust badge)"
+    implemented: true
+    working: "NA"
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Regression report from user:
+            - Safar logo overlapping the hero "Experience Kashmir Like a Local." heading on desktop.
+            - Trust badge "Curated by locals · Trusted by travelers" rendering behind/under the logo.
+            - Fix constraints: CSS/layout only, no React refactor, no logic changes, no mobile
+              change, Season Card must remain intact and animated, simplified nav must not be reverted.
+
+          Root cause:
+            /app/app/page.js line 191 - hero content wrapper had `pt-24 md:pt-0`. On md+ screens
+            desktop top padding was ZERO. Combined with `justify-end` (content anchored to bottom),
+            when total vertical stack exceeded viewport height on shorter desktop resolutions
+            (1366x768, 1440x900), the top of the content overflowed UPWARD and slid under the
+            fixed navbar (z-50). The H1 appeared behind the logo and, because the trust badge
+            stacks between the CTAs and search card in the same flex-col, it got dragged into
+            the overlap zone as well.
+
+          Fix applied (single-token CSS class change):
+            /app/app/page.js line 191
+              BEFORE: `pt-24 md:pt-0  pb-16 md:pb-24`
+              AFTER:  `pt-24 md:pt-28 lg:pt-32 pb-16 md:pb-24`
+            Guarantees 112 px top padding on md and 128 px on lg+, safely clearing the h-16/h-20
+            fixed navbar. Any overflow now terminates at the pt-* boundary, not under the navbar.
+
+          What was NOT touched:
+            * Mobile styles - pt-24 on <md preserved -> mobile is pixel-identical.
+            * Navbar.jsx (Season Card, simplified nav, Experience dropdown, CTAs) untouched.
+            * globals.css (season ambience animations) untouched.
+            * No JS/React logic, no component restructure, no API/route/auth/SEO change.
+
+          What testing agent must verify (Playwright at THREE desktop viewports):
+            Viewports: 1366x768, 1440x900, 1920x1080. Additionally 390x844 mobile spot-check.
+
+            For each desktop viewport (a)-(f):
+              a) Navbar "Safar / Kashmir - Curated" logo bounding box must NOT intersect the
+                 hero <h1> bounding box (compute logo.getBoundingClientRect() and h1... verify
+                 h1.top >= logo.bottom).
+              b) Hero <h1> "Experience Kashmir Like a Local." starts BELOW the fixed navbar
+                 (h1.top >= navbar.bottom AT MOST 4 px above; ideally >= navbar.bottom + 8 px).
+              c) Trust badge element with class "glass-dark" containing "Curated by locals":
+                   - Present in DOM.
+                   - Vertically positioned between the CTA row (button "Explore Stays") and the
+                     search form: badge.top >= ctaButton.bottom AND badge.bottom <= searchForm.top.
+                   - Left-aligned with the hero content column: |badge.left - h1.left| <= 8 px.
+                   - Does NOT overlap the navbar (badge.top >= navbar.bottom).
+              d) Search card <form> (element containing "Where" input) still renders with rounded
+                 corners and glass class; its top position >= badge.bottom.
+              e) Season Card in navbar right side is VISIBLE at viewports >= 1280 px
+                 (element with class "season-card"). Contains an icon + "in Kashmir" title text
+                 + a subtitle. One of season-winter / season-spring / season-summer / season-autumn
+                 modifier classes is present. Test can just verify presence, not the exact animation.
+              f) No console errors, no hydration warnings, no 404s on the page itself (ignore any
+                 legitimate /api/public/... 500s from missing MONGO_URL in this preview).
+
+            Mobile spot-check (390x844):
+              g) Season Card is HIDDEN (hidden xl:flex applies).
+              h) No horizontal overflow.
+              i) Hero renders (H1, CTAs, search card visible after scroll if hero content pushes them).
+              j) No visible logo/hero overlap.
+
+          Note: Task is NOT a functional test - only a visual/layout regression check. Do not
+          attempt sign-in, do not click Book, do not run Lighthouse. Just measure element
+          bounding boxes and verify no overlap.
     implemented: true
     working: true
     file: "/app/next.config.js, /app/app/page.js"
