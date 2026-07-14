@@ -38,7 +38,7 @@ export default function DiscoverPage() {
             <h1 className="display text-3xl sm:text-4xl md:text-6xl font-bold mt-3 md:mt-4 leading-[1.05]">Discover <span className="circle-grad-text">Journeys</span></h1>
             <p className="text-white/70 mt-2 md:mt-3 text-sm md:text-base max-w-xl">Every journey is a cinematic poster. Hover to reveal the details. Tap to step into the story.</p>
           </div>
-          <Link href="/circle/create" className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold w-full md:w-fit shrink-0">
+          <Link href="/create" className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold w-full md:w-fit shrink-0">
             <Sparkles className="size-4" /> Create a Journey
           </Link>
         </div>
@@ -73,7 +73,7 @@ export default function DiscoverPage() {
             <div className="circle-glass circle-card p-12 text-center">
               <div className="text-lg font-semibold">No journeys match yet</div>
               <div className="text-white/60 text-sm mt-1">Adjust filters, or become the first Journey Curator here.</div>
-              <Link href="/circle/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
+              <Link href="/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
                 <Sparkles className="size-4" /> Create a Journey
               </Link>
             </div>
@@ -104,7 +104,7 @@ function FilterSelect({ value, onChange, label, options }) {
 function JourneyPoster({ j }) {
   const th = themeLabel(j.theme);
   return (
-    <Link href={`/circle/j/${j.slug}`} className="group relative aspect-[3/4] rounded-3xl overflow-hidden block border border-white/10 circle-magnetic">
+    <Link href={`/j/${j.slug}`} className="group relative aspect-[3/4] rounded-3xl overflow-hidden block border border-white/10 circle-magnetic">
       {j.cover ? (
         // PERF: explicit width/height (3:4 ratio) reserves the exact aspect
         // box before decode → zero CLS in the discover grid.

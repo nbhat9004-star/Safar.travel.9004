@@ -82,7 +82,7 @@ export default function MembersPage() {
         <div className="max-w-lg mx-auto px-5 pt-20 text-center circle-glass circle-card p-10">
           <div className="text-5xl">🧭</div>
           <div className="display text-2xl font-bold mt-3">Journey not found</div>
-          <Link href="/circle/discover" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href="/discover" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Discover journeys
           </Link>
         </div>
@@ -98,7 +98,7 @@ export default function MembersPage() {
 
       {/* Header */}
       <section className="max-w-5xl mx-auto px-5 mt-6">
-        <Link href={`/circle/j/${journey.slug}`} className="inline-flex items-center gap-2 text-white/70 hover:text-white text-sm">
+        <Link href={`/j/${journey.slug}`} className="inline-flex items-center gap-2 text-white/70 hover:text-white text-sm">
           <ArrowLeft className="size-4" /> Back to journey
         </Link>
         <div className="mt-4 circle-glass circle-card p-5 md:p-7 flex flex-col md:flex-row md:items-center md:justify-between gap-4">

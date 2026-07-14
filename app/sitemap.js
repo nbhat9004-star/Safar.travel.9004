@@ -8,8 +8,6 @@ import { getCollection } from '@/lib/db';
 
 const STATIC_ROUTES = [
   { path: '', priority: 1.0, changeFrequency: 'daily' },
-  { path: '/circle', priority: 0.95, changeFrequency: 'daily' },
-  { path: '/circle/discover', priority: 0.9, changeFrequency: 'daily' },
   { path: '/explore', priority: 0.85, changeFrequency: 'daily' },
   { path: '/guides', priority: 0.7, changeFrequency: 'weekly' },
   { path: '/about', priority: 0.5, changeFrequency: 'monthly' },
@@ -33,25 +31,17 @@ export default async function sitemap() {
   }));
 
   // Append public Safar Circle journeys (best-effort). Never crash the sitemap.
+  // Circle now lives on a separate origin (circle.safarcurated.com); include a
+  // link to the Circle site root and skip per-journey deep-links (owned by
+  // the Circle app's own sitemap).
   try {
-    const col = await getCollection('circle_journeys');
-    const docs = await col
-      .find(
-        { visibility: 'public', publishedAt: { $ne: null, $lte: now } },
-        { projection: { slug: 1, publishedAt: 1, updatedAt: 1 } }
-      )
-      .sort({ publishedAt: -1 })
-      .limit(500)
-      .toArray();
-    for (const d of docs) {
-      if (!d.slug) continue;
-      entries.push({
-        url: `${base}/circle/j/${d.slug}`,
-        lastModified: d.updatedAt || d.publishedAt || now,
-        changeFrequency: 'weekly',
-        priority: 0.7,
-      });
-    }
+    const circleBase = (process.env.NEXT_PUBLIC_CIRCLE_URL || 'https://circle.safarcurated.com').replace(/\/$/, '');
+    entries.push({
+      url: circleBase,
+      lastModified: now,
+      changeFrequency: 'daily',
+      priority: 0.95,
+    });
 
     // Approved public listings (property pages)
     const listings = await getCollection('listings');

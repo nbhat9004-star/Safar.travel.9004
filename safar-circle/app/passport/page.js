@@ -28,7 +28,7 @@ export default function Passport() {
           <div className="circle-chip mx-auto">Sign in required</div>
           <h1 className="display text-3xl font-bold mt-4">Meet your Traveler Passport.</h1>
           <p className="text-white/70 mt-3">A living record of everywhere you’ve curated, joined, and dreamt about.</p>
-          <Link href={signInHref('/circle/passport')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href={signInHref('/passport')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Continue to sign in <ArrowRight className="size-4" />
           </Link>
         </div>
@@ -102,14 +102,14 @@ export default function Passport() {
                   <div className="circle-chip">Your recent journeys</div>
                   <h2 className="display text-xl sm:text-2xl font-bold mt-2 leading-tight">Where you’ve been leading</h2>
                 </div>
-                <Link href="/circle/studio" className="text-xs sm:text-sm text-white/70 hover:text-white inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+                <Link href="/studio" className="text-xs sm:text-sm text-white/70 hover:text-white inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                   All in Studio <ArrowRight className="size-4" />
                 </Link>
               </div>
               {recent.length === 0 ? (
                 <div className="mt-4 circle-glass circle-card p-10 text-center">
                   <div className="text-white/70">No journeys yet. Curate your first — the world is watching.</div>
-                  <Link href="/circle/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
+                  <Link href="/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
                     <Sparkles className="size-4" /> Create a Journey
                   </Link>
                 </div>
@@ -118,7 +118,7 @@ export default function Passport() {
                   {recent.map(j => {
                     const th = themeLabel(j.theme);
                     return (
-                      <Link key={j.id} href={`/circle/j/${j.slug}`} className="relative rounded-3xl overflow-hidden aspect-[16/10] block border border-white/10 circle-magnetic">
+                      <Link key={j.id} href={`/j/${j.slug}`} className="relative rounded-3xl overflow-hidden aspect-[16/10] block border border-white/10 circle-magnetic">
                         {j.cover ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img loading="lazy" decoding="async" src={j.cover} alt={j.name} className="absolute inset-0 w-full h-full object-cover" />

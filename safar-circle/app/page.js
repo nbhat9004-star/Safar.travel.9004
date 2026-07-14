@@ -40,10 +40,10 @@ export default function CircleLanding() {
               Plan incredible trips. Invite amazing people. Book everything through trusted Safar hosts. Travel together.
             </p>
             <div className="mt-7 md:mt-9 flex flex-col sm:flex-row flex-wrap gap-3">
-              <Link href="/circle/create" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-4 rounded-full circle-btn-primary text-[15px]">
+              <Link href="/create" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-4 rounded-full circle-btn-primary text-[15px]">
                 <Sparkles className="size-4" /> Create a Journey
               </Link>
-              <Link href="/circle/discover" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-4 rounded-full circle-btn-ghost text-[15px]">
+              <Link href="/discover" className="inline-flex items-center justify-center gap-2 px-6 py-3.5 md:py-4 rounded-full circle-btn-ghost text-[15px]">
                 <Compass className="size-4" /> Discover Journeys <ArrowRight className="size-4" />
               </Link>
             </div>
@@ -89,14 +89,14 @@ export default function CircleLanding() {
               <div className="circle-chip">Now Live</div>
               <h2 className="display text-3xl md:text-5xl font-bold mt-3">Journeys the Circle is talking about</h2>
             </div>
-            <Link href="/circle/discover" className="hidden md:inline-flex items-center gap-2 text-sm text-white/80 hover:text-white">
+            <Link href="/discover" className="hidden md:inline-flex items-center gap-2 text-sm text-white/80 hover:text-white">
               Explore all <ArrowRight className="size-4" />
             </Link>
           </div>
           {featured.length === 0 ? (
             <div className="circle-glass circle-card p-12 text-center">
               <div className="text-white/70">No public journeys yet. Be the first Journey Curator.</div>
-              <Link href="/circle/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
+              <Link href="/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
                 <Sparkles className="size-4" /> Create a Journey
               </Link>
             </div>
@@ -118,10 +118,10 @@ export default function CircleLanding() {
               <h2 className="display text-4xl md:text-6xl font-bold mt-4">Your first Journey is one click away.</h2>
               <p className="text-white/75 text-lg mt-4">You bring the vision. Safar Circle brings the tools, the trusted marketplace, and the world.</p>
               <div className="mt-8 flex justify-center gap-3 flex-wrap">
-                <Link href="/circle/create" className="inline-flex items-center gap-2 px-7 py-4 rounded-full circle-btn-primary text-[15px]">
+                <Link href="/create" className="inline-flex items-center gap-2 px-7 py-4 rounded-full circle-btn-primary text-[15px]">
                   <Sparkles className="size-4" /> Create a Journey <ArrowRight className="size-4" />
                 </Link>
-                <Link href="/circle/discover" className="inline-flex items-center gap-2 px-7 py-4 rounded-full circle-btn-ghost text-[15px]">
+                <Link href="/discover" className="inline-flex items-center gap-2 px-7 py-4 rounded-full circle-btn-ghost text-[15px]">
                   Discover Journeys
                 </Link>
               </div>
@@ -138,8 +138,8 @@ export default function CircleLanding() {
           </div>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:text-white">Safar Marketplace</Link>
-            <Link href="/circle/discover" className="hover:text-white">Discover</Link>
-            <Link href="/circle/create" className="hover:text-white">Create</Link>
+            <Link href="/discover" className="hover:text-white">Discover</Link>
+            <Link href="/create" className="hover:text-white">Create</Link>
           </div>
         </div>
       </footer>
@@ -189,7 +189,7 @@ function FloatingPoster({ img, title, tag, price, style, big }) {
 function JourneyPoster({ j }) {
   const th = themeLabel(j.theme);
   return (
-    <Link href={`/circle/j/${j.slug}`} className="group relative aspect-[3/4] rounded-3xl overflow-hidden block border border-white/10 circle-magnetic">
+    <Link href={`/j/${j.slug}`} className="group relative aspect-[3/4] rounded-3xl overflow-hidden block border border-white/10 circle-magnetic">
       {j.cover ? (
         // PERF: explicit width/height (3:4 ratio) so the browser reserves
         // the exact aspect box before the image decodes → zero CLS on the

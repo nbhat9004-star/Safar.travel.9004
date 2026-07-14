@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://instant-safar-mobile.preview.emergentagent.com"
+BASE_URL = "https://github-connect-122.preview.emergentagent.com"
 API_BASE = f"{BASE_URL}/api"
 
 # Super Admin credentials

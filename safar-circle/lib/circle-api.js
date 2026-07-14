@@ -1,7 +1,12 @@
 // Safar Circle — client API helpers. Reuses safar_token cookie via credentials:'include'.
+// All API calls proxy to the Safar Curated backend (safarcurated.com) when the
+// NEXT_PUBLIC_API_BASE_URL env var is set. The auth cookie MUST be issued with
+// Domain=.safarcurated.com by the backend so it is shared across subdomains.
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || '').replace(/\/$/, '');
+const apiUrl = (p) => `${API_BASE}${p}`;
 
 async function apiJson(path, opts = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...opts,
     credentials: 'include',
     headers: {
@@ -51,7 +56,7 @@ export const circleApi = {
   estimate: (payload) => apiJson('/api/circle/estimate', { method: 'POST', body: JSON.stringify(payload) }),
 
   // Passport
-  passport: () => apiJson('/api/circle/passport'),
+  passport: () => apiJson('/api/passport'),
 
   // Module 2 — Collaboration Engine (members & requests)
   getMembers: (id) => apiJson(`/api/circle/journeys/${id}/members`),
@@ -97,10 +102,10 @@ export const circleApi = {
   getTimeline: (id, limit = 100) => apiJson(`/api/circle/journeys/${id}/timeline?limit=${limit}`),
   postAnnouncement: (id, payload) => apiJson(`/api/circle/journeys/${id}/announcements`, { method: 'POST', body: JSON.stringify(payload) }),
   inviteMember: (id, payload) => apiJson(`/api/circle/journeys/${id}/invite`, { method: 'POST', body: JSON.stringify(payload) }),
-  studioRequests: () => apiJson(`/api/circle/studio/requests`),
-  studioMembers: () => apiJson(`/api/circle/studio/members`),
-  studioMessages: () => apiJson(`/api/circle/studio/messages`),
-  studioTimeline: (limit = 100) => apiJson(`/api/circle/studio/timeline?limit=${limit}`),
+  studioRequests: () => apiJson(`/api/studio/requests`),
+  studioMembers: () => apiJson(`/api/studio/members`),
+  studioMessages: () => apiJson(`/api/studio/messages`),
+  studioTimeline: (limit = 100) => apiJson(`/api/studio/timeline?limit=${limit}`),
 };
 
 export const THEMES = [
@@ -151,11 +156,15 @@ export function formatINR(n) {
 }
 
 // Build a sign-in URL for the SafarCurated auth flow that returns the user back
-// to `returnPath` after successful authentication. Used by Safar Circle pages
-// so users land back on the Circle screen (e.g. /circle/create) they came from.
+// to `returnPath` after successful authentication. Because Circle now lives on
+// a separate origin (e.g. circle.safarcurated.com), we build an ABSOLUTE
+// returnUrl pointing back to the Circle app, and target the Curated origin.
 export function signInHref(returnPath) {
-  const safe = safeReturnUrl(returnPath) || '/circle';
-  return `/?auth=1&returnUrl=${encodeURIComponent(safe)}`;
+  const safe = safeReturnUrl(returnPath) || '/';
+  const CURATED = (process.env.NEXT_PUBLIC_CURATED_URL || '').replace(/\/$/, '');
+  const CIRCLE = (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  const absoluteReturn = CIRCLE ? `${CIRCLE}${safe}` : safe;
+  return `${CURATED}/?auth=1&returnUrl=${encodeURIComponent(absoluteReturn)}`;
 }
 
 // Validate a redirect destination to prevent open-redirect attacks.

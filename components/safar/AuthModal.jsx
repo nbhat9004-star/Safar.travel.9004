@@ -10,7 +10,42 @@ import { useAuth } from '@/lib/auth-context';
 import { auth } from '@/lib/firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { IMG } from '@/lib/data';
-import { safeReturnUrl } from '@/lib/circle-api';
+
+// Validate a redirect destination to prevent open-redirect attacks.
+// Accepts:
+//   1. Same-origin relative paths starting with a single slash (e.g. /dashboard).
+//   2. Absolute URLs whose host matches NEXT_PUBLIC_CIRCLE_URL (Safar Circle
+//      subdomain, e.g. https://circle.safarcurated.com/...) so cross-origin
+//      auth flows from the Circle app work seamlessly.
+function safeReturnUrl(input) {
+  if (!input || typeof input !== 'string') return null;
+  const s = input.trim();
+  // Absolute URL path — only permit trusted Circle origin.
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const target = new URL(s);
+      const circleEnv = (process.env.NEXT_PUBLIC_CIRCLE_URL || '').replace(/\/$/, '');
+      if (circleEnv) {
+        const allowed = new URL(circleEnv);
+        if (target.origin === allowed.origin) return s;
+      }
+      return null;
+    } catch { return null; }
+  }
+  // Same-origin relative paths only.
+  if (!s.startsWith('/')) return null;
+  if (s.startsWith('//') || s.startsWith('/\\')) return null;
+  if (/^\/+[a-z][a-z0-9+.-]*:/i.test(s)) return null;
+  try {
+    const url = new URL(s, 'http://x');
+    url.searchParams.delete('auth');
+    url.searchParams.delete('returnUrl');
+    const qs = url.searchParams.toString();
+    return url.pathname + (qs ? '?' + qs : '') + (url.hash || '');
+  } catch {
+    return s;
+  }
+}
 
 const ROLE_OPTIONS = [
   { id: 'traveler', label: 'Traveler', desc: 'Book stays, experiences & transport', icon: MapPin },
@@ -50,8 +85,12 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
     const returnUrl = getReturnUrl();
     onClose?.();
     if (returnUrl) {
-      // Use router.push for client-side navigation so session state is preserved.
-      try { router.push(returnUrl); } catch { window.location.href = returnUrl; }
+      // Absolute URLs (cross-origin, e.g. Safar Circle subdomain) require full navigation.
+      if (/^https?:\/\//i.test(returnUrl)) {
+        window.location.href = returnUrl;
+      } else {
+        try { router.push(returnUrl); } catch { window.location.href = returnUrl; }
+      }
     }
   };
 

@@ -82,7 +82,7 @@ export default function Studio() {
           <div className="circle-chip mx-auto">Sign in required</div>
           <h1 className="display text-3xl font-bold mt-4">Studio is for Journey Curators.</h1>
           <p className="text-white/70 mt-3">Sign in with your Safar account to start.</p>
-          <Link href={signInHref('/circle/studio')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href={signInHref('/studio')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Continue to sign in <ArrowRight className="size-4" />
           </Link>
         </div>
@@ -121,7 +121,7 @@ export default function Studio() {
   const doRestore = (id) => guard(id, () => circleApi.setVisibility(id, 'draft'), 'Restored to Drafts', 'Restore failed');
 
   const share = (j) => {
-    const url = (typeof window !== 'undefined' ? window.location.origin : '') + `/circle/j/${j.slug}`;
+    const url = (typeof window !== 'undefined' ? window.location.origin : '') + `/j/${j.slug}`;
     setShareUrl(url); setShareTitle(`Join my Journey: ${j.name}`);
   };
 
@@ -137,7 +137,7 @@ export default function Studio() {
             <h1 className="display text-3xl sm:text-4xl md:text-5xl font-bold mt-3 leading-tight">Your Journeys, curated.</h1>
             <p className="text-white/70 mt-2 text-sm">Every journey you’ve ever crafted — alive in one command center.</p>
           </div>
-          <Link href="/circle/create" className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold w-full md:w-fit shrink-0">
+          <Link href="/create" className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold w-full md:w-fit shrink-0">
             <Sparkles className="size-4" /> Create a Journey
           </Link>
         </div>
@@ -218,7 +218,7 @@ function JourneyGrid({ list, empty, onShare, onDelete, onPublish, onUnpublish, o
     return (
       <div className="circle-glass circle-card p-10 text-center">
         <div className="text-white/70">{empty}</div>
-        <Link href="/circle/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
+        <Link href="/create" className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full circle-btn-primary text-sm font-semibold">
           <Sparkles className="size-4" /> Create a Journey
         </Link>
       </div>
@@ -274,12 +274,12 @@ function StudioCard({ j, onShare, onDelete, onPublish, onUnpublish, onArchive, o
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {!isArchived && (
-            <Link href={`/circle/j/${j.slug}`} className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold">
+            <Link href={`/j/${j.slug}`} className="flex-1 min-w-[100px] inline-flex items-center justify-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold">
               <Eye className="size-3.5" /> Preview
             </Link>
           )}
           {isPublic && (
-            <Link href={`/circle/j/${j.slug}`} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0" aria-label="Edit">
+            <Link href={`/j/${j.slug}`} className="inline-flex items-center gap-1 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0" aria-label="Edit">
               <Edit3 className="size-3.5" />
             </Link>
           )}

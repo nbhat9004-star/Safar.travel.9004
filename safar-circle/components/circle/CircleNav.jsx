@@ -27,23 +27,23 @@ export default function CircleNav({ variant = 'default' }) {
   const isActive = (p) => {
     if (!pathname) return false;
     if (p === '/') return pathname === '/';
-    if (p === '/circle') return pathname === '/circle';
+    if (p === '/') return pathname === '/';
     return pathname === p || pathname.startsWith(p + '/');
   };
 
   // Bottom-nav (mobile) tabs — keeps existing look
   const tabs = [
-    { href: '/circle/discover', label: 'Discover', icon: Compass },
-    { href: '/circle/create', label: 'Create', icon: Sparkles },
-    { href: '/circle/studio', label: 'Studio', icon: Layers },
-    { href: '/circle/passport', label: 'Passport', icon: IdCard },
+    { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/create', label: 'Create', icon: Sparkles },
+    { href: '/studio', label: 'Studio', icon: Layers },
+    { href: '/passport', label: 'Passport', icon: IdCard },
   ];
 
   // Unified drawer nav — primary destinations
   const drawerNav = [
-    { href: '/circle/discover', label: 'Discover', icon: Compass, hint: 'Journeys curated for you' },
-    { href: '/circle/studio', label: 'Journey Studio', icon: Layers, hint: 'Build your itineraries' },
-    { href: '/circle/passport', label: 'Traveler Passport', icon: IdCard, hint: 'Your circle identity' },
+    { href: '/discover', label: 'Discover', icon: Compass, hint: 'Journeys curated for you' },
+    { href: '/studio', label: 'Journey Studio', icon: Layers, hint: 'Build your itineraries' },
+    { href: '/passport', label: 'Traveler Passport', icon: IdCard, hint: 'Your circle identity' },
     { href: '/', label: 'Safar Marketplace', icon: Store, hint: 'Verified stays & services' },
   ];
 
@@ -108,7 +108,7 @@ export default function CircleNav({ variant = 'default' }) {
   const handleSignOut = async () => {
     closeDrawer();
     await logout();
-    router.push('/circle');
+    router.push('/');
   };
 
   const initials = (user?.name || user?.email || '?').charAt(0).toUpperCase();
@@ -122,7 +122,7 @@ export default function CircleNav({ variant = 'default' }) {
         } `}
       >
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between gap-2 w-full max-w-full">
-          <Link href="/circle" className="flex items-center gap-2 group shrink-0" onClick={closeDrawer}>
+          <Link href="/" className="flex items-center gap-2 group shrink-0" onClick={closeDrawer}>
             <div className="size-9 rounded-2xl grid place-items-center circle-btn-primary shrink-0">
               <span className="text-sm font-bold">S</span>
             </div>
@@ -148,7 +148,7 @@ export default function CircleNav({ variant = 'default' }) {
 
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href="/circle/create"
+              href="/create"
               className="hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold circle-btn-primary"
             >
               <Sparkles className="size-4" /> Create a Journey
@@ -293,7 +293,7 @@ export default function CircleNav({ variant = 'default' }) {
 
         {/* Featured CTA — Create a Journey */}
         <Link
-          href="/circle/create"
+          href="/create"
           onClick={closeDrawer}
           className="circle-drawer-cta"
         >

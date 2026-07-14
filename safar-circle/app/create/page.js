@@ -92,7 +92,7 @@ export default function CreateJourney() {
   const submit = async (asVisibility) => {
     if (!user) {
       toast.error('Please sign in first');
-      router.push(signInHref('/circle/create'));
+      router.push(signInHref('/create'));
       return;
     }
     try {
@@ -116,7 +116,7 @@ export default function CreateJourney() {
       };
       const r = await circleApi.createJourney(payload);
       toast.success(asVisibility === 'public' ? 'Journey published!' : 'Draft saved.');
-      router.push(`/circle/j/${r.journey.slug}`);
+      router.push(`/j/${r.journey.slug}`);
     } catch (e) {
       toast.error(e.message || 'Could not save');
     }
@@ -131,7 +131,7 @@ export default function CreateJourney() {
             <div className="circle-chip mx-auto">Sign in required</div>
             <h1 className="display text-3xl font-bold mt-4">Only members can curate journeys.</h1>
             <p className="text-white/70 mt-3">Safar Circle uses Single Sign-On from your Safar account.</p>
-            <Link href={signInHref('/circle/create')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+            <Link href={signInHref('/create')} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
               Continue to sign in <ArrowRight className="size-4" />
             </Link>
           </div>
@@ -153,7 +153,7 @@ export default function CreateJourney() {
             <h1 className="display text-4xl md:text-5xl font-bold mt-3">Craft a <span className="circle-grad-text">Journey Worth Joining</span></h1>
             <p className="text-white/70 mt-2 text-sm">All services are pulled live from the Safar marketplace. No duplicates. No middlemen.</p>
           </div>
-          <Link href="/circle/studio" className="text-sm text-white/70 hover:text-white hidden md:inline-flex items-center gap-1">Cancel <X className="size-4" /></Link>
+          <Link href="/studio" className="text-sm text-white/70 hover:text-white hidden md:inline-flex items-center gap-1">Cancel <X className="size-4" /></Link>
         </div>
 
         {/* Stepper — mobile-first, equal-width columns, no overflow */}

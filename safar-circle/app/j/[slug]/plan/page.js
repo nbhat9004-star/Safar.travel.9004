@@ -87,7 +87,7 @@ export default function JourneyWorkspace() {
         <div className="max-w-lg mx-auto px-5 pt-20 text-center circle-glass circle-card p-10">
           <div className="text-5xl">🧭</div>
           <div className="display text-2xl font-bold mt-3">Journey not found</div>
-          <Link href="/circle/discover" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href="/discover" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Discover journeys
           </Link>
         </div>
@@ -103,7 +103,7 @@ export default function JourneyWorkspace() {
           <Lock className="size-8 mx-auto text-white/60" />
           <div className="display text-2xl font-bold mt-3">Members only</div>
           <div className="text-white/70 text-sm mt-2">Join this journey to access the collaborative workspace.</div>
-          <Link href={`/circle/j/${journey.slug}`} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href={`/j/${journey.slug}`} className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Back to journey <ChevronRight className="size-4" />
           </Link>
         </div>
@@ -121,7 +121,7 @@ export default function JourneyWorkspace() {
 
       {/* Header */}
       <section className="max-w-6xl mx-auto px-4 md:px-5 mt-6">
-        <Link href={`/circle/j/${journey.slug}`} className="inline-flex items-center gap-2 text-white/70 hover:text-white text-sm">
+        <Link href={`/j/${journey.slug}`} className="inline-flex items-center gap-2 text-white/70 hover:text-white text-sm">
           <ArrowLeft className="size-4" /> Back to journey
         </Link>
         <div className="mt-4 circle-glass circle-card p-5 md:p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -133,7 +133,7 @@ export default function JourneyWorkspace() {
               <span>·</span>
               <span>{members?.acceptedCount || 1} member{(members?.acceptedCount || 1) !== 1 ? 's' : ''}</span>
               <span>·</span>
-              <Link href={`/circle/j/${journey.slug}/members`} className="hover:text-white">Manage members</Link>
+              <Link href={`/j/${journey.slug}/members`} className="hover:text-white">Manage members</Link>
             </div>
           </div>
         </div>
@@ -219,7 +219,7 @@ function DashboardTab({ journeyId, journey, onJumpTab }) {
         <div className="circle-label mb-1">Members</div>
         <div className="display text-3xl font-bold">{data.members.total}<span className="text-white/40 text-lg">/{data.members.capacity}</span></div>
         <div className="text-xs text-white/60 mt-2">{data.members.seatsRemaining} seat{data.members.seatsRemaining !== 1 ? 's' : ''} remaining</div>
-        <Link href={`/circle/j/${journey.slug}/members`} className="mt-3 inline-flex items-center gap-1 text-xs text-white/70 hover:text-white">
+        <Link href={`/j/${journey.slug}/members`} className="mt-3 inline-flex items-center gap-1 text-xs text-white/70 hover:text-white">
           Manage <ChevronRight className="size-3" />
         </Link>
       </Widget>

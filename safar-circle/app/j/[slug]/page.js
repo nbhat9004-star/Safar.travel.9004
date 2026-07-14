@@ -97,7 +97,7 @@ export default function JourneyPreview() {
           <div className="text-5xl">🧳</div>
           <div className="display text-2xl font-bold mt-3">Journey not found</div>
           <div className="text-white/60 text-sm mt-2">It may be private, deleted, or the link is wrong.</div>
-          <Link href="/circle/discover" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
+          <Link href="/discover" className="mt-6 inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-primary text-sm font-semibold">
             Discover journeys <ArrowRight className="size-4" />
           </Link>
         </div>
@@ -107,11 +107,11 @@ export default function JourneyPreview() {
 
   const th = themeLabel(j.theme);
   const isOwner = user && user.id === j.curatorId;
-  const url = origin + `/circle/j/${j.slug}`;
+  const url = origin + `/j/${j.slug}`;
 
   const doDelete = async () => {
     if (!confirm('Delete this journey? This cannot be undone.')) return;
-    try { await circleApi.deleteJourney(j.id); toast.success('Journey deleted'); router.push('/circle/studio'); }
+    try { await circleApi.deleteJourney(j.id); toast.success('Journey deleted'); router.push('/studio'); }
     catch (e) { toast.error(e.message || 'Delete failed'); }
   };
 
@@ -159,7 +159,7 @@ export default function JourneyPreview() {
           <div className="mt-6 flex flex-wrap items-center gap-4 text-white/80 text-sm">
             <span className="inline-flex items-center gap-1.5"><MapPin className="size-4" /> {j.destination?.name}{j.destination?.district ? `, ${j.destination.district}` : ''}</span>
             <span className="inline-flex items-center gap-1.5"><CalendarRange className="size-4" /> {j.startDate ? new Date(j.startDate).toDateString() : (j.isFlexibleDates ? 'Flexible dates' : 'TBD')}{j.endDate ? ` → ${new Date(j.endDate).toDateString()}` : ''}</span>
-            <Link href={`/circle/j/${j.slug}/members`} className="inline-flex items-center gap-1.5 hover:text-white transition">
+            <Link href={`/j/${j.slug}/members`} className="inline-flex items-center gap-1.5 hover:text-white transition">
               <Users className="size-4" /> {memberInfo?.acceptedCount ?? 1} member{(memberInfo?.acceptedCount ?? 1) !== 1 ? 's' : ''} · {memberInfo?.seatsRemaining ?? j.maxMembers} seat{(memberInfo?.seatsRemaining ?? j.maxMembers) !== 1 ? 's' : ''} left
             </Link>
             <span className="inline-flex items-center gap-1.5 capitalize">{j.difficulty}</span>
@@ -176,7 +176,7 @@ export default function JourneyPreview() {
               journey={j}
               memberInfo={memberInfo}
               onOpenJoin={() => {
-                if (!user) { router.push(signInHref(`/circle/j/${j.slug}`)); return; }
+                if (!user) { router.push(signInHref(`/j/${j.slug}`)); return; }
                 setJoinOpen(true);
               }}
               onCancel={async () => {
@@ -189,17 +189,17 @@ export default function JourneyPreview() {
                 catch (e) { toast.error(e.message || 'Failed'); }
               }}
             />
-            <Link href={`/circle/j/${j.slug}/members`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
+            <Link href={`/j/${j.slug}/members`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
               <Users className="size-4" /> Members
             </Link>
             {(isOwner || memberInfo?.myMembership?.status === 'accepted') && (
-              <Link href={`/circle/j/${j.slug}/plan`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-emerald-400/25 to-violet-400/25 border border-emerald-400/40 text-white text-sm font-semibold hover:from-emerald-400/40 hover:to-violet-400/40 transition">
+              <Link href={`/j/${j.slug}/plan`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-emerald-400/25 to-violet-400/25 border border-emerald-400/40 text-white text-sm font-semibold hover:from-emerald-400/40 hover:to-violet-400/40 transition">
                 <Sparkles className="size-4" /> Open Workspace
               </Link>
             )}
             {isOwner && (
               <>
-                <Link href={`/circle/studio`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
+                <Link href={`/studio`} className="inline-flex items-center gap-2 px-5 py-3 rounded-full circle-btn-ghost text-sm font-semibold">
                   <Edit3 className="size-4" /> Studio
                 </Link>
                 <button onClick={doDelete} className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-red-500/20 border border-red-500/30 text-red-200 text-sm font-semibold">
@@ -348,7 +348,7 @@ export default function JourneyPreview() {
                   journey={j}
                   memberInfo={memberInfo}
                   onOpenJoin={() => {
-                    if (!user) { router.push(signInHref(`/circle/j/${j.slug}`)); return; }
+                    if (!user) { router.push(signInHref(`/j/${j.slug}`)); return; }
                     setJoinOpen(true);
                   }}
                   onCancel={async () => {

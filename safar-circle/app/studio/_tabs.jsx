@@ -1,5 +1,5 @@
 'use client';
-// PERF: Studio tabs extracted here so /app/app/circle/studio/page.js can
+// PERF: Studio tabs extracted here so /app/app/studio/page.js can
 // code-split (`next/dynamic`) them. Only the tab currently active by the
 // curator loads its chunk on demand; the initial Studio page ships without
 // the analytics / services / requests / members / messages / timeline JS.
@@ -68,7 +68,7 @@ export function ServicesTab({ journeys }) {
               </td>
               <td className="py-3 px-2 text-white/70">{s.subcategory || s.category}</td>
               <td className="py-3 px-2 text-white/70">{s.hostName || 'Safar Host'}</td>
-              <td className="py-3 px-2"><Link href={`/circle/j/${s.slug}`} className="text-emerald-300 hover:underline">{s.journey}</Link></td>
+              <td className="py-3 px-2"><Link href={`/j/${s.slug}`} className="text-emerald-300 hover:underline">{s.journey}</Link></td>
               <td className="py-3 px-2 text-right font-semibold circle-grad-text">{formatINR(s.price)}</td>
             </tr>
           ))}
@@ -161,7 +161,7 @@ export function RequestsTab({ onChange }) {
                 </div>
                 {r.journey && (
                   <div className="mt-1 text-[11px] text-white/50">
-                    for <Link href={`/circle/j/${r.journey.slug}`} className="text-emerald-300 hover:underline">{r.journey.name}</Link>
+                    for <Link href={`/j/${r.journey.slug}`} className="text-emerald-300 hover:underline">{r.journey.name}</Link>
                   </div>
                 )}
                 {r.message && (
@@ -177,7 +177,7 @@ export function RequestsTab({ onChange }) {
                 {busy === r.id + ':decline' ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3.5" />} Decline
               </button>
               {r.journey && (
-                <Link href={`/circle/j/${r.journey.slug}/members`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-semibold hover:bg-white/10">
+                <Link href={`/j/${r.journey.slug}/members`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-semibold hover:bg-white/10">
                   <Users className="size-3.5" /> Manage
                 </Link>
               )}
@@ -211,9 +211,9 @@ export function MembersTab() {
           <div className="flex items-center justify-between mb-4">
             <div className="min-w-0">
               <div className="circle-chip">{g.members.length}/{g.journey.maxMembers} member{g.members.length !== 1 ? 's' : ''}</div>
-              <Link href={`/circle/j/${g.journey.slug}/members`} className="display text-lg font-bold mt-2 block hover:underline truncate">{g.journey.name}</Link>
+              <Link href={`/j/${g.journey.slug}/members`} className="display text-lg font-bold mt-2 block hover:underline truncate">{g.journey.name}</Link>
             </div>
-            <Link href={`/circle/j/${g.journey.slug}/members`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0">
+            <Link href={`/j/${g.journey.slug}/members`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full circle-btn-ghost text-xs font-semibold shrink-0">
               Manage <ArrowRight className="size-3.5" />
             </Link>
           </div>
@@ -258,7 +258,7 @@ export function MessagesTab() {
   return (
     <div className="space-y-2">
       {data.conversations.map(c => (
-        <Link key={c.journey.id} href={`/circle/j/${c.journey.slug}/plan?tab=chat`} className="block circle-glass circle-card p-4 hover:bg-white/5 transition">
+        <Link key={c.journey.id} href={`/j/${c.journey.slug}/plan?tab=chat`} className="block circle-glass circle-card p-4 hover:bg-white/5 transition">
           <div className="flex items-center gap-4">
             <div className="size-14 rounded-2xl overflow-hidden bg-white/10 shrink-0">
               {c.journey.cover ? (
@@ -351,7 +351,7 @@ export function TimelineTab() {
                   {ev.body && <div className="text-white/70 text-xs mt-0.5 line-clamp-2">{ev.body}</div>}
                   <div className="flex items-center gap-2 mt-1 text-[11px] text-white/50">
                     {ev.journeyName && (
-                      <Link href={`/circle/j/${ev.journeySlug}`} className="text-emerald-300 hover:underline truncate max-w-[180px]">{ev.journeyName}</Link>
+                      <Link href={`/j/${ev.journeySlug}`} className="text-emerald-300 hover:underline truncate max-w-[180px]">{ev.journeyName}</Link>
                     )}
                     {ev.actorName && <span>· by {ev.actorName}</span>}
                     <span>· {timeAgo(ev.createdAt)}</span>

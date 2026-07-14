@@ -189,10 +189,10 @@ export default function Navbar({ transparent = false }) {
               Build My Trip
             </Link>
           )}
-          {/* Safar Circle — premium highlighted nav item */}
+          {/* Safar Circle — premium highlighted nav item (external subdomain) */}
           {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-            <Link
-              href="/circle"
+            <a
+              href={process.env.NEXT_PUBLIC_CIRCLE_URL || 'https://circle.safarcurated.com'}
               className={`group relative ml-1.5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13.5px] font-semibold tracking-tight transition-all ${solid
                 ? 'text-white bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40'
                 : 'text-white bg-gradient-to-r from-emerald-400/40 via-violet-400/40 to-pink-400/40 border border-white/25 backdrop-blur hover:from-emerald-400/60 hover:via-violet-400/60 hover:to-pink-400/60'}`}
@@ -200,7 +200,7 @@ export default function Navbar({ transparent = false }) {
               <Sparkles className="size-3.5" />
               Safar Circle
               <span className="ml-0.5 text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">Beta</span>
-            </Link>
+            </a>
           )}
           {/* Module 11A — More menu (informational + policy links) */}
           {!(user?.role === 'admin' || user?.role === 'super_admin') && (
@@ -376,10 +376,10 @@ export default function Navbar({ transparent = false }) {
                     </Link>
                   )}
 
-                  {/* Safar Circle — featured highlight (near top) */}
+                  {/* Safar Circle — featured highlight (near top, external subdomain) */}
                   {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <Link
-                      href="/circle"
+                    <a
+                      href={process.env.NEXT_PUBLIC_CIRCLE_URL || 'https://circle.safarcurated.com'}
                       onClick={() => setOpen(false)}
                       className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl mb-4 bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40 transition"
                     >
@@ -394,7 +394,7 @@ export default function Navbar({ transparent = false }) {
                         <div className="text-[11px] text-white/80 mt-0.5">Plan trips together with fellow travelers</div>
                       </div>
                       <ChevronDown className="size-4 rotate-[-90deg] text-white/80" />
-                    </Link>
+                    </a>
                   )}
 
                   {/* EXPLORE Section */}
