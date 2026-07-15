@@ -227,7 +227,7 @@ export default function ExploreHome() {
         ) : (
           <div className="e-hcarousel">
             {journeys.map((j) => (
-              <Link key={j.id} href={`/explore/journey?trip=${j.slug || j.id}`} className="e-card e-lift-in">
+              <Link key={j.id} href={`/explore/j/${j.slug || j.id}`} className="e-card e-lift-in">
                 {j.coverImage && <div className="e-card-media"><Image src={j.coverImage} alt={j.title} fill sizes="(min-width:1024px) 33vw, 100vw" className="object-cover" /></div>}
                 <div className="p-5">
                   <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>{j.destination?.name || 'Kashmir'} · {j.theme || 'Journey'}</div>

@@ -11361,6 +11361,283 @@ Return ONLY valid JSON, no markdown.`;
       return ok({ events });
     }
 
+    // =========================================================================
+    // MODULE 1 (Explore, July 2025): Journey Bookmarks + Community Posts
+    // Kept in a single insertion block to minimise edits. Reuses helpers, uuid,
+    // ok/err, journeys, circleMembers, getCurrentUser (me) from the enclosing scope.
+    // =========================================================================
+    async function ensureExploreExtIndexes() {
+      try {
+        const b = await getCollection('circle_bookmarks');
+        await b.createIndex({ userId: 1, targetType: 1, targetId: 1 }, { unique: true });
+        await b.createIndex({ userId: 1, createdAt: -1 });
+        const p = await getCollection('circle_posts');
+        await p.createIndex({ id: 1 }, { unique: true });
+        await p.createIndex({ category: 1, createdAt: -1 });
+        await p.createIndex({ authorId: 1, createdAt: -1 });
+        const pl = await getCollection('circle_post_likes');
+        await pl.createIndex({ postId: 1, userId: 1 }, { unique: true });
+        const pc = await getCollection('circle_post_comments');
+        await pc.createIndex({ postId: 1, createdAt: 1 });
+        const pr = await getCollection('circle_post_reports');
+        await pr.createIndex({ postId: 1, userId: 1 }, { unique: true });
+      } catch {}
+    }
+    await ensureExploreExtIndexes();
+
+    const POST_CATEGORIES = ['discussions','questions','tips','hidden_gems','meetups','travelers'];
+
+    // ---------- Journey bookmark (toggle) ----------
+    {
+      const m = path.match(/^\/circle\/journeys\/([\w-]+)\/bookmark$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const jid = m[1];
+        const jdoc = await journeys.findOne({ id: jid }, { projection: { _id: 0, id: 1 } });
+        if (!jdoc) return err('Journey not found', 404);
+        const bmk = await getCollection('circle_bookmarks');
+        const existing = await bmk.findOne({ userId: me.id, targetType: 'journey', targetId: jid });
+        if (existing) {
+          await bmk.deleteOne({ _id: existing._id });
+          return ok({ bookmarked: false });
+        }
+        await bmk.insertOne({ id: uuid(), userId: me.id, targetType: 'journey', targetId: jid, createdAt: new Date() });
+        return ok({ bookmarked: true });
+      }
+    }
+
+    // GET /circle/bookmarks/mine  — list my bookmarks (journeys + posts)
+    if (path === '/circle/bookmarks/mine' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const bmk = await getCollection('circle_bookmarks');
+      const type = url.searchParams.get('type');
+      const filter = { userId: me.id };
+      if (type) filter.targetType = type;
+      const rows = await bmk.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(200).toArray();
+      const journeyIds = rows.filter(r => r.targetType === 'journey').map(r => r.targetId);
+      const postIds = rows.filter(r => r.targetType === 'post').map(r => r.targetId);
+      const [jList, pList] = await Promise.all([
+        journeyIds.length ? journeys.find({ id: { $in: journeyIds } }, { projection: { _id: 0 } }).toArray() : [],
+        postIds.length ? (await getCollection('circle_posts')).find({ id: { $in: postIds } }, { projection: { _id: 0 } }).toArray() : [],
+      ]);
+      return ok({ bookmarks: rows, journeys: jList, posts: pList });
+    }
+
+    // ---------- Community Posts CRUD ----------
+    if (path === '/circle/posts' && method === 'POST') {
+      if (!me) return err('Sign in to post', 401);
+      const b = await readBody(request);
+      const category = POST_CATEGORIES.includes(b.category) ? b.category : 'discussions';
+      const title = (b.title || '').toString().trim().slice(0, 160);
+      const content = (b.content || '').toString().trim().slice(0, 4000);
+      if (!content && !title) return err('Post content required');
+      const doc = {
+        id: uuid(),
+        authorId: me.id,
+        authorName: me.name || 'Traveler',
+        authorAvatar: me.avatar || null,
+        category,
+        title,
+        content,
+        image: (b.image || '').toString().slice(0, 800) || null,
+        location: (b.location || '').toString().slice(0, 120) || null,
+        tags: Array.isArray(b.tags) ? b.tags.slice(0, 8).map(t => String(t).slice(0, 24)) : [],
+        likesCount: 0,
+        commentsCount: 0,
+        bookmarksCount: 0,
+        reportsCount: 0,
+        hidden: false,
+        pinned: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await (await getCollection('circle_posts')).insertOne(doc);
+      const { _id, ...rest } = doc;
+      return ok({ post: rest }, 201);
+    }
+
+    if (path === '/circle/posts' && method === 'GET') {
+      const posts = await getCollection('circle_posts');
+      const category = url.searchParams.get('category');
+      const authorId = url.searchParams.get('authorId');
+      const q = url.searchParams.get('q');
+      const limit = Math.min(Number(url.searchParams.get('limit')) || 30, 60);
+      const filter = { hidden: { $ne: true } };
+      if (category && POST_CATEGORIES.includes(category)) filter.category = category;
+      if (authorId) filter.authorId = authorId;
+      if (q) filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { content: { $regex: q, $options: 'i' } },
+      ];
+      const rows = await posts.find(filter, { projection: { _id: 0 } }).sort({ pinned: -1, createdAt: -1 }).limit(limit).toArray();
+      // Attach my like/bookmark state in one shot
+      let likedSet = new Set();
+      let bookedSet = new Set();
+      if (me && rows.length) {
+        const ids = rows.map(r => r.id);
+        const [likes, bmks] = await Promise.all([
+          (await getCollection('circle_post_likes')).find({ postId: { $in: ids }, userId: me.id }, { projection: { _id: 0, postId: 1 } }).toArray(),
+          (await getCollection('circle_bookmarks')).find({ userId: me.id, targetType: 'post', targetId: { $in: ids } }, { projection: { _id: 0, targetId: 1 } }).toArray(),
+        ]);
+        likedSet = new Set(likes.map(l => l.postId));
+        bookedSet = new Set(bmks.map(b => b.targetId));
+      }
+      const enriched = rows.map(r => ({ ...r, liked: likedSet.has(r.id), bookmarked: bookedSet.has(r.id) }));
+      return ok({ posts: enriched, total: enriched.length });
+    }
+
+    // GET/PUT/DELETE a specific post
+    {
+      const m = path.match(/^\/circle\/posts\/([\w-]+)$/);
+      if (m) {
+        const pid = m[1];
+        const posts = await getCollection('circle_posts');
+        const doc = await posts.findOne({ id: pid }, { projection: { _id: 0 } });
+        if (!doc) return err('Post not found', 404);
+        if (method === 'GET') {
+          if (doc.hidden) return err('Post not found', 404);
+          let liked = false, bookmarked = false;
+          if (me) {
+            liked = !!(await (await getCollection('circle_post_likes')).findOne({ postId: pid, userId: me.id }));
+            bookmarked = !!(await (await getCollection('circle_bookmarks')).findOne({ userId: me.id, targetType: 'post', targetId: pid }));
+          }
+          return ok({ post: { ...doc, liked, bookmarked } });
+        }
+        if (!me) return err('Sign in required', 401);
+        const isOwner = doc.authorId === me.id;
+        const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+        if (!isOwner && !isAdmin) return err('Not your post', 403);
+        if (method === 'PUT') {
+          const b = await readBody(request);
+          const set = { updatedAt: new Date() };
+          if (b.title != null) set.title = String(b.title).slice(0, 160);
+          if (b.content != null) set.content = String(b.content).slice(0, 4000);
+          if (b.image !== undefined) set.image = b.image ? String(b.image).slice(0, 800) : null;
+          if (b.location !== undefined) set.location = b.location ? String(b.location).slice(0, 120) : null;
+          if (b.category && POST_CATEGORIES.includes(b.category)) set.category = b.category;
+          if (Array.isArray(b.tags)) set.tags = b.tags.slice(0, 8).map(t => String(t).slice(0, 24));
+          await posts.updateOne({ id: pid }, { $set: set });
+          const updated = await posts.findOne({ id: pid }, { projection: { _id: 0 } });
+          return ok({ post: updated });
+        }
+        if (method === 'DELETE') {
+          await posts.deleteOne({ id: pid });
+          await Promise.all([
+            (await getCollection('circle_post_likes')).deleteMany({ postId: pid }),
+            (await getCollection('circle_post_comments')).deleteMany({ postId: pid }),
+            (await getCollection('circle_bookmarks')).deleteMany({ targetType: 'post', targetId: pid }),
+            (await getCollection('circle_post_reports')).deleteMany({ postId: pid }),
+          ]);
+          return ok({ deleted: true });
+        }
+      }
+    }
+
+    // Like / Unlike (toggle)
+    {
+      const m = path.match(/^\/circle\/posts\/([\w-]+)\/like$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const pid = m[1];
+        const posts = await getCollection('circle_posts');
+        const likesCol = await getCollection('circle_post_likes');
+        const existing = await likesCol.findOne({ postId: pid, userId: me.id });
+        if (existing) {
+          await likesCol.deleteOne({ _id: existing._id });
+          await posts.updateOne({ id: pid }, { $inc: { likesCount: -1 } });
+          return ok({ liked: false });
+        }
+        try { await likesCol.insertOne({ id: uuid(), postId: pid, userId: me.id, createdAt: new Date() }); } catch {}
+        await posts.updateOne({ id: pid }, { $inc: { likesCount: 1 } });
+        return ok({ liked: true });
+      }
+    }
+
+    // Bookmark post (toggle) — reuses circle_bookmarks
+    {
+      const m = path.match(/^\/circle\/posts\/([\w-]+)\/bookmark$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const pid = m[1];
+        const bmk = await getCollection('circle_bookmarks');
+        const posts = await getCollection('circle_posts');
+        const existing = await bmk.findOne({ userId: me.id, targetType: 'post', targetId: pid });
+        if (existing) {
+          await bmk.deleteOne({ _id: existing._id });
+          await posts.updateOne({ id: pid }, { $inc: { bookmarksCount: -1 } });
+          return ok({ bookmarked: false });
+        }
+        await bmk.insertOne({ id: uuid(), userId: me.id, targetType: 'post', targetId: pid, createdAt: new Date() });
+        await posts.updateOne({ id: pid }, { $inc: { bookmarksCount: 1 } });
+        return ok({ bookmarked: true });
+      }
+    }
+
+    // Comments (list + create)
+    {
+      const m = path.match(/^\/circle\/posts\/([\w-]+)\/comments$/);
+      if (m) {
+        const pid = m[1];
+        const comments = await getCollection('circle_post_comments');
+        if (method === 'GET') {
+          const rows = await comments.find({ postId: pid }, { projection: { _id: 0 } }).sort({ createdAt: 1 }).limit(200).toArray();
+          return ok({ comments: rows });
+        }
+        if (method === 'POST') {
+          if (!me) return err('Sign in required', 401);
+          const b = await readBody(request);
+          const text = (b.text || '').toString().trim().slice(0, 800);
+          if (!text) return err('Comment text required');
+          const posts = await getCollection('circle_posts');
+          const doc = await posts.findOne({ id: pid }, { projection: { _id: 0, id: 1 } });
+          if (!doc) return err('Post not found', 404);
+          const c = { id: uuid(), postId: pid, userId: me.id, userName: me.name, userAvatar: me.avatar || null, text, createdAt: new Date() };
+          await comments.insertOne(c);
+          await posts.updateOne({ id: pid }, { $inc: { commentsCount: 1 } });
+          const { _id, ...rest } = c;
+          return ok({ comment: rest }, 201);
+        }
+      }
+    }
+
+    // Delete a comment (owner or admin)
+    {
+      const m = path.match(/^\/circle\/posts\/([\w-]+)\/comments\/([\w-]+)$/);
+      if (m && method === 'DELETE') {
+        if (!me) return err('Sign in required', 401);
+        const [, pid, cid] = m;
+        const comments = await getCollection('circle_post_comments');
+        const c = await comments.findOne({ id: cid, postId: pid });
+        if (!c) return err('Comment not found', 404);
+        const isOwner = c.userId === me.id;
+        const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+        if (!isOwner && !isAdmin) return err('Not your comment', 403);
+        await comments.deleteOne({ id: cid });
+        await (await getCollection('circle_posts')).updateOne({ id: pid }, { $inc: { commentsCount: -1 } });
+        return ok({ deleted: true });
+      }
+    }
+
+    // Report a post
+    {
+      const m = path.match(/^\/circle\/posts\/([\w-]+)\/report$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const pid = m[1];
+        const b = await readBody(request);
+        const reason = (b.reason || '').toString().slice(0, 200);
+        const reports = await getCollection('circle_post_reports');
+        try {
+          await reports.insertOne({ id: uuid(), postId: pid, userId: me.id, reason, createdAt: new Date() });
+          await (await getCollection('circle_posts')).updateOne({ id: pid }, { $inc: { reportsCount: 1 } });
+        } catch { /* duplicate — already reported */ }
+        return ok({ reported: true });
+      }
+    }
+    // ================== end Module 1 additions ==================
+
+
+
 
     // Collections: circle_itinerary (embedded days/blocks per journey), circle_checklist,
     //              circle_polls, circle_chat, circle_gallery.

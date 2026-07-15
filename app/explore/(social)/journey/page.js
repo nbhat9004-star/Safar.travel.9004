@@ -1,51 +1,45 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Route, Sparkles, Backpack, Wallet, Clock, MapPin, Plus, X, Trash2, Loader2, Wand2, ArrowRight, Check, Camera, Bike, Mountain, Car, Utensils, Users, ShoppingBag } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import {
+  Route, Sparkles, Backpack, Wallet, Clock, MapPin, Plus, X, Trash2, Loader2, Wand2,
+  ArrowRight, Check, Camera, Bike, Mountain, Car, Utensils, Users, ShoppingBag,
+  Edit3, Send, Save, Eye, Bookmark, FileText,
+} from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
 import BadgeChip from '@/components/explore/BadgeChip';
-import { IMG } from '@/lib/data';
 import { useAuth } from '@/lib/auth-context';
 
 const JOURNEY_TYPES = [
-  { id: 'journey',    label: 'Journey',        icon: Route,     hint: 'A full trip plan' },
-  { id: 'meetup',     label: 'Meetup',         icon: Users,     hint: 'Local gathering' },
-  { id: 'roadtrip',   label: 'Road trip',      icon: Car,       hint: 'Wheels & horizons' },
-  { id: 'photo',      label: 'Photo walk',     icon: Camera,    hint: 'Golden-hour hunts' },
-  { id: 'bike',       label: 'Bike expedition',icon: Bike,      hint: 'Two-wheel epic' },
-  { id: 'camp',       label: 'Camping',        icon: Mountain,  hint: 'Under the stars' },
-  { id: 'weekend',    label: 'Weekend escape', icon: Sparkles,  hint: '48-hour story' },
-  { id: 'food',       label: 'Food trail',     icon: Utensils,  hint: 'Wazwan & beyond' },
-  { id: 'adventure',  label: 'Adventure',      icon: Mountain,  hint: 'Trek / raft / ski' },
+  { id: 'journey',        label: 'Journey',         icon: Route,     theme: 'weekend_escape' },
+  { id: 'meetup',         label: 'Meetup',          icon: Users,     theme: 'weekend_escape' },
+  { id: 'road_trip',      label: 'Road trip',       icon: Car,       theme: 'road_trip' },
+  { id: 'photography',    label: 'Photo walk',      icon: Camera,    theme: 'photography' },
+  { id: 'bike_expedition',label: 'Bike expedition', icon: Bike,      theme: 'bike_expedition' },
+  { id: 'camping',        label: 'Camping',         icon: Mountain,  theme: 'adventure' },
+  { id: 'weekend_escape', label: 'Weekend escape',  icon: Sparkles,  theme: 'weekend_escape' },
+  { id: 'food',           label: 'Food trail',      icon: Utensils,  theme: 'food' },
+  { id: 'adventure',      label: 'Adventure',       icon: Mountain,  theme: 'adventure' },
 ];
 
 const ORCHESTRA_SERVICES = [
-  { id: 'stay',      label: 'Accommodation', icon: MapPin,    href: '/explore?cat=all',       desc: 'Houseboats, cabins, cottages' },
-  { id: 'bike',      label: 'Bike rental',    icon: Bike,      href: '/explore?cat=transport', desc: 'Royal Enfield, Himalayan' },
-  { id: 'car',       label: 'Car rental',     icon: Car,       href: '/explore?cat=transport', desc: 'Sedans, SUVs, drivers' },
-  { id: 'guide',     label: 'Guide',          icon: Users,     href: '/explore?cat=tour',      desc: 'Certified locals' },
-  { id: 'camp',      label: 'Camping',        icon: Mountain,  href: '/explore?cat=camp',      desc: 'Glacier & meadow camps' },
-  { id: 'pickup',    label: 'Airport pickup', icon: Car,       href: '/explore?cat=transport', desc: '24/7 meet & greet' },
-  { id: 'exp',       label: 'Experiences',    icon: Sparkles,  href: '/explore?cat=experience',desc: 'Shikara, Wazwan, culture' },
-  { id: 'food',      label: 'Restaurants',    icon: Utensils,  href: '/explore?cat=experience',desc: 'Curated wazwan houses' },
-  { id: 'shop',      label: 'Shopping',       icon: ShoppingBag,href:'/explore?cat=shopping',  desc: 'Handicrafts, saffron, shawls' },
+  { id: 'stay',   label: 'Accommodation', icon: MapPin,   href: '/explore?cat=all',       desc: 'Houseboats, cabins, cottages' },
+  { id: 'bike',   label: 'Bike rental',   icon: Bike,     href: '/explore?cat=transport', desc: 'Royal Enfield, Himalayan' },
+  { id: 'car',    label: 'Car rental',    icon: Car,      href: '/explore?cat=transport', desc: 'Sedans, SUVs, drivers' },
+  { id: 'guide',  label: 'Guide',         icon: Users,    href: '/explore?cat=tour',      desc: 'Certified locals' },
+  { id: 'camp',   label: 'Camping',       icon: Mountain, href: '/explore?cat=camp',      desc: 'Glacier & meadow camps' },
+  { id: 'exp',    label: 'Experiences',   icon: Sparkles, href: '/explore?cat=experience',desc: 'Shikara, Wazwan, culture' },
 ];
 
 const TABS = [
-  { id: 'planner', label: 'Trip Planner', icon: Route },
-  { id: 'itinerary', label: 'Itinerary', icon: Sparkles },
-  { id: 'packing', label: 'Packing', icon: Backpack },
-  { id: 'budget', label: 'Budget', icon: Wallet },
-  { id: 'timeline', label: 'Timeline', icon: Clock },
-  { id: 'saved', label: 'Saved places', icon: MapPin },
+  { id: 'create', label: 'Create Journey', icon: Plus },
+  { id: 'mine',   label: 'My Journeys',    icon: Route },
+  { id: 'planner',label: 'Trip Planner',   icon: Sparkles },
 ];
 
-const DEFAULT_PACKING = [
-  { c: 'Essentials', items: ['Passport / ID', 'Insurance', 'Cash + cards', 'Phone charger'] },
-  { c: 'Clothing', items: ['Thermal layers', 'Waterproof jacket', 'Wool socks', 'Sturdy boots'] },
-  { c: 'Kashmir extras', items: ['Sunglasses (snow glare)', 'Sunscreen', 'Lip balm', 'Reusable bottle'] },
-];
+const DIFFICULTIES = ['easy','moderate','challenging','expert'];
 
 function callAI(message) {
   return fetch('/api/ai-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) })
@@ -53,40 +47,146 @@ function callAI(message) {
     .catch(() => 'Journey Studio is warming up — try again in a moment.');
 }
 
+const emptyForm = () => ({
+  name: '',
+  description: '',
+  cover: '',
+  destination: { name: 'Kashmir', district: '', state: 'Jammu & Kashmir', country: 'India' },
+  startDate: '',
+  endDate: '',
+  maxMembers: 6,
+  budget: 40000,
+  theme: 'weekend_escape',
+  difficulty: 'moderate',
+  type: 'journey',
+});
+
 export default function ExploreJourney() {
   const { user } = useAuth();
-  const [tab, setTab] = useState('planner');
-  const [form, setForm] = useState({ destination: 'Kashmir', days: 5, budget: 40000, style: 'balanced', travelers: 2, type: 'journey' });
-  const [itinerary, setItinerary] = useState('');
-  const [packing, setPacking] = useState('');
-  const [budgetOut, setBudgetOut] = useState('');
-  const [loading, setLoading] = useState('');
-  const [saved, setSaved] = useState([
-    { name: 'Betaab Valley viewpoint', tag: 'Pahalgam • golden hour' },
-    { name: 'Nishat Bagh terrace', tag: 'Srinagar • spring bloom' },
-  ]);
-  const [savedInput, setSavedInput] = useState('');
+  const router = useRouter();
+  const params = useSearchParams();
+  const initialTab = params.get('tab') || (params.get('edit') ? 'create' : 'create');
+  const [tab, setTab] = useState(initialTab);
+  const [form, setForm] = useState(emptyForm());
+  const [editingId, setEditingId] = useState('');
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const [mine, setMine] = useState([]);
+  const [mineLoading, setMineLoading] = useState(false);
 
-  const genItinerary = async () => {
-    setLoading('itin');
-    const msg = `Create a day-by-day ${form.days}-day itinerary for ${form.travelers} traveler(s) to ${form.destination} with a total budget of ₹${form.budget}. Travel style: ${form.style}. Format each day as "Day N — Title" then 3-4 bullet points (morning, afternoon, evening) with rough ₹ costs. End with a total estimate.`;
-    setItinerary(await callAI(msg));
-    setTab('itinerary');
-    setLoading('');
+  // AI planner state (kept as-is, minor)
+  const [pForm, setPForm] = useState({ destination: 'Kashmir', days: 5, budget: 40000, style: 'balanced', travelers: 2 });
+  const [aiOut, setAiOut] = useState('');
+  const [aiKind, setAiKind] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const loadMine = useCallback(async () => {
+    if (!user) return;
+    setMineLoading(true);
+    try {
+      const r = await fetch('/api/circle/journeys/mine');
+      const j = await r.json();
+      setMine(j.journeys || []);
+    } catch {}
+    setMineLoading(false);
+  }, [user]);
+
+  useEffect(() => { if (tab === 'mine') loadMine(); }, [tab, loadMine]);
+
+  // Load journey to edit (?edit=id)
+  useEffect(() => {
+    const eid = params.get('edit');
+    if (!eid) return;
+    (async () => {
+      try {
+        const r = await fetch(`/api/circle/journeys/id/${eid}`);
+        const j = await r.json();
+        if (j.journey) {
+          const jd = j.journey;
+          setEditingId(jd.id);
+          setForm({
+            name: jd.name || '',
+            description: jd.description || '',
+            cover: jd.cover || '',
+            destination: jd.destination || { name: 'Kashmir', country: 'India' },
+            startDate: jd.startDate ? String(jd.startDate).slice(0, 10) : '',
+            endDate: jd.endDate ? String(jd.endDate).slice(0, 10) : '',
+            maxMembers: jd.maxMembers || 6,
+            budget: jd.budget || 40000,
+            theme: jd.theme || 'weekend_escape',
+            difficulty: jd.difficulty || 'moderate',
+            type: JOURNEY_TYPES.find(t => t.theme === jd.theme)?.id || 'journey',
+          });
+          setTab('create');
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveJourney = async (visibility) => {
+    if (!user) { router.push('/?auth=1'); return; }
+    if (!form.name || form.name.trim().length < 3) { setMsg('Journey title needs at least 3 characters'); return; }
+    setBusy(visibility);
+    setMsg('');
+    try {
+      const body = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        cover: form.cover.trim() || null,
+        destination: form.destination,
+        startDate: form.startDate || null,
+        endDate: form.endDate || null,
+        maxMembers: Number(form.maxMembers) || 6,
+        budget: Number(form.budget) || null,
+        theme: form.theme,
+        difficulty: form.difficulty,
+        visibility,
+      };
+      let r, j;
+      if (editingId) {
+        r = await fetch(`/api/circle/journeys/${editingId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'Save failed');
+      } else {
+        r = await fetch('/api/circle/journeys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'Save failed');
+      }
+      const saved = j.journey;
+      if (visibility === 'public') {
+        router.push(`/explore/j/${saved.slug}`);
+      } else {
+        setMsg(editingId ? 'Journey updated.' : 'Draft saved to My Journeys.');
+        setEditingId(saved.id);
+        loadMine();
+      }
+    } catch (e) {
+      setMsg(e.message || 'Save failed');
+    } finally { setBusy(''); }
   };
-  const genPacking = async () => {
-    setLoading('pack');
-    const msg = `Create a smart packing checklist for a ${form.days}-day ${form.style} trip to ${form.destination} in the current season. Group items into 4 categories. Add 2 Kashmir-specific tips at the end.`;
-    setPacking(await callAI(msg));
-    setTab('packing');
-    setLoading('');
+
+  const deleteJourney = async (id) => {
+    if (!confirm('Delete this journey? This cannot be undone.')) return;
+    await fetch(`/api/circle/journeys/${id}`, { method: 'DELETE' });
+    loadMine();
+    if (editingId === id) { setEditingId(''); setForm(emptyForm()); }
   };
-  const genBudget = async () => {
-    setLoading('bud');
-    const msg = `Break down a ₹${form.budget} budget for ${form.travelers} traveler(s) on a ${form.days}-day ${form.style} trip to ${form.destination}. Split into categories (stay, transport, food, experiences, buffer). Return as a compact bulleted list with ₹ amounts and % of total.`;
-    setBudgetOut(await callAI(msg));
-    setTab('budget');
-    setLoading('');
+
+  const publishExisting = async (id) => {
+    await fetch(`/api/circle/journeys/${id}/visibility`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'public' }) });
+    loadMine();
+  };
+
+  const genAI = async (kind) => {
+    setAiKind(kind); setAiLoading(true);
+    const prompts = {
+      itin: `Create a day-by-day ${pForm.days}-day itinerary for ${pForm.travelers} traveler(s) to ${pForm.destination} with a total budget of ₹${pForm.budget}. Travel style: ${pForm.style}. Format each day as "Day N — Title" then 3-4 bullet points with rough ₹ costs.`,
+      pack: `Create a smart packing checklist for a ${pForm.days}-day ${pForm.style} trip to ${pForm.destination}. Group items into 4 categories.`,
+      bud:  `Break down a ₹${pForm.budget} budget for ${pForm.travelers} traveler(s) on a ${pForm.days}-day ${pForm.style} trip to ${pForm.destination}. Split into stay, transport, food, experiences, buffer. Return as bulleted list with ₹ amounts and %.`,
+    };
+    setAiOut(await callAI(prompts[kind] || prompts.itin));
+    setAiLoading(false);
   };
 
   return (
@@ -96,21 +196,12 @@ export default function ExploreJourney() {
         <div className="relative e-container e-fade-in">
           <div className="e-chip"><Route className="size-3 text-emerald-300" /> Journey</div>
           <h1 className="display font-bold mt-4 text-[clamp(2rem,5.6vw,4rem)] leading-tight max-w-3xl">Design a trip <span className="e-grad-text">worth remembering.</span></h1>
-          <p className="mt-4 text-white/75 max-w-2xl">One place for your itinerary, packing list, budget, timeline and saved places. Built by you, shaped by the community.</p>
+          <p className="mt-4 text-white/75 max-w-2xl">Draft privately, publish when ready, invite your tribe or open it to the community.</p>
         </div>
       </section>
 
       {/* Tabs */}
       <section className="relative e-container mb-6">
-        {/* Journey type selector */}
-        <div className="e-chip mb-3"><Sparkles className="size-3 text-emerald-300" /> Journey type</div>
-        <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1 mb-5">
-          {JOURNEY_TYPES.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setForm({ ...form, type: id })} className={`shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${form.type===id ? 'e-btn-primary border-transparent' : 'e-btn-ghost'}`} aria-pressed={form.type===id}>
-              <Icon className="size-3.5" /> {label}
-            </button>
-          ))}
-        </div>
         <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)} className={`shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${tab===id ? 'e-btn-primary border-transparent' : 'bg-white/[0.04] border-white/10 text-white/75 hover:bg-white/[0.08] hover:text-white'}`}>
@@ -120,184 +211,206 @@ export default function ExploreJourney() {
         </div>
       </section>
 
-      {/* Panels */}
-      <section className="relative e-container pb-24">
-        {tab === 'planner' && (
+      {/* ---------------- CREATE / EDIT ---------------- */}
+      {tab === 'create' && (
+        <section className="relative e-container pb-12">
+          {/* Journey type selector */}
+          <div className="e-chip mb-3"><Sparkles className="size-3 text-emerald-300" /> Journey type</div>
+          <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1 mb-5">
+            {JOURNEY_TYPES.map(({ id, label, icon: Icon, theme }) => (
+              <button
+                key={id}
+                onClick={() => setForm({ ...form, type: id, theme })}
+                className={`shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${form.type===id ? 'e-btn-primary border-transparent' : 'e-btn-ghost'}`}
+              >
+                <Icon className="size-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-6">
+            <div className="e-glass rounded-3xl p-6 md:p-8">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                {editingId ? <><Edit3 className="size-4 text-emerald-300" /> Edit journey</> : <><Plus className="size-4 text-emerald-300" /> New journey</>}
+              </h3>
+              <p className="text-white/60 text-sm mt-1">Fill the essentials — save as draft or publish for others to join.</p>
+
+              <div className="grid sm:grid-cols-2 gap-4 mt-6">
+                <Field label="Title *" full>
+                  <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Chinar Autumn Ride" className="e-input" />
+                </Field>
+                <Field label="Destination *">
+                  <input value={form.destination?.name || ''} onChange={e => setForm({ ...form, destination: { ...form.destination, name: e.target.value } })} placeholder="Srinagar, Gulmarg…" className="e-input" />
+                </Field>
+                <Field label="District">
+                  <input value={form.destination?.district || ''} onChange={e => setForm({ ...form, destination: { ...form.destination, district: e.target.value } })} placeholder="Anantnag, Baramulla…" className="e-input" />
+                </Field>
+                <Field label="Start date">
+                  <input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="e-input" />
+                </Field>
+                <Field label="End date">
+                  <input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="e-input" />
+                </Field>
+                <Field label="Budget total (₹)">
+                  <input type="number" min="0" value={form.budget} onChange={e => setForm({ ...form, budget: Number(e.target.value) })} className="e-input" />
+                </Field>
+                <Field label="Seats available">
+                  <input type="number" min="1" max="50" value={form.maxMembers} onChange={e => setForm({ ...form, maxMembers: Number(e.target.value) })} className="e-input" />
+                </Field>
+                <Field label="Difficulty">
+                  <select value={form.difficulty} onChange={e => setForm({ ...form, difficulty: e.target.value })} className="e-input">
+                    {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </Field>
+                <Field label="Cover image URL" full>
+                  <input value={form.cover} onChange={e => setForm({ ...form, cover: e.target.value })} placeholder="https://…" className="e-input" />
+                </Field>
+                <Field label="Description" full>
+                  <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="What's the vibe? What will travelers experience?" className="e-input" />
+                </Field>
+              </div>
+
+              {form.cover && (
+                <div className="mt-4 relative w-full h-48 rounded-2xl overflow-hidden border border-white/10">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={form.cover} alt="Cover preview" className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              {msg && <div className="mt-4 text-xs" style={{ color: 'var(--e-text-muted)' }}>{msg}</div>}
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  onClick={() => saveJourney('draft')}
+                  disabled={!!busy}
+                  className="e-btn-ghost rounded-full px-5 py-3 text-sm inline-flex items-center gap-2"
+                >{busy==='draft' ? <Loader2 className="size-4 animate-spin"/> : <Save className="size-4" />} Save draft</button>
+                <button
+                  onClick={() => saveJourney('public')}
+                  disabled={!!busy}
+                  className="e-btn-primary rounded-full px-5 py-3 text-sm inline-flex items-center gap-2"
+                >{busy==='public' ? <Loader2 className="size-4 animate-spin"/> : <Send className="size-4" />} {editingId ? 'Update & publish' : 'Publish journey'}</button>
+                {editingId && (
+                  <button
+                    onClick={() => { setEditingId(''); setForm(emptyForm()); setMsg(''); }}
+                    className="e-btn-ghost rounded-full px-5 py-3 text-sm inline-flex items-center gap-2"
+                  ><X className="size-4" /> Cancel edit</button>
+                )}
+              </div>
+            </div>
+
+            {/* Side panel with Journey Orchestra */}
+            <aside className="e-glass rounded-3xl p-6">
+              <div className="e-chip"><Sparkles className="size-3 text-emerald-300" /> Journey Orchestra</div>
+              <h3 className="font-semibold mt-3">Complete your journey</h3>
+              <p className="mt-2 text-xs" style={{ color: 'var(--e-text-muted)' }}>Add real services from Marketplace after publishing.</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {ORCHESTRA_SERVICES.map(s => (
+                  <Link key={s.id} href={s.href} className="e-glass rounded-xl p-3 hover:-translate-y-0.5 transition text-xs">
+                    <s.icon className="size-4 text-emerald-300" />
+                    <div className="mt-1 font-semibold">{s.label}</div>
+                    <div className="opacity-70">{s.desc}</div>
+                  </Link>
+                ))}
+              </div>
+            </aside>
+          </div>
+        </section>
+      )}
+
+      {/* ---------------- MY JOURNEYS ---------------- */}
+      {tab === 'mine' && (
+        <section className="relative e-container pb-16">
+          <div className="flex items-end justify-between mb-5">
+            <div>
+              <div className="e-chip"><Route className="size-3 text-emerald-300" /> My Journeys</div>
+              <h2 className="display text-2xl md:text-3xl font-bold mt-3">Your trips</h2>
+            </div>
+            <button onClick={() => { setEditingId(''); setForm(emptyForm()); setTab('create'); }} className="e-btn-primary rounded-full px-4 py-2 text-sm inline-flex items-center gap-1.5"><Plus className="size-4" /> New</button>
+          </div>
+          {!user && <div className="e-glass rounded-3xl p-8 text-center">Please <Link href="/?auth=1" className="e-grad-text font-semibold">sign in</Link> to view your journeys.</div>}
+          {user && mineLoading && <div className="text-center py-8"><Loader2 className="size-6 animate-spin mx-auto text-white/60" /></div>}
+          {user && !mineLoading && mine.length === 0 && (
+            <div className="e-glass rounded-3xl p-8 text-center">
+              <div className="e-chip mx-auto">✨ Nothing yet</div>
+              <p className="mt-4" style={{ color: 'var(--e-text-muted)' }}>Create your first journey — save as draft or publish for the community.</p>
+            </div>
+          )}
+          {user && mine.length > 0 && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {mine.map(j => (
+                <div key={j.id} className="e-card e-lift-in">
+                  {j.cover && <div className="e-card-media relative"><Image src={j.cover} alt={j.name} fill sizes="(min-width:1024px) 33vw, 100vw" className="object-cover" unoptimized /></div>}
+                  <div className="p-5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <BadgeChip type={j.visibility === 'public' ? 'new' : 'warn'}>{j.visibility}</BadgeChip>
+                      {j.difficulty && <span className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>{j.difficulty}</span>}
+                    </div>
+                    <div className="font-semibold line-clamp-2">{j.name}</div>
+                    <div className="text-[11px] mt-1" style={{ color: 'var(--e-text-muted)' }}>{j.destination?.name || 'Kashmir'} · {j.maxMembers} seats</div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <Link href={`/explore/j/${j.slug}`} className="e-btn-ghost rounded-full px-3 py-1.5 text-[11px] inline-flex items-center gap-1"><Eye className="size-3" /> View</Link>
+                      <button onClick={() => { setEditingId(j.id); setForm({ name: j.name, description: j.description||'', cover: j.cover||'', destination: j.destination||{name:'Kashmir',country:'India'}, startDate: j.startDate ? String(j.startDate).slice(0,10) : '', endDate: j.endDate ? String(j.endDate).slice(0,10) : '', maxMembers: j.maxMembers||6, budget: j.budget||40000, theme: j.theme||'weekend_escape', difficulty: j.difficulty||'moderate', type: JOURNEY_TYPES.find(t=>t.theme===j.theme)?.id||'journey' }); setTab('create'); }} className="e-btn-ghost rounded-full px-3 py-1.5 text-[11px] inline-flex items-center gap-1"><Edit3 className="size-3" /> Edit</button>
+                      {j.visibility !== 'public' && <button onClick={() => publishExisting(j.id)} className="e-btn-primary rounded-full px-3 py-1.5 text-[11px] inline-flex items-center gap-1"><Send className="size-3" /> Publish</button>}
+                      <button onClick={() => deleteJourney(j.id)} className="e-btn-ghost rounded-full px-3 py-1.5 text-[11px] inline-flex items-center gap-1 text-rose-300"><Trash2 className="size-3" /> Delete</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ---------------- AI TRIP PLANNER (kept from previous version) ---------------- */}
+      {tab === 'planner' && (
+        <section className="relative e-container pb-24">
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 e-glass rounded-3xl p-6 md:p-8">
-              <h3 className="font-semibold text-lg">Trip details</h3>
-              <p className="text-white/60 text-sm mt-1">Give Journey Studio a few hints — draft, edit and share with your travel tribe.</p>
+              <h3 className="font-semibold text-lg">AI trip inputs</h3>
+              <p className="text-white/60 text-sm mt-1">Get a starter itinerary, packing list or budget breakdown in seconds.</p>
               <div className="grid sm:grid-cols-2 gap-4 mt-6">
-                <Field label="Destination"><input value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} className="e-input" /></Field>
-                <Field label="Days"><input type="number" min="1" max="30" value={form.days} onChange={e => setForm({ ...form, days: Number(e.target.value) })} className="e-input" /></Field>
-                <Field label="Travelers"><input type="number" min="1" max="20" value={form.travelers} onChange={e => setForm({ ...form, travelers: Number(e.target.value) })} className="e-input" /></Field>
-                <Field label="Total budget (₹)"><input type="number" min="5000" value={form.budget} onChange={e => setForm({ ...form, budget: Number(e.target.value) })} className="e-input" /></Field>
-                <Field label="Style">
-                  <select value={form.style} onChange={e => setForm({ ...form, style: e.target.value })} className="e-input">
-                    <option value="budget">Budget • backpacker</option>
-                    <option value="balanced">Balanced • mid-range</option>
-                    <option value="premium">Premium • boutique</option>
-                    <option value="luxury">Luxury • personal service</option>
+                <Field label="Destination"><input value={pForm.destination} onChange={e => setPForm({ ...pForm, destination: e.target.value })} className="e-input" /></Field>
+                <Field label="Days"><input type="number" min="1" max="30" value={pForm.days} onChange={e => setPForm({ ...pForm, days: Number(e.target.value) })} className="e-input" /></Field>
+                <Field label="Travelers"><input type="number" min="1" max="20" value={pForm.travelers} onChange={e => setPForm({ ...pForm, travelers: Number(e.target.value) })} className="e-input" /></Field>
+                <Field label="Total budget (₹)"><input type="number" min="5000" value={pForm.budget} onChange={e => setPForm({ ...pForm, budget: Number(e.target.value) })} className="e-input" /></Field>
+                <Field label="Style" full>
+                  <select value={pForm.style} onChange={e => setPForm({ ...pForm, style: e.target.value })} className="e-input">
+                    <option value="budget">Budget · backpacker</option>
+                    <option value="balanced">Balanced · mid-range</option>
+                    <option value="premium">Premium · boutique</option>
+                    <option value="luxury">Luxury · personal service</option>
                   </select>
                 </Field>
               </div>
               <div className="mt-6 grid sm:grid-cols-3 gap-3">
-                <button onClick={genItinerary} disabled={!!loading} className="e-btn-primary rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2">{loading==='itin' ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Generate itinerary</button>
-                <button onClick={genPacking} disabled={!!loading} className="e-btn-ghost rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2">{loading==='pack' ? <Loader2 className="size-4 animate-spin" /> : <Backpack className="size-4" />} Packing list</button>
-                <button onClick={genBudget} disabled={!!loading} className="e-btn-ghost rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2">{loading==='bud' ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />} Budget breakdown</button>
+                <button onClick={() => genAI('itin')} disabled={aiLoading} className="e-btn-primary rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2">{aiLoading && aiKind==='itin' ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Itinerary</button>
+                <button onClick={() => genAI('pack')} disabled={aiLoading} className="e-btn-ghost rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2">{aiLoading && aiKind==='pack' ? <Loader2 className="size-4 animate-spin" /> : <Backpack className="size-4" />} Packing</button>
+                <button onClick={() => genAI('bud')}  disabled={aiLoading} className="e-btn-ghost rounded-full px-5 py-3 text-sm inline-flex items-center justify-center gap-2">{aiLoading && aiKind==='bud'  ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />} Budget</button>
               </div>
-            </div>
-            <div className="e-glass rounded-3xl p-6">
-              <h3 className="font-semibold text-lg">Save & sync</h3>
-              <p className="text-white/60 text-sm mt-2 leading-relaxed">Sign in to save this trip to your Passport, invite friends, and turn it into a public journey travelers can join.</p>
-              {user ? (
-                <div className="mt-5 e-chip"><Check className="size-3 text-emerald-300" /> Signed in · {user.name || user.email}</div>
-              ) : (
-                <Link href="/?auth=1" className="mt-5 e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2"><Sparkles className="size-4" /> Sign in to sync</Link>
+              {aiOut && (
+                <div className="mt-6 whitespace-pre-wrap text-sm leading-relaxed p-5 rounded-2xl bg-white/[0.04] border border-white/10" style={{ color: 'var(--e-text-muted)' }}>{aiOut}</div>
               )}
-              <div className="mt-6">
-                <div className="text-[10px] uppercase tracking-[0.22em] text-white/50">Related</div>
-                <Link href="/build-trip" className="mt-2 flex items-center justify-between p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] transition">
-                  <div><div className="text-sm font-semibold">Build My Trip</div><div className="text-xs text-white/55">The classic step-by-step wizard</div></div>
-                  <ArrowRight className="size-4 text-white/60" />
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'itinerary' && (
-          <div className="e-glass rounded-3xl p-6 md:p-8 e-fade-in">
-            <div className="flex items-center justify-between gap-3">
-              <div><h3 className="font-semibold text-lg flex items-center gap-2"><Sparkles className="size-4 text-emerald-300" /> Itinerary draft</h3><p className="text-white/60 text-sm mt-1">A curated day-by-day plan tailored to your inputs.</p></div>
-              <button onClick={genItinerary} disabled={!!loading} className="e-btn-ghost rounded-full px-4 py-2 text-xs inline-flex items-center gap-2">{loading==='itin' ? <Loader2 className="size-3 animate-spin" /> : <Wand2 className="size-3" />} Regenerate</button>
-            </div>
-            <div className="mt-5 whitespace-pre-wrap text-sm text-white/85 leading-relaxed">
-              {itinerary || <EmptyPrompt onGenerate={genItinerary} loading={loading==='itin'} label="Generate my itinerary" />}
-            </div>
-          </div>
-        )}
-
-        {tab === 'packing' && (
-          <div className="grid lg:grid-cols-2 gap-5 e-fade-in">
-            <div className="e-glass rounded-3xl p-6">
-              <h3 className="font-semibold text-lg"><Backpack className="inline size-4 text-emerald-300 mr-2" /> Packing list</h3>
-              <div className="mt-5 whitespace-pre-wrap text-sm text-white/85 leading-relaxed">
-                {packing || <EmptyPrompt onGenerate={genPacking} loading={loading==='pack'} label="Generate packing list" />}
-              </div>
             </div>
             <div className="e-glass rounded-3xl p-6">
-              <h3 className="font-semibold text-lg">Starter checklist</h3>
-              <p className="text-white/60 text-sm mt-1">Quick defaults — tick as you pack.</p>
-              <div className="mt-4 space-y-4">
-                {DEFAULT_PACKING.map(g => (
-                  <div key={g.c}>
-                    <div className="text-[10px] uppercase tracking-[0.22em] text-white/50">{g.c}</div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      {g.items.map(it => (
-                        <label key={it} className="flex items-center gap-2 text-sm text-white/85"><input type="checkbox" className="accent-emerald-400" /> {it}</label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <div className="e-chip"><FileText className="size-3 text-emerald-300" /> Ready to publish?</div>
+              <p className="mt-3 text-sm" style={{ color: 'var(--e-text-muted)' }}>Turn your plan into a real journey and let travelers join you.</p>
+              <button onClick={() => setTab('create')} className="mt-4 e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2"><Plus className="size-4" /> Create journey</button>
             </div>
           </div>
-        )}
+        </section>
+      )}
 
-        {tab === 'budget' && (
-          <div className="e-glass rounded-3xl p-6 md:p-8 e-fade-in">
-            <h3 className="font-semibold text-lg"><Wallet className="inline size-4 text-emerald-300 mr-2" /> Budget breakdown</h3>
-            <div className="mt-5 whitespace-pre-wrap text-sm text-white/85 leading-relaxed">
-              {budgetOut || <EmptyPrompt onGenerate={genBudget} loading={loading==='bud'} label="Generate budget" />}
-            </div>
-          </div>
-        )}
-
-        {tab === 'timeline' && (
-          <div className="e-glass rounded-3xl p-6 md:p-8 e-fade-in">
-            <h3 className="font-semibold text-lg"><Clock className="inline size-4 text-emerald-300 mr-2" /> Timeline</h3>
-            <div className="mt-6 space-y-4">
-              {Array.from({ length: Math.min(form.days, 7) }).map((_, i) => (
-                <div key={i} className="flex gap-4">
-                  <div className="size-10 shrink-0 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] font-bold text-sm">{i+1}</div>
-                  <div className="flex-1 e-glass-dark rounded-2xl p-4">
-                    <div className="font-semibold text-sm">Day {i+1}</div>
-                    <div className="text-xs text-white/60 mt-1">Placeholder — generate an Itinerary draft to auto-populate.</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === 'saved' && (
-          <div className="e-glass rounded-3xl p-6 md:p-8 e-fade-in">
-            <h3 className="font-semibold text-lg"><MapPin className="inline size-4 text-emerald-300 mr-2" /> Saved places</h3>
-            <div className="mt-5 flex gap-2">
-              <input value={savedInput} onChange={e => setSavedInput(e.target.value)} onKeyDown={e => { if (e.key==='Enter' && savedInput.trim()) { setSaved(s => [...s, { name: savedInput.trim(), tag: 'Custom' }]); setSavedInput(''); } }} placeholder="Add a place — e.g. Chandanwari" className="e-input flex-1" />
-              <button onClick={() => { if (savedInput.trim()) { setSaved(s => [...s, { name: savedInput.trim(), tag: 'Custom' }]); setSavedInput(''); } }} className="e-btn-primary rounded-full px-4 text-sm inline-flex items-center gap-1"><Plus className="size-4" /> Add</button>
-            </div>
-            <div className="mt-4 grid sm:grid-cols-2 gap-3">
-              {saved.map((s, i) => (
-                <div key={i} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10">
-                  <div><div className="text-sm font-semibold">{s.name}</div><div className="text-[11px] text-white/55">{s.tag}</div></div>
-                  <button onClick={() => setSaved(saved.filter((_, j) => j !== i))} className="text-white/50 hover:text-rose-300 transition"><Trash2 className="size-4" /></button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* JOURNEY ORCHESTRA — Complete your journey via Marketplace */}
-        <div className="mt-10">
-          <div className="e-chip"><Sparkles className="size-3 text-emerald-300" /> Journey Orchestra</div>
-          <h3 className="display text-2xl md:text-3xl font-bold mt-3">Complete your journey</h3>
-          <p className="mt-2 text-sm max-w-2xl leading-relaxed" style={{ color: 'var(--e-text-muted)' }}>
-            Add real services from the Safar Marketplace directly to your plan. Booking, payments and reviews stay in one place.
-          </p>
-          <div className="mt-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 md:gap-4">
-            {ORCHESTRA_SERVICES.map(s => (
-              <Link key={s.id} href={s.href} className="e-glass rounded-2xl p-4 flex items-start gap-3 hover:-translate-y-0.5 transition group">
-                <div className="size-10 rounded-xl bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] shrink-0"><s.icon className="size-5" strokeWidth={2.4} /></div>
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm">Add {s.label}</div>
-                  <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--e-text-dim)' }}>{s.desc}</div>
-                  <div className="mt-2 inline-flex items-center gap-1 text-xs e-grad-text font-semibold">Marketplace <ArrowRight className="size-3" /></div>
-                </div>
-              </Link>
-            ))}
-          </div>
-          {user && (
-            <div className="mt-6 e-glass rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-sm" style={{ color: 'var(--e-text-muted)' }}>
-                <span className="font-semibold" style={{ color: 'var(--e-text)' }}>Publish your journey</span> — invite friends or open it to the community. Members can either use your selections or pick their own Marketplace bookings.
-              </div>
-              <button className="e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2"><Route className="size-4" /> Publish</button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <style jsx>{`.e-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:10px 14px;color:white;font-size:14px;width:100%;outline:none;transition:border-color .2s}.e-input:focus{border-color:rgba(255,255,255,.35)}.e-input option{background:#0a0e1a;color:white}`}</style>
+      <style jsx>{`.e-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:10px 14px;color:white;font-size:14px;width:100%;outline:none;transition:border-color .2s}.e-input:focus{border-color:rgba(255,255,255,.35)}.e-input option{background:#0a0e1a;color:white}textarea.e-input{resize:vertical;font-family:inherit}`}</style>
     </div>
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, full }) {
   return (
-    <label className="block">
+    <label className={`block ${full ? 'sm:col-span-2' : ''}`}>
       <div className="text-[10px] uppercase tracking-[0.22em] text-white/55 mb-1.5">{label}</div>
       {children}
     </label>
-  );
-}
-function EmptyPrompt({ onGenerate, loading, label }) {
-  return (
-    <div className="text-center py-10 text-white/60">
-      <div className="e-chip mx-auto"><Sparkles className="size-3 text-emerald-300" /> Nothing here yet</div>
-      <p className="mt-4">Fill in your trip details and let Journey Studio draft this section for you.</p>
-      <button onClick={onGenerate} disabled={loading} className="mt-4 e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2">{loading ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />} {label}</button>
-    </div>
   );
 }

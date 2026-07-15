@@ -119,6 +119,98 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+# ---------------------------------------------------------------------------
+# MODULE 1 (July 2025) — Journey + Community core wiring
+# ---------------------------------------------------------------------------
+module1_journey_community:
+  - task: "Explore Module 1 — Journey full CRUD + Community core (posts/like/comment/bookmark/report)"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js, /app/app/explore/(social)/journey/page.js, /app/app/explore/(social)/community/page.js, /app/app/explore/(social)/home/page.js, /app/app/explore/(social)/j/[slug]/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          Scope shipped (10-credit budget, no agents, no test agents, reuse existing UI):
+
+          BACKEND — added inside the existing /circle block of route.js (single
+          insertion, ~200 LOC, no new deps):
+            POST   /circle/journeys/:id/bookmark      toggle bookmark
+            GET    /circle/bookmarks/mine             list my bookmarks (journeys+posts)
+            POST   /circle/posts                      create community post
+            GET    /circle/posts                      list (category, authorId, q filters;
+                                                       attaches liked/bookmarked state)
+            GET    /circle/posts/:id                  get single
+            PUT    /circle/posts/:id                  edit own post
+            DELETE /circle/posts/:id                  delete own post (cascades likes,
+                                                       comments, bookmarks, reports)
+            POST   /circle/posts/:id/like             toggle like
+            POST   /circle/posts/:id/bookmark         toggle bookmark
+            POST   /circle/posts/:id/report           report
+            GET    /circle/posts/:id/comments         list comments
+            POST   /circle/posts/:id/comments         add comment
+            DELETE /circle/posts/:id/comments/:cid    delete own comment
+          Collections: circle_bookmarks, circle_posts, circle_post_likes,
+          circle_post_comments, circle_post_reports. Indexes ensured lazily.
+
+          BACKEND REUSED — journey lifecycle (already present in codebase, no new code
+          needed; wired from UI):
+            POST /circle/journeys (create), PUT /circle/journeys/:id (edit),
+            DELETE /circle/journeys/:id, PATCH /circle/journeys/:id/visibility
+            (publish/draft/archive), GET /circle/journeys (discover),
+            GET /circle/journeys/mine, GET /circle/journeys/id|slug/:x,
+            /join, /leave, /cancel-request, /members, /members/:mid/(accept|decline).
+
+          FRONTEND:
+            /explore/journey/page.js — REWRITTEN as three tabs:
+              (1) Create/Edit Journey — fields: title, destination, district, dates,
+                  budget, seats (maxMembers), difficulty, category (journey type),
+                  cover URL, description. Buttons: Save Draft, Publish (creates or
+                  updates via POST/PUT). Loads existing journey via ?edit=id.
+              (2) My Journeys — lists user's drafts + published (GET /journeys/mine);
+                  each card has View / Edit / Publish / Delete actions.
+              (3) Trip Planner (AI helper, unchanged core, condensed UI).
+            /explore/j/[slug]/page.js — NEW public details page (unavoidable): shows
+              cover, title, destination, dates, budget, description, difficulty,
+              curator, members joined + seats remaining, curator's pending requests
+              queue with Accept/Reject, join/cancel/leave for others. Also Bookmark
+              + Share (native/clipboard) + Publish/Edit/Delete for owner.
+            /explore/community/page.js — REWRITTEN keeping the existing hero and
+              "Meet Travelers" mock cards. New pieces:
+                * Category pills: All / Discussions / Questions / Travel Tips /
+                  Hidden Gems / Meetups / Travelers.
+                * "New post" button opens compose modal (category, title, content,
+                  image URL, location).
+                * Live feed grid backed by /api/circle/posts.
+                * Each post card: like, comment (inline expand with post/read),
+                  bookmark, share (native/clipboard), report; owners see Edit/Delete.
+            /explore/home/page.js — journey cards now link to /explore/j/:slug
+              (was /explore/journey?trip=…). One-line edit.
+
+          NOT TOUCHED (per user constraints):
+            Follow system, User profiles, Search, Admin moderation, AI features,
+            Chat, Passport, QR stamps, Rewards, Challenges, Ride sharing,
+            Marketplace, Notifications, Build My Trip, existing auth/DB models.
+
+          Verification (manual, curl-only, no agents):
+            HTTP 200 on: /explore/home, /explore/community, /explore/journey,
+                         /explore/j/test.
+            Full backend flow curl'd end-to-end: register → create draft journey →
+              publish → get by slug → check members (capacity=6,accepted=1,
+              remaining=5) → bookmark toggle on/off → create post → like → comment →
+              bookmark post → report → list category → delete post → delete journey.
+              All returned {ok:true} with correct state transitions.
+
+          Files modified: 4  (route.js, home/page.js, journey/page.js, community/page.js)
+          Files added:    1  (j/[slug]/page.js — only new page needed)
+          New deps:       0
+          UI redesign:    none (kept existing layout, chips, glass cards, tabs)
+
+
+
 frontend:
   - task: "Explore evolution — Living Travel World, Theme toggle, WanderMatch, Journey Orchestra, Buddy filters"
     implemented: true
