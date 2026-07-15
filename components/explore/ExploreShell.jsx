@@ -17,7 +17,7 @@ export default function ExploreShell({ children }) {
         }}
       />
       <header className="sticky top-0 z-40 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--e-ink) 55%, transparent)', borderColor: 'var(--e-line)' }}>
-        <div className="max-w-7xl mx-auto px-4 md:px-8 h-14 flex items-center justify-between">
+        <div className="e-container h-14 flex items-center justify-between">
           <div className="flex items-center gap-3 shrink-0">
             <Link href="/explore/home" className="inline-flex items-center gap-2 shrink-0">
               <div className="size-7 rounded-lg bg-gradient-to-br from-emerald-300 via-violet-400 to-fuchsia-400 grid place-items-center shadow-lg shadow-violet-500/30">
@@ -46,7 +46,7 @@ export default function ExploreShell({ children }) {
           </div>
         </div>
       </header>
-      <div className="flex justify-center px-2">
+      <div className="e-container flex justify-center">
         <ExploreSubNav />
       </div>
       <main className="relative">{children}</main>

@@ -174,8 +174,9 @@ html:has(.explore-root), body:has(.explore-root) { overflow-x: hidden; max-width
 /* Shared premium content grid — single source of truth for Explore content width.
    All major sections use .e-container so left/right edges align across the entire page,
    while backgrounds stay full-bleed. */
-.e-container { max-width: 1400px; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem; width: 100%; }
-@media (min-width: 768px) { .e-container { padding-left: 1.5rem; padding-right: 1.5rem; } }
+.explore-root .e-container { max-width: 1280px; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem; width: 100%; }
+@media (min-width: 768px) { .explore-root .e-container { padding-left: 1.5rem; padding-right: 1.5rem; } }
+@media (min-width: 1024px) { .explore-root .e-container { padding-left: 2rem; padding-right: 2rem; } }
 
 /* Uniform responsive tile grid — 1 / 2 / 4 columns. Direct children stretch to equal height. */
 .e-tile-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
