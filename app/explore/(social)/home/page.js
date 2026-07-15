@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { Sparkles, ArrowRight, MapPin, Flame, Snowflake, Cloud, CloudSun, Sun, Leaf, TrendingUp, Compass, Users, Camera, Wand2, Mountain, Bike, Car, Utensils, Calendar, MessageCircle, Lightbulb, Route, IdCard, Bookmark, Clock, Send } from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
-import AIPanel from '@/components/explore/AIPanel';
+import CommunityHighlights from '@/components/explore/CommunityHighlights';
 import BadgeChip from '@/components/explore/BadgeChip';
 import { useAuth } from '@/lib/auth-context';
 import { LISTINGS, IMG } from '@/lib/data';
@@ -188,10 +188,10 @@ export default function ExploreHome() {
           ))}
         </div>
         <div className="mt-4">
-          <BadgeChip type="ai">AI recommendation</BadgeChip>
+          <BadgeChip type="new">Community pick</BadgeChip>
           <p className="text-sm mt-2 max-w-3xl leading-relaxed" style={{ color: 'var(--e-text-muted)' }}>
-            Fresh snow in Gulmarg + open roads = perfect ski weekend. Pair with a Nigeen houseboat for the cultural half of your trip.
-            <Link href="/explore?cat=all&location=Gulmarg" className="e-grad-text font-semibold ml-1">Build this trip →</Link>
+            Fresh snow in Gulmarg + open roads = perfect ski weekend, reported by our Gulmarg locals this morning. Pair it with a Nigeen houseboat for the cultural half of your trip.
+            <Link href="/explore?cat=all&location=Gulmarg" className="e-grad-text font-semibold ml-1">Plan this weekend →</Link>
           </p>
         </div>
       </section>
@@ -287,12 +287,13 @@ export default function ExploreHome() {
         </div>
       </section>
 
-      {/* AI concierge inline */}
+      {/* Community Highlights — human-powered replacement for the previous AI concierge panel */}
       <section className="relative e-container pb-24">
-        <AIPanel
-          title="Safar AI — your travel concierge"
-          suggestions={['Best weekend trip for me this week', 'Hidden gems near Srinagar', 'Ski + culture combo, ₹35k, 4 days', 'What festivals are on this month?']}
-          systemHint="You are the Safar Explore concierge. Reply with warm, concise, structured travel advice for Kashmir. Use bullets and ₹ estimates."
+        <CommunityHighlights
+          title="Community Highlights"
+          eyebrow="From real travelers"
+          description="Trending journeys, popular stories, hidden gems and upcoming meetups — everything you see is shared by people, not algorithms."
+          cta={{ label: 'Open Community', href: '/explore/community' }}
         />
       </section>
     </div>

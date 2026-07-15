@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Users, UserPlus, MessageCircle, MapPin, Sparkles, Filter, Heart, Backpack, Plane, Baby, Baseline as User, Search, Loader2 } from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
 import BadgeChip from '@/components/explore/BadgeChip';
-import AIPanel from '@/components/explore/AIPanel';
+import CommunityHighlights from '@/components/explore/CommunityHighlights';
 import { IMG } from '@/lib/data';
 import { useAuth } from '@/lib/auth-context';
 
@@ -68,12 +68,14 @@ export default function ExploreCommunity() {
         </div>
       </section>
 
-      {/* AI Buddy Match */}
+      {/* Community Highlights — replaces the old AI Buddy Match panel */}
       <section className="relative e-container mb-10">
-        <AIPanel
-          title="Safar AI — Buddy Match"
-          suggestions={['I am solo, 26, want photography-focused trip in Nov', 'We are a couple, love adventure but no crowds', 'Family of 4, kids 6 & 9, week-long relaxed trip']}
-          systemHint="You are a matchmaking travel concierge for Kashmir. Given the traveler's profile, suggest 3 compatible travel-buddy archetypes and 2 group trip ideas with rough budgets in ₹. Bullet points only."
+        <CommunityHighlights
+          variant="buddy"
+          title="Meet your travel tribe"
+          eyebrow="From real travelers"
+          description="Verified profiles, active discussions and open journey seats — real people planning real Kashmir trips right now."
+          cta={{ label: 'Browse travelers', href: '/explore/community' }}
         />
       </section>
 

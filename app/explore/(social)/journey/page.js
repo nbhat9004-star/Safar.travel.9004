@@ -34,7 +34,7 @@ const ORCHESTRA_SERVICES = [
 
 const TABS = [
   { id: 'planner', label: 'Trip Planner', icon: Route },
-  { id: 'itinerary', label: 'AI Itinerary', icon: Sparkles },
+  { id: 'itinerary', label: 'Itinerary', icon: Sparkles },
   { id: 'packing', label: 'Packing', icon: Backpack },
   { id: 'budget', label: 'Budget', icon: Wallet },
   { id: 'timeline', label: 'Timeline', icon: Clock },
@@ -49,8 +49,8 @@ const DEFAULT_PACKING = [
 
 function callAI(message) {
   return fetch('/api/ai-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) })
-    .then(r => r.json()).then(j => j.reply || j.text || 'AI is warming up — try again in a moment.')
-    .catch(() => 'AI is warming up — try again in a moment.');
+    .then(r => r.json()).then(j => j.reply || j.text || 'Journey Studio is warming up — try again in a moment.')
+    .catch(() => 'Journey Studio is warming up — try again in a moment.');
 }
 
 export default function ExploreJourney() {
@@ -96,7 +96,7 @@ export default function ExploreJourney() {
         <div className="relative e-container e-fade-in">
           <div className="e-chip"><Route className="size-3 text-emerald-300" /> Journey</div>
           <h1 className="display font-bold mt-4 text-[clamp(2rem,5.6vw,4rem)] leading-tight max-w-3xl">Design a trip <span className="e-grad-text">worth remembering.</span></h1>
-          <p className="mt-4 text-white/75 max-w-2xl">One place for your itinerary, packing list, budget, timeline and saved places. Powered by Safar AI end-to-end.</p>
+          <p className="mt-4 text-white/75 max-w-2xl">One place for your itinerary, packing list, budget, timeline and saved places. Built by you, shaped by the community.</p>
         </div>
       </section>
 
@@ -126,7 +126,7 @@ export default function ExploreJourney() {
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 e-glass rounded-3xl p-6 md:p-8">
               <h3 className="font-semibold text-lg">Trip details</h3>
-              <p className="text-white/60 text-sm mt-1">Give Safar AI a few hints. It will craft everything else.</p>
+              <p className="text-white/60 text-sm mt-1">Give Journey Studio a few hints — draft, edit and share with your travel tribe.</p>
               <div className="grid sm:grid-cols-2 gap-4 mt-6">
                 <Field label="Destination"><input value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} className="e-input" /></Field>
                 <Field label="Days"><input type="number" min="1" max="30" value={form.days} onChange={e => setForm({ ...form, days: Number(e.target.value) })} className="e-input" /></Field>
@@ -137,7 +137,7 @@ export default function ExploreJourney() {
                     <option value="budget">Budget • backpacker</option>
                     <option value="balanced">Balanced • mid-range</option>
                     <option value="premium">Premium • boutique</option>
-                    <option value="luxury">Luxury • concierge</option>
+                    <option value="luxury">Luxury • personal service</option>
                   </select>
                 </Field>
               </div>
@@ -169,7 +169,7 @@ export default function ExploreJourney() {
         {tab === 'itinerary' && (
           <div className="e-glass rounded-3xl p-6 md:p-8 e-fade-in">
             <div className="flex items-center justify-between gap-3">
-              <div><h3 className="font-semibold text-lg flex items-center gap-2"><Sparkles className="size-4 text-emerald-300" /> AI itinerary</h3><p className="text-white/60 text-sm mt-1">A curated day-by-day plan tailored to your inputs.</p></div>
+              <div><h3 className="font-semibold text-lg flex items-center gap-2"><Sparkles className="size-4 text-emerald-300" /> Itinerary draft</h3><p className="text-white/60 text-sm mt-1">A curated day-by-day plan tailored to your inputs.</p></div>
               <button onClick={genItinerary} disabled={!!loading} className="e-btn-ghost rounded-full px-4 py-2 text-xs inline-flex items-center gap-2">{loading==='itin' ? <Loader2 className="size-3 animate-spin" /> : <Wand2 className="size-3" />} Regenerate</button>
             </div>
             <div className="mt-5 whitespace-pre-wrap text-sm text-white/85 leading-relaxed">
@@ -181,7 +181,7 @@ export default function ExploreJourney() {
         {tab === 'packing' && (
           <div className="grid lg:grid-cols-2 gap-5 e-fade-in">
             <div className="e-glass rounded-3xl p-6">
-              <h3 className="font-semibold text-lg"><Backpack className="inline size-4 text-emerald-300 mr-2" /> AI packing list</h3>
+              <h3 className="font-semibold text-lg"><Backpack className="inline size-4 text-emerald-300 mr-2" /> Packing list</h3>
               <div className="mt-5 whitespace-pre-wrap text-sm text-white/85 leading-relaxed">
                 {packing || <EmptyPrompt onGenerate={genPacking} loading={loading==='pack'} label="Generate packing list" />}
               </div>
@@ -223,7 +223,7 @@ export default function ExploreJourney() {
                   <div className="size-10 shrink-0 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] font-bold text-sm">{i+1}</div>
                   <div className="flex-1 e-glass-dark rounded-2xl p-4">
                     <div className="font-semibold text-sm">Day {i+1}</div>
-                    <div className="text-xs text-white/60 mt-1">Placeholder — generate an AI itinerary to auto-populate.</div>
+                    <div className="text-xs text-white/60 mt-1">Placeholder — generate an Itinerary draft to auto-populate.</div>
                   </div>
                 </div>
               ))}
@@ -296,7 +296,7 @@ function EmptyPrompt({ onGenerate, loading, label }) {
   return (
     <div className="text-center py-10 text-white/60">
       <div className="e-chip mx-auto"><Sparkles className="size-3 text-emerald-300" /> Nothing here yet</div>
-      <p className="mt-4">Fill in your trip details and let Safar AI craft this section for you.</p>
+      <p className="mt-4">Fill in your trip details and let Journey Studio draft this section for you.</p>
       <button onClick={onGenerate} disabled={loading} className="mt-4 e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2">{loading ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />} {label}</button>
     </div>
   );

@@ -72,7 +72,7 @@ export default function ExplorePassport() {
                 <h1 className="display font-bold text-3xl md:text-5xl mt-3 truncate">{user.name || 'Traveler'}</h1>
                 <div className="text-white/60 text-sm mt-1 truncate">{user.email}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <BadgeChip type="ai">Level 3 explorer</BadgeChip>
+                  <BadgeChip type="new">Level 3 explorer</BadgeChip>
                   <BadgeChip type="new">7 trips</BadgeChip>
                   <BadgeChip>Kashmir specialist</BadgeChip>
                 </div>
