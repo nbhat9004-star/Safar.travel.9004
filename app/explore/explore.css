@@ -178,11 +178,45 @@ html:has(.explore-root), body:has(.explore-root) { overflow-x: hidden; max-width
 @media (min-width: 768px) { .explore-root .e-container { padding-left: 1.5rem; padding-right: 1.5rem; } }
 @media (min-width: 1024px) { .explore-root .e-container { padding-left: 2rem; padding-right: 2rem; } }
 
-/* Uniform responsive tile grid — 1 / 2 / 4 columns. Direct children stretch to equal height. */
-.e-tile-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+/* Uniform responsive tile grid — 2 (mobile) / 2 (tablet) / 4 (desktop) columns.
+   Mobile is a dense 2-col dashboard grid (no single-column stack) so short widgets
+   like weather, quick actions and stats read at a glance. Direct children stretch
+   to equal height via flex column. */
+.e-tile-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
 .e-tile-grid > * { height: 100%; display: flex; flex-direction: column; }
-@media (min-width: 640px) { .e-tile-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; } }
+@media (min-width: 640px) { .e-tile-grid { gap: 16px; } }
 @media (min-width: 1024px) { .e-tile-grid { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 20px; } }
+
+/* Mobile horizontal snap carousel — desktop behaves like a normal grid so nothing
+   above the sm breakpoint changes. Used for journeys, stories and story-like
+   content where side-by-side swiping feels natural on a phone. */
+.e-hcarousel {
+  display: flex; gap: 12px;
+  overflow-x: auto; overflow-y: visible;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+  /* Bleed edges to viewport so cards feel like an Apple News / Google Travel rail */
+  margin-left: -1rem; margin-right: -1rem;
+  padding-left: 1rem; padding-right: 1rem;
+}
+.e-hcarousel::-webkit-scrollbar { display: none; }
+.e-hcarousel > * { flex: 0 0 78%; max-width: 320px; scroll-snap-align: start; }
+@media (min-width: 640px) {
+  .e-hcarousel { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 20px; overflow: visible; margin: 0; padding: 0; scroll-snap-type: none; }
+  .e-hcarousel > * { flex: initial; max-width: none; }
+}
+@media (min-width: 1024px) {
+  .e-hcarousel { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; }
+}
+
+/* Mobile: tighter card padding so info density feels editorial, not messaging-app. */
+@media (max-width: 639px) {
+  .explore-root .e-tile-grid .e-glass,
+  .explore-root .e-tile-grid > .e-glass { padding: 12px; border-radius: 16px; }
+  .explore-root .e-tile-grid .rounded-2xl { border-radius: 16px; }
+}
 
 /* Optional section-card wrapper for premium sectioning (rounded, glass, soft border). */
 .e-section-card { padding: 24px; border-radius: 24px; background: var(--e-surface); border: 1px solid var(--e-line); box-shadow: 0 8px 32px -20px rgba(0,0,0,0.5); }

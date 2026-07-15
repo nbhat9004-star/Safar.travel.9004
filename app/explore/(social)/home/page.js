@@ -216,7 +216,7 @@ export default function ExploreHome() {
           ))}
         </div>
         {jLoading ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="e-hcarousel">
             {[1,2,3].map(i => <div key={i} className="e-glass rounded-3xl p-5 h-56 e-skeleton" />)}
           </div>
         ) : journeys.length === 0 ? (
@@ -225,7 +225,7 @@ export default function ExploreHome() {
             <p className="mt-4" style={{ color: 'var(--e-text-muted)' }}>No public journeys yet — be the first. <Link href="/explore/journey" className="e-grad-text font-semibold">Create one →</Link></p>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="e-hcarousel">
             {journeys.map((j) => (
               <Link key={j.id} href={`/explore/journey?trip=${j.slug || j.id}`} className="e-card e-lift-in">
                 {j.coverImage && <div className="e-card-media"><Image src={j.coverImage} alt={j.title} fill sizes="(min-width:1024px) 33vw, 100vw" className="object-cover" /></div>}
