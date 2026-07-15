@@ -168,14 +168,14 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 1 — LIVE KASHMIR */}
-      <section className="relative e-container mb-16 md:mb-24">
+      <section className="relative e-container mb-8">
         <div className="flex items-end justify-between mb-5">
           <div>
             <div className="e-chip"><Sun className="size-3 text-amber-300" /> Live Kashmir</div>
             <h2 className="display text-2xl md:text-3xl font-bold mt-3">Real conditions. Right now.</h2>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <div className="e-tile-grid">
           {LIVE_WIDGETS.map((w) => (
             <Link key={w.id} href={`/explore?location=${encodeURIComponent(w.dest)}`} className="e-glass rounded-2xl p-4 group hover:-translate-y-0.5 transition">
               <div className={`size-10 rounded-xl bg-gradient-to-br ${w.tint} grid place-items-center text-[#06080f]`}>
@@ -197,7 +197,7 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 2 — LIVE JOURNEYS */}
-      <section className="relative e-container mb-16 md:mb-24">
+      <section className="relative e-container mb-8">
         <div className="flex items-end justify-between mb-5 gap-3 flex-wrap">
           <div>
             <div className="e-chip"><Route className="size-3 text-emerald-300" /> Live Journeys</div>
@@ -241,14 +241,14 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 3 — COMMUNITY */}
-      <section className="relative e-container mb-16 md:mb-24">
+      <section className="relative e-container mb-8">
         <div className="flex items-end justify-between mb-5">
           <div>
             <div className="e-chip"><Users className="size-3 text-violet-300" /> Community</div>
             <h2 className="display text-2xl md:text-3xl font-bold mt-3">Travelers, tips & togetherness</h2>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
+        <div className="e-tile-grid">
           {COMMUNITY_TILES.map(t => (
             <Link key={t.title} href={t.href} className="e-glass rounded-2xl p-4 hover:-translate-y-0.5 transition group">
               <t.icon className="size-5 text-emerald-300" />
@@ -260,7 +260,7 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 4 — YOUR JOURNEY */}
-      <section className="relative e-container mb-16 md:mb-24">
+      <section className="relative e-container mb-8">
         <div className="flex items-end justify-between mb-5">
           <div>
             <div className="e-chip"><IdCard className="size-3 text-fuchsia-300" /> Your Journey</div>
@@ -276,7 +276,7 @@ export default function ExploreHome() {
             <Link href="/?auth=1" className="e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2"><Sparkles className="size-4" /> Sign in</Link>
           </div>
         )}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 md:gap-4">
+        <div className="e-tile-grid">
           {YOUR_JOURNEY_TILES.map(t => (
             <Link key={t.title} href={t.href} className="e-glass rounded-2xl p-4 hover:-translate-y-0.5 transition">
               <t.icon className="size-5 text-fuchsia-300" />
