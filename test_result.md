@@ -5731,3 +5731,48 @@ agent_communication:
       - /circle/j/[slug]/plan → workspace preserved; pre-existing gallery syntax error fixed
       
       Also created /app/.env with MONGO_URL (was missing on fresh restart).
+
+
+  - agent: "main"
+    message: |
+      EXPLORE WHITE (PREMIUM) THEME PERFORMANCE + READABILITY BUG FIX
+      
+      Reported: In premium (white/Safar Curated) theme on /explore/home, homepage
+      sections took 2–3 minutes to become visible — every block appearing progressively
+      rather than immediately. Additionally text contrast was poor on light backgrounds
+      and cards looked flat.
+      
+      Root cause identified: every `.e-glass` card in premium theme was running
+      `backdrop-filter: blur(24px) saturate(180%)` over a background containing multiple
+      animated aurora orbs (`.e-aurora`, `.e-orb`) with `blur(60px)` filters + radial
+      gradients. With 30+ glass cards on the home page, the GPU compositor was
+      overwhelmed → browser progressively painted cards over 2–3 minutes.
+      
+      Fix (in /app/app/explore/explore.css, premium block only):
+        1) Removed all backdrop-filter from .e-glass / .e-glass-strong / .e-glass-dark
+           in premium theme. Replaced with solid white → off-white linear-gradient plus
+           multi-layer soft shadows for a premium editorial feel.
+        2) Hid animated `.e-aurora` and `.e-orb` elements in premium theme (they were
+           expensive and clashed with the light background anyway). Kept the two static
+           radial highlights on `.explore-root` for ambient glow (cheap, no animation).
+        3) Kept a modest backdrop-filter only on .e-subnav-inner and .e-bottomnav
+           (blur 14px, single frosted surface, cheap).
+        4) Typography contrast improved: headings now #1F2937 (dark charcoal), muted
+           text 0.72 opacity of #0f172a (darker slate), dim text 0.56 opacity.
+        5) e-chip in premium is now emerald-tinted (#0F3D2E on emerald-8%) with 600
+           weight and wider tracking — LIVE KASHMIR / LIVE JOURNEYS chips are now
+           clearly visible on white.
+        6) e-card and e-glass hover: gets stronger shadow + translateY(-2px) lift for
+           premium feel.
+      
+      Measured post-fix (Playwright, 1440×900 viewport, premium theme active):
+        Load event fired      : 0.51s
+        LIVE KASHMIR chip     : 0.60s
+        Real conditions title : 0.62s
+        Community Highlights  : 0.62s   (bottom-of-page section)
+      All sections render within 1s (well under the 3s target).
+      
+      No routes, backend, APIs, components, or JS logic were touched.
+      Aurora theme completely preserved as opt-in secondary via header toggle.
+      
+      Ready for testing_agent verification.
