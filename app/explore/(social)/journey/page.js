@@ -2,11 +2,35 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Route, Sparkles, Backpack, Wallet, Clock, MapPin, Plus, X, Trash2, Loader2, Wand2, ArrowRight, Check } from 'lucide-react';
+import { Route, Sparkles, Backpack, Wallet, Clock, MapPin, Plus, X, Trash2, Loader2, Wand2, ArrowRight, Check, Camera, Bike, Mountain, Car, Utensils, Users, ShoppingBag } from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
 import BadgeChip from '@/components/explore/BadgeChip';
 import { IMG } from '@/lib/data';
 import { useAuth } from '@/lib/auth-context';
+
+const JOURNEY_TYPES = [
+  { id: 'journey',    label: 'Journey',        icon: Route,     hint: 'A full trip plan' },
+  { id: 'meetup',     label: 'Meetup',         icon: Users,     hint: 'Local gathering' },
+  { id: 'roadtrip',   label: 'Road trip',      icon: Car,       hint: 'Wheels & horizons' },
+  { id: 'photo',      label: 'Photo walk',     icon: Camera,    hint: 'Golden-hour hunts' },
+  { id: 'bike',       label: 'Bike expedition',icon: Bike,      hint: 'Two-wheel epic' },
+  { id: 'camp',       label: 'Camping',        icon: Mountain,  hint: 'Under the stars' },
+  { id: 'weekend',    label: 'Weekend escape', icon: Sparkles,  hint: '48-hour story' },
+  { id: 'food',       label: 'Food trail',     icon: Utensils,  hint: 'Wazwan & beyond' },
+  { id: 'adventure',  label: 'Adventure',      icon: Mountain,  hint: 'Trek / raft / ski' },
+];
+
+const ORCHESTRA_SERVICES = [
+  { id: 'stay',      label: 'Accommodation', icon: MapPin,    href: '/explore?cat=all',       desc: 'Houseboats, cabins, cottages' },
+  { id: 'bike',      label: 'Bike rental',    icon: Bike,      href: '/explore?cat=transport', desc: 'Royal Enfield, Himalayan' },
+  { id: 'car',       label: 'Car rental',     icon: Car,       href: '/explore?cat=transport', desc: 'Sedans, SUVs, drivers' },
+  { id: 'guide',     label: 'Guide',          icon: Users,     href: '/explore?cat=tour',      desc: 'Certified locals' },
+  { id: 'camp',      label: 'Camping',        icon: Mountain,  href: '/explore?cat=camp',      desc: 'Glacier & meadow camps' },
+  { id: 'pickup',    label: 'Airport pickup', icon: Car,       href: '/explore?cat=transport', desc: '24/7 meet & greet' },
+  { id: 'exp',       label: 'Experiences',    icon: Sparkles,  href: '/explore?cat=experience',desc: 'Shikara, Wazwan, culture' },
+  { id: 'food',      label: 'Restaurants',    icon: Utensils,  href: '/explore?cat=experience',desc: 'Curated wazwan houses' },
+  { id: 'shop',      label: 'Shopping',       icon: ShoppingBag,href:'/explore?cat=shopping',  desc: 'Handicrafts, saffron, shawls' },
+];
 
 const TABS = [
   { id: 'planner', label: 'Trip Planner', icon: Route },
@@ -32,7 +56,7 @@ function callAI(message) {
 export default function ExploreJourney() {
   const { user } = useAuth();
   const [tab, setTab] = useState('planner');
-  const [form, setForm] = useState({ destination: 'Kashmir', days: 5, budget: 40000, style: 'balanced', travelers: 2 });
+  const [form, setForm] = useState({ destination: 'Kashmir', days: 5, budget: 40000, style: 'balanced', travelers: 2, type: 'journey' });
   const [itinerary, setItinerary] = useState('');
   const [packing, setPacking] = useState('');
   const [budgetOut, setBudgetOut] = useState('');
@@ -78,6 +102,15 @@ export default function ExploreJourney() {
 
       {/* Tabs */}
       <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-6">
+        {/* Journey type selector */}
+        <div className="e-chip mb-3"><Sparkles className="size-3 text-emerald-300" /> Journey type</div>
+        <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1 mb-5">
+          {JOURNEY_TYPES.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setForm({ ...form, type: id })} className={`shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${form.type===id ? 'e-btn-primary border-transparent' : 'e-btn-ghost'}`} aria-pressed={form.type===id}>
+              <Icon className="size-3.5" /> {label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)} className={`shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${tab===id ? 'e-btn-primary border-transparent' : 'bg-white/[0.04] border-white/10 text-white/75 hover:bg-white/[0.08] hover:text-white'}`}>
@@ -215,6 +248,35 @@ export default function ExploreJourney() {
             </div>
           </div>
         )}
+
+        {/* JOURNEY ORCHESTRA — Complete your journey via Marketplace */}
+        <div className="mt-10">
+          <div className="e-chip"><Sparkles className="size-3 text-emerald-300" /> Journey Orchestra</div>
+          <h3 className="display text-2xl md:text-3xl font-bold mt-3">Complete your journey</h3>
+          <p className="mt-2 text-sm max-w-2xl leading-relaxed" style={{ color: 'var(--e-text-muted)' }}>
+            Add real services from the Safar Marketplace directly to your plan. Booking, payments and reviews stay in one place.
+          </p>
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3 md:gap-4">
+            {ORCHESTRA_SERVICES.map(s => (
+              <Link key={s.id} href={s.href} className="e-glass rounded-2xl p-4 flex items-start gap-3 hover:-translate-y-0.5 transition group">
+                <div className="size-10 rounded-xl bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] shrink-0"><s.icon className="size-5" strokeWidth={2.4} /></div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm">Add {s.label}</div>
+                  <div className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--e-text-dim)' }}>{s.desc}</div>
+                  <div className="mt-2 inline-flex items-center gap-1 text-xs e-grad-text font-semibold">Marketplace <ArrowRight className="size-3" /></div>
+                </div>
+              </Link>
+            ))}
+          </div>
+          {user && (
+            <div className="mt-6 e-glass rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-sm" style={{ color: 'var(--e-text-muted)' }}>
+                <span className="font-semibold" style={{ color: 'var(--e-text)' }}>Publish your journey</span> — invite friends or open it to the community. Members can either use your selections or pick their own Marketplace bookings.
+              </div>
+              <button className="e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2"><Route className="size-4" /> Publish</button>
+            </div>
+          )}
+        </div>
       </section>
 
       <style jsx>{`.e-input{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:10px 14px;color:white;font-size:14px;width:100%;outline:none;transition:border-color .2s}.e-input:focus{border-color:rgba(255,255,255,.35)}.e-input option{background:#0a0e1a;color:white}`}</style>

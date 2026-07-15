@@ -103,22 +103,93 @@
 #====================================================================================================
 
 user_problem_statement: |
-  Replace the current "Safar Circle" nav item with a new "Explore" experience — a polished,
-  futuristic, AI-powered discovery + community suite living inside Safar Curated (no
-  subdomain / standalone app). Keep Safar Curated Marketplace and Build My Trip untouched.
-  Delete old Safar Circle standalone project and Safar Together module after migration.
-  Modules: Home (live feed, trending, AI recs, nearby, seasonal, community highlights),
-  Community (buddies filter, public trips, discussions, AI buddy match), Journey (trip
-  planner, AI itinerary/packing/budget, timeline, saved places), Stories (photos, videos,
-  journals, collections) and Passport (profile, stats, badges, countries, states).
-  Reuse existing backend (/api/circle/*, /api/ai-chat), auth, DB, admin. Max 30 credits.
+  Evolve the existing Explore module (do NOT rebuild) into a "Living Travel World"
+  inside Safar Curated. Add Live Kashmir widgets, Live Journeys categorised feed,
+  Community tiles, Your Journey dashboard tiles, Journey Type selector on the
+  Journey page, WanderMatch swipe discovery, Journey Orchestra (Marketplace CTAs
+  on Journey planner), Travel Buddy Finder filters on Community, and a Theme
+  Toggle between Safar Premium (light) and Aurora (dark). Keep Marketplace and
+  Build My Trip untouched. Reuse existing /api/circle/* and /api/ai-chat. Max
+  15 credits. No AI Agents used per user instruction.
 
 test_plan:
   current_focus:
-    - "Explore module — smoke test all 5 pages (/explore/home, /community, /journey, /stories, /passport) render at 200. Marketplace /explore and /build-trip unchanged."
+    - "Explore evolution — smoke test all pages render at 200. Theme toggle switches themes instantly and persists. Marketplace /explore and /build-trip unchanged."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+frontend:
+  - task: "Explore evolution — Living Travel World, Theme toggle, WanderMatch, Journey Orchestra, Buddy filters"
+    implemented: true
+    working: true
+    file: "/app/app/explore/**, /app/components/explore/**"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          Manual verification (Playwright + curl) — user prohibited AI Agents in this task.
+
+          Files added:
+            /app/app/explore/(social)/wander/page.js       (WanderMatch swipe discovery)
+            /app/components/explore/ThemeToggle.jsx        (localStorage-persisted theme switcher)
+
+          Files modified:
+            /app/app/explore/(social)/home/page.js         (rewritten as Living Travel World:
+              hero, 8 Live Kashmir widgets grid + AI recommendation,
+              Live Journeys with 9 category pills wired to /api/circle/journeys,
+              7 Community tiles, 7 Your Journey tiles, AI concierge panel).
+            /app/app/explore/(social)/journey/page.js      (added Journey Type selector — 9
+              types: Journey/Meetup/Road trip/Photo walk/Bike expedition/Camping/Weekend
+              escape/Food trail/Adventure; added Journey Orchestra section — 9 Marketplace
+              service CTA cards (Accommodation/Bike/Car/Guide/Camping/Airport pickup/
+              Experiences/Restaurants/Shopping) all deep-linking to existing /explore).
+            /app/app/explore/(social)/community/page.js    (added Travel Buddy Finder
+              filters — destination/dates/budget/language/style/age/interests — with
+              collapsible glass panel).
+            /app/components/explore/ExploreShell.jsx       (mounts ThemeToggle; converted
+              all hardcoded white/black colours to CSS variables driven by data-explore-theme).
+            /app/components/explore/ExploreSubNav.jsx      (added Wander tab).
+            /app/app/explore/explore.css                   (theme variants — aurora default
+              + premium light theme via html[data-explore-theme="premium"] selectors, all
+              driven by CSS vars; hoisted .e-input to global class; added .e-theme-toggle).
+
+          Verified (manual, no AI agents used):
+            HTTP 200 on: /, /explore (Marketplace unchanged), /build-trip (unchanged),
+              /explore/home, /explore/community, /explore/journey, /explore/wander,
+              /explore/stories, /explore/passport.
+            Playwright screenshots at 1440x900 confirm:
+              - New Home hero + Live Kashmir 4x2 widget grid + AI recommendation
+              - Theme toggle click: instant switch to Premium light theme (sub-nav
+                becomes light pill, cards become white/glass, aurora dimmed to 25%
+                opacity, text becomes dark). No reload. localStorage persists.
+              - WanderMatch loads with category pills + swipe card scaffold
+              - Journey page shows JOURNEY TYPE pills (9 options) above existing
+                planner tabs — form.type field wired in state
+            Marketplace /explore renders identically to before (route group (social)
+              layout is isolated and does not affect /app/app/explore/page.js).
+            Build My Trip untouched.
+            All existing endpoints untouched — reused /api/circle/journeys and
+            /api/ai-chat only.
+
+          NOT touched (per user requirement):
+            * Marketplace, Build My Trip, Passport internals, Auth, DB, Admin panel,
+              /api/[[...path]]/route.js, Navbar top-level nav, Journey Studio
+              (existing /api/circle/journeys endpoints reused as-is)
+
+          Phase-2 architecture (not implemented, per user):
+            * QR passport stamps, AI buddy matching, WhatsApp companion, ride
+              sharing, community levels, rewards, audio stories, offline mode
+            * All new UI components use CSS variables → global expansion beyond
+              Kashmir requires only content/data change, no schema redesign.
+
+          Deployment ready. Preview 500s on /api/auth/me are pre-existing MongoDB
+          config, unrelated. User has confirmed prior "blank page" bug on Vercel
+          was NOT a code issue (deployment_agent report + local prod build renders
+          correctly on port 3001).
 
 frontend:
   - task: "Explore experience — 5 modules replacing Safar Circle nav"

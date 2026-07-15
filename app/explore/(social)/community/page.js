@@ -40,6 +40,10 @@ export default function ExploreCommunity() {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
+  // Travel Buddy Finder filters
+  const [flt, setFlt] = useState({ destination: '', dates: '', budget: '', language: '', style: '', age: '', interests: '' });
+  const [showFlt, setShowFlt] = useState(false);
+
   useEffect(() => {
     let cancel = false;
     fetch('/api/circle/journeys?limit=8').then(r => r.json()).then(j => {
@@ -74,7 +78,30 @@ export default function ExploreCommunity() {
       </section>
 
       {/* Type filter */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-6">
+      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-4">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+          <div className="e-chip"><Users className="size-3 text-emerald-300" /> Travel Buddy Finder</div>
+          <button onClick={() => setShowFlt(v => !v)} className="text-xs inline-flex items-center gap-1.5 e-btn-ghost rounded-full px-3 py-1.5"><Filter className="size-3.5" /> {showFlt ? 'Hide filters' : 'Show filters'}</button>
+        </div>
+        {showFlt && (
+          <div className="e-glass rounded-2xl p-4 md:p-5 mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <label className="text-xs"><span className="uppercase tracking-[0.22em] block mb-1" style={{ color: 'var(--e-text-dim)' }}>Destination</span><input value={flt.destination} onChange={e => setFlt({ ...flt, destination: e.target.value })} placeholder="Srinagar, Gulmarg…" className="e-input" /></label>
+            <label className="text-xs"><span className="uppercase tracking-[0.22em] block mb-1" style={{ color: 'var(--e-text-dim)' }}>Dates</span><input type="text" value={flt.dates} onChange={e => setFlt({ ...flt, dates: e.target.value })} placeholder="Dec 12–19" className="e-input" /></label>
+            <label className="text-xs"><span className="uppercase tracking-[0.22em] block mb-1" style={{ color: 'var(--e-text-dim)' }}>Budget (₹)</span><input type="text" value={flt.budget} onChange={e => setFlt({ ...flt, budget: e.target.value })} placeholder="₹20k – ₹60k" className="e-input" /></label>
+            <label className="text-xs"><span className="uppercase tracking-[0.22em] block mb-1" style={{ color: 'var(--e-text-dim)' }}>Language</span><input value={flt.language} onChange={e => setFlt({ ...flt, language: e.target.value })} placeholder="English, Hindi, Urdu" className="e-input" /></label>
+            <label className="text-xs"><span className="uppercase tracking-[0.22em] block mb-1" style={{ color: 'var(--e-text-dim)' }}>Travel style</span>
+              <select value={flt.style} onChange={e => setFlt({ ...flt, style: e.target.value })} className="e-input"><option value="">Any</option><option>Backpacker</option><option>Balanced</option><option>Premium</option><option>Luxury</option></select>
+            </label>
+            <label className="text-xs"><span className="uppercase tracking-[0.22em] block mb-1" style={{ color: 'var(--e-text-dim)' }}>Age</span>
+              <select value={flt.age} onChange={e => setFlt({ ...flt, age: e.target.value })} className="e-input"><option value="">Any</option><option>18–25</option><option>26–35</option><option>36–45</option><option>46+</option></select>
+            </label>
+            <label className="text-xs col-span-2"><span className="uppercase tracking-[0.22em] block mb-1" style={{ color: 'var(--e-text-dim)' }}>Interests</span><input value={flt.interests} onChange={e => setFlt({ ...flt, interests: e.target.value })} placeholder="Photography · Trekking · Food" className="e-input" /></label>
+            <div className="col-span-2 md:col-span-4 flex gap-2 justify-end">
+              <button onClick={() => setFlt({ destination: '', dates: '', budget: '', language: '', style: '', age: '', interests: '' })} className="text-xs e-btn-ghost rounded-full px-4 py-1.5">Clear</button>
+              <button className="text-xs e-btn-primary rounded-full px-4 py-1.5 inline-flex items-center gap-1"><Sparkles className="size-3" /> Find matches</button>
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1">
           {TYPES.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setType(id)} className={`shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${type===id ? 'e-btn-primary border-transparent' : 'bg-white/[0.04] border-white/10 text-white/75 hover:bg-white/[0.08] hover:text-white'}`}>

@@ -1,5 +1,6 @@
 /* Explore — premium futuristic design language (isolated) */
 
+/* Theme variants: aurora (dark, default) and premium (light, matches Safar Curated) */
 .explore-root {
   --e-ink: #0a0e1a;
   --e-ink-2: #10162a;
@@ -10,7 +11,12 @@
   --e-accent-2: #a78bfa;
   --e-accent-3: #f0abfc;
   --e-gold: #f7d271;
-  color: white;
+  --e-text: #ffffff;
+  --e-text-muted: rgba(255,255,255,0.75);
+  --e-text-dim: rgba(255,255,255,0.55);
+  --e-surface: rgba(255,255,255,0.06);
+  --e-surface-strong: rgba(255,255,255,0.10);
+  color: var(--e-text);
   background:
     radial-gradient(1200px 800px at 90% -10%, rgba(167,139,250,0.28), transparent 60%),
     radial-gradient(900px 700px at -10% 15%, rgba(110,231,183,0.22), transparent 65%),
@@ -20,6 +26,43 @@
   min-height: 100vh;
   font-family: var(--font-inter), system-ui, sans-serif;
 }
+
+/* Premium (light) theme — matches Safar Curated marketplace look */
+html[data-explore-theme="premium"] .explore-root {
+  --e-text: #1a1f2e;
+  --e-text-muted: rgba(26,31,46,0.72);
+  --e-text-dim: rgba(26,31,46,0.5);
+  --e-line: rgba(26,31,46,0.08);
+  --e-line-strong: rgba(26,31,46,0.15);
+  --e-surface: rgba(255,255,255,0.75);
+  --e-surface-strong: rgba(255,255,255,0.92);
+  color: var(--e-text);
+  background:
+    radial-gradient(1200px 700px at 90% -10%, rgba(15,61,46,0.10), transparent 60%),
+    radial-gradient(900px 600px at -10% 15%, rgba(247,210,113,0.14), transparent 65%),
+    linear-gradient(180deg, #f7f6f2 0%, #fbfaf6 60%, #f7f6f2 100%);
+}
+html[data-explore-theme="premium"] .e-aurora { opacity: 0.25; filter: blur(60px); }
+html[data-explore-theme="premium"] .e-glass { background: var(--e-surface); border-color: var(--e-line-strong); box-shadow: 0 20px 60px -30px rgba(15,20,25,0.18), inset 0 1px 0 rgba(255,255,255,0.5); }
+html[data-explore-theme="premium"] .e-glass-strong { background: var(--e-surface-strong); border-color: var(--e-line-strong); }
+html[data-explore-theme="premium"] .e-glass-dark { background: rgba(15,20,25,0.05); border-color: var(--e-line); color: var(--e-text); }
+html[data-explore-theme="premium"] .e-card { background: #ffffff; border-color: rgba(0,0,0,0.06); box-shadow: 0 8px 24px -12px rgba(15,20,25,0.10); }
+html[data-explore-theme="premium"] .e-chip { background: rgba(15,20,25,0.04); border-color: rgba(15,20,25,0.08); color: rgba(26,31,46,0.75); }
+html[data-explore-theme="premium"] .e-subnav-inner { background: rgba(255,255,255,0.85); border-color: rgba(15,20,25,0.10); }
+html[data-explore-theme="premium"] .e-subnav-item { color: rgba(26,31,46,0.65); }
+html[data-explore-theme="premium"] .e-subnav-item:hover { background: rgba(15,20,25,0.05); color: #1a1f2e; }
+html[data-explore-theme="premium"] .e-bottomnav { background: rgba(255,255,255,0.88); border-color: rgba(15,20,25,0.12); }
+html[data-explore-theme="premium"] .e-bottomnav a { color: rgba(26,31,46,0.55); }
+html[data-explore-theme="premium"] .e-btn-ghost { background: rgba(15,20,25,0.04); color: #1a1f2e; border-color: rgba(15,20,25,0.15); }
+html[data-explore-theme="premium"] .e-btn-ghost:hover { background: rgba(15,20,25,0.08); border-color: rgba(15,20,25,0.28); }
+html[data-explore-theme="premium"] .e-input { background: rgba(15,20,25,0.03) !important; border-color: rgba(15,20,25,0.12) !important; color: #1a1f2e !important; }
+html[data-explore-theme="premium"] .e-input option { background: #fff !important; color: #1a1f2e !important; }
+html[data-explore-theme="premium"] .e-theme-toggle { background: rgba(15,20,25,0.05); border-color: rgba(15,20,25,0.10); color: #1a1f2e; }
+html[data-explore-theme="premium"] .e-theme-toggle:hover { background: rgba(15,20,25,0.08); }
+
+/* Aurora theme (default): keep dark toggle chip */
+.e-theme-toggle { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.18); color: #fff; }
+.e-theme-toggle:hover { background: rgba(255,255,255,0.12); }
 .explore-root * { min-width: 0; }
 html:has(.explore-root), body:has(.explore-root) { overflow-x: hidden; max-width: 100%; }
 .explore-root section, .explore-root main, .explore-root header, .explore-root footer { max-width: 100%; overflow-x: clip; }
@@ -87,6 +130,11 @@ html:has(.explore-root), body:has(.explore-root) { overflow-x: hidden; max-width
 .e-scroll-x { overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x mandatory; }
 .e-scroll-x::-webkit-scrollbar { display: none; }
 .e-scroll-x > * { scroll-snap-align: start; }
+
+/* Input (used across Explore forms) */
+.e-input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 10px 14px; color: white; font-size: 14px; width: 100%; outline: none; transition: border-color .2s; }
+.e-input:focus { border-color: rgba(255,255,255,0.35); }
+.e-input option { background: #0a0e1a; color: white; }
 
 /* Badge */
 .e-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }

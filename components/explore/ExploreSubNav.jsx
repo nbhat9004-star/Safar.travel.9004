@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, Users, Route, Camera, IdCard } from 'lucide-react';
+import { Compass, Users, Route, Camera, IdCard, Sparkles } from 'lucide-react';
 
 const ITEMS = [
   { href: '/explore/home', label: 'Home', icon: Compass },
   { href: '/explore/community', label: 'Community', icon: Users },
   { href: '/explore/journey', label: 'Journey', icon: Route },
+  { href: '/explore/wander', label: 'Wander', icon: Sparkles },
   { href: '/explore/stories', label: 'Stories', icon: Camera },
   { href: '/explore/passport', label: 'Passport', icon: IdCard },
 ];
