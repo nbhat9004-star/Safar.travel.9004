@@ -11895,6 +11895,213 @@ Return ONLY valid JSON, no markdown.`;
     }
     // ================== end Module 2 additions ==================
 
+    // =========================================================================
+    // MODULE 3 (Explore, July 2025): Journey-scoped Messaging (Private DMs)
+    // Group chat lives at /circle/journeys/:id/chat (already implemented).
+    // Private DMs exist ONLY between organizer ↔ accepted traveler of a journey.
+    // =========================================================================
+    async function ensureDmIndexes() {
+      try {
+        const t = await getCollection('circle_dm_threads');
+        await t.createIndex({ id: 1 }, { unique: true });
+        await t.createIndex({ journeyId: 1, participantsKey: 1 }, { unique: true });
+        await t.createIndex({ participantIds: 1, updatedAt: -1 });
+        const m = await getCollection('circle_dm_messages');
+        await m.createIndex({ threadId: 1, createdAt: 1 });
+      } catch {}
+    }
+    await ensureDmIndexes();
+
+    // Helper: validate that two users can DM each other on a given journey
+    async function validateDmPair(journeyId, userAId, userBId) {
+      const jdoc = await journeys.findOne({ id: journeyId });
+      if (!jdoc) return { ok: false, error: 'Journey not found', status: 404 };
+      const [a, b] = [userAId, userBId];
+      if (a === b) return { ok: false, error: 'Cannot DM yourself', status: 400 };
+      const organizerId = jdoc.curatorId;
+      // Exactly one of the pair must be the organizer, and the other must be accepted
+      const otherId = a === organizerId ? b : (b === organizerId ? a : null);
+      if (!otherId) return { ok: false, error: 'DMs only exist between the organizer and an accepted traveler', status: 403 };
+      const acc = await circleMembers.findOne({ journeyId, userId: otherId, status: 'accepted' });
+      if (!acc) return { ok: false, error: 'The traveler must be accepted before you can DM them', status: 403 };
+      return { ok: true, jdoc };
+    }
+
+    // POST /circle/dm/open { journeyId, otherUserId } — create-or-fetch a 1:1 thread
+    if (path === '/circle/dm/open' && method === 'POST') {
+      if (!me) return err('Sign in required', 401);
+      const b = await readBody(request);
+      const journeyId = String(b.journeyId || '');
+      const otherUserId = String(b.otherUserId || '');
+      if (!journeyId || !otherUserId) return err('journeyId and otherUserId required');
+      const v = await validateDmPair(journeyId, me.id, otherUserId);
+      if (!v.ok) return err(v.error, v.status);
+      const participantIds = [me.id, otherUserId].sort();
+      const participantsKey = participantIds.join(':');
+      const threads = await getCollection('circle_dm_threads');
+      let doc = await threads.findOne({ journeyId, participantsKey }, { projection: { _id: 0 } });
+      if (!doc) {
+        // Fetch other user's public info
+        const users = await getCollection('users');
+        const otherUser = await users.findOne({ id: otherUserId }, { projection: { _id: 0, id: 1, name: 1, avatar: 1, username: 1 } });
+        doc = {
+          id: uuid(),
+          journeyId,
+          journeySlug: v.jdoc.slug,
+          journeyName: v.jdoc.name,
+          participantIds,
+          participantsKey,
+          participants: [
+            { id: me.id, name: me.name, avatar: me.avatar || null, username: me.username || null },
+            { id: otherUserId, name: otherUser?.name || 'Traveler', avatar: otherUser?.avatar || null, username: otherUser?.username || null },
+          ],
+          lastMessage: null,
+          lastAt: null,
+          unread: { [me.id]: 0, [otherUserId]: 0 },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        await threads.insertOne(doc);
+      }
+      return ok({ thread: doc });
+    }
+
+    // GET /circle/dm/mine — list my DM threads with unread counts
+    if (path === '/circle/dm/mine' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const threads = await getCollection('circle_dm_threads');
+      const list = await threads.find(
+        { participantIds: me.id },
+        { projection: { _id: 0 } }
+      ).sort({ lastAt: -1, updatedAt: -1 }).limit(60).toArray();
+      // Attach whether journey is archived so UI can disable send
+      const jids = [...new Set(list.map(t => t.journeyId))];
+      const jArch = jids.length
+        ? await journeys.find({ id: { $in: jids } }, { projection: { _id: 0, id: 1, visibility: 1, slug: 1 } }).toArray()
+        : [];
+      const arch = Object.fromEntries(jArch.map(j => [j.id, j.visibility === 'archived']));
+      const totalUnread = list.reduce((n, t) => n + (t.unread?.[me.id] || 0), 0);
+      const enriched = list.map(t => ({ ...t, myUnread: t.unread?.[me.id] || 0, archived: !!arch[t.journeyId] }));
+      return ok({ threads: enriched, totalUnread });
+    }
+
+    // GET /circle/dm/:threadId — thread + messages
+    {
+      const m = path.match(/^\/circle\/dm\/([\w-]+)$/);
+      if (m && method === 'GET') {
+        if (!me) return err('Sign in required', 401);
+        const tid = m[1];
+        const threads = await getCollection('circle_dm_threads');
+        const t = await threads.findOne({ id: tid }, { projection: { _id: 0 } });
+        if (!t) return err('Thread not found', 404);
+        if (!t.participantIds.includes(me.id)) return err('Not your thread', 403);
+        // Re-verify DM access (traveler may have been un-accepted / removed since)
+        const v = await validateDmPair(t.journeyId, t.participantIds[0], t.participantIds[1]);
+        // Allow reading even if no longer accepted, but flag as archived for send-guard
+        const readOnly = !v.ok || v.jdoc?.visibility === 'archived';
+        const msgs = await (await getCollection('circle_dm_messages'))
+          .find({ threadId: tid }, { projection: { _id: 0 } })
+          .sort({ createdAt: 1 }).limit(500).toArray();
+        return ok({ thread: t, messages: msgs, readOnly, archived: v.jdoc?.visibility === 'archived' });
+      }
+    }
+
+    // POST /circle/dm/:threadId/messages — send text/image
+    {
+      const m = path.match(/^\/circle\/dm\/([\w-]+)\/messages$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const tid = m[1];
+        const threads = await getCollection('circle_dm_threads');
+        const t = await threads.findOne({ id: tid });
+        if (!t) return err('Thread not found', 404);
+        if (!t.participantIds.includes(me.id)) return err('Not your thread', 403);
+        const v = await validateDmPair(t.journeyId, t.participantIds[0], t.participantIds[1]);
+        if (!v.ok) return err(v.error, v.status);
+        if (v.jdoc.visibility === 'archived') return err('Journey is archived — chat is read-only', 403);
+        const b = await readBody(request);
+        const text = (b.text || '').toString().trim().slice(0, 2000);
+        const image = (b.image || '').toString().slice(0, 2000) || null;
+        if (!text && !image) return err('Text or image required');
+        const otherId = t.participantIds.find(x => x !== me.id);
+        const now = new Date();
+        const doc = {
+          id: uuid(),
+          threadId: tid,
+          journeyId: t.journeyId,
+          userId: me.id,
+          userName: me.name,
+          userAvatar: me.avatar || null,
+          text,
+          image,
+          readBy: [me.id],
+          createdAt: now,
+        };
+        await (await getCollection('circle_dm_messages')).insertOne(doc);
+        await threads.updateOne(
+          { id: tid },
+          {
+            $set: {
+              lastMessage: { text: text || '📷 image', userId: me.id, at: now },
+              lastAt: now,
+              updatedAt: now,
+              [`unread.${otherId}`]: (t.unread?.[otherId] || 0) + 1,
+              [`unread.${me.id}`]: 0,
+            },
+          }
+        );
+        // Notify recipient
+        mkNotif({
+          userId: otherId,
+          type: 'circle_dm_new',
+          category: 'circle',
+          title: `${me.name} sent you a message`,
+          body: (text || '📷 image').slice(0, 100),
+          link: `/explore/messages?thread=${tid}`,
+          meta: { threadId: tid, journeyId: t.journeyId },
+        }).catch(() => {});
+        const { _id, ...rest } = doc;
+        return ok({ message: rest }, 201);
+      }
+    }
+
+    // PATCH /circle/dm/:threadId/read — mark my unread → 0
+    {
+      const m = path.match(/^\/circle\/dm\/([\w-]+)\/read$/);
+      if (m && method === 'PATCH') {
+        if (!me) return err('Sign in required', 401);
+        const tid = m[1];
+        const threads = await getCollection('circle_dm_threads');
+        const t = await threads.findOne({ id: tid }, { projection: { _id: 0, participantIds: 1 } });
+        if (!t) return err('Thread not found', 404);
+        if (!t.participantIds.includes(me.id)) return err('Not your thread', 403);
+        await threads.updateOne({ id: tid }, { $set: { [`unread.${me.id}`]: 0 } });
+        // Mark messages as read by me
+        await (await getCollection('circle_dm_messages')).updateMany(
+          { threadId: tid, readBy: { $ne: me.id } },
+          { $addToSet: { readBy: me.id } }
+        );
+        return ok({ ok: true });
+      }
+    }
+
+    // DELETE /circle/dm/messages/:id — delete a single message (sender or admin)
+    {
+      const m = path.match(/^\/circle\/dm\/messages\/([\w-]+)$/);
+      if (m && method === 'DELETE') {
+        if (!me) return err('Sign in required', 401);
+        const mid = m[1];
+        const msgs = await getCollection('circle_dm_messages');
+        const msg = await msgs.findOne({ id: mid });
+        if (!msg) return err('Message not found', 404);
+        const isAdmin = me.role === 'admin' || me.role === 'super_admin';
+        if (msg.userId !== me.id && !isAdmin) return err('Only sender or admin can delete', 403);
+        await msgs.deleteOne({ id: mid });
+        return ok({ deleted: true });
+      }
+    }
+    // ================== end Module 3 additions ==================
+
 
 
 
@@ -12253,24 +12460,36 @@ Return ONLY valid JSON, no markdown.`;
         if (!me) return err('Sign in required', 401);
         if (rest === '' && method === 'POST') {
           if (!access.canParticipate) return err('Only members can chat', 403);
+          if (jdoc.visibility === 'archived') return err('This journey is archived — chat is read-only', 403);
           const b = await readBody(request);
           const text = (b.text || '').toString().trim().slice(0, 1000);
-          if (!text) return err('Message required');
-          const msg = { id: uuid(), journeyId: jid, userId: me.id, userName: me.name, userAvatar: me.avatar || null, text, createdAt: new Date() };
+          const image = (b.image || '').toString().slice(0, 2000) || null;
+          if (!text && !image) return err('Message or image required');
+          const msg = { id: uuid(), journeyId: jid, userId: me.id, userName: me.name, userAvatar: me.avatar || null, text, image, pinned: false, createdAt: new Date() };
           await chat.insertOne(msg);
           // Notify curator + members (but keep it light: only send in-app notif to curator; skip if it's curator writing)
           if (jdoc.curatorId !== me.id) {
-            await mkNotif({ userId: jdoc.curatorId, type: 'circle_chat_new', category: 'circle', title: `New message in ${jdoc.name}`, body: `${me.name}: ${text.slice(0, 80)}`, link: `/circle/j/${jdoc.slug}/plan?tab=chat`, meta: { journeyId: jid } });
+            await mkNotif({ userId: jdoc.curatorId, type: 'circle_chat_new', category: 'circle', title: `New message in ${jdoc.name}`, body: `${me.name}: ${(text || '📷 image').slice(0, 80)}`, link: `/explore/j/${jdoc.slug}?chat=1`, meta: { journeyId: jid } });
           }
           const { _id, ...rest2 } = msg;
           return ok({ message: rest2 }, 201);
+        }
+        // Pin/Unpin (curator only)
+        const pinMatch = rest.match(/^\/([\w-]+)\/pin$/);
+        if (pinMatch && method === 'POST') {
+          if (!access.canManage) return err('Only the organizer can pin messages', 403);
+          const mid = pinMatch[1];
+          const msg = await chat.findOne({ id: mid, journeyId: jid });
+          if (!msg) return err('Message not found', 404);
+          await chat.updateOne({ id: mid }, { $set: { pinned: !msg.pinned } });
+          return ok({ pinned: !msg.pinned });
         }
         const mMatch = rest.match(/^\/([\w-]+)$/);
         if (mMatch && method === 'DELETE') {
           const mid = mMatch[1];
           const msg = await chat.findOne({ id: mid, journeyId: jid });
           if (!msg) return err('Message not found', 404);
-          if (msg.userId !== me.id && !access.canManage) return err('Only the sender can delete', 403);
+          if (msg.userId !== me.id && !access.canManage) return err('Only the sender or organizer can delete', 403);
           await chat.deleteOne({ id: mid });
           return ok({ deleted: true });
         }

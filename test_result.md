@@ -120,6 +120,106 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE 3 (July 2025) — Journey-scoped Messaging (5-credit budget)
+# ---------------------------------------------------------------------------
+module3_messaging:
+  - task: "Explore Module 3 — Journey group chat (extend) + Private 1:1 DMs (organizer ↔ accepted travelers only)"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js, /app/app/explore/(social)/j/[slug]/page.js, /app/app/explore/(social)/messages/page.js, /app/components/explore/JourneyChat.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          Shipped Module 3 in ~5 credits. No agents, no test agents, no UI redesign,
+          zero new deps.
+
+          CORE SECURITY RULE (server-side, enforced on every request):
+            Private chat is available ONLY between the journey organizer and an
+            ACCEPTED traveler on the same journey. Pending, rejected, cancelled,
+            or randomly-picked users receive 403. Verified via curl matrix.
+
+          BACKEND (route.js):
+            * Existing group chat POST extended:
+                - Accepts optional {image} field (image URL, ≤2KB).
+                - New pinned:false default on messages.
+                - Blocks new messages when journey.visibility === 'archived'.
+                - Notification link updated to /explore/j/:slug?chat=1.
+            * NEW: POST /circle/journeys/:id/chat/:mid/pin   (organizer-only toggle)
+            * NEW DM endpoints (all validated via validateDmPair()):
+                POST   /circle/dm/open                 body: {journeyId, otherUserId}
+                                                       - Ensures caller & other are the
+                                                         organizer/accepted-traveler pair
+                                                         of that journey; creates or
+                                                         returns the thread. Unique on
+                                                         (journeyId, participantsKey).
+                GET    /circle/dm/mine                 my threads with unread + preview
+                GET    /circle/dm/:threadId            thread + messages + readOnly +
+                                                       archived flags
+                POST   /circle/dm/:threadId/messages   send text and/or image; increments
+                                                       recipient unread; blocks send if
+                                                       journey is archived; fires
+                                                       mkNotif('circle_dm_new')
+                PATCH  /circle/dm/:threadId/read       clears my unread; adds me to
+                                                       readBy on messages
+                DELETE /circle/dm/messages/:id         sender or admin only
+            * Collections (new): circle_dm_threads, circle_dm_messages.
+              Reused: circle_chat (group), notifications (mkNotif).
+
+          FRONTEND:
+            * /app/components/explore/JourneyChat.jsx  — NEW inline group chat panel
+              (collapsible, poll every 15s, text+image, pin/delete controls, pinned
+              banner, archived read-only state, hidden completely if user is not a
+              member).
+            * /app/app/explore/(social)/j/[slug]/page.js — mounts JourneyChat below
+              members list ONLY when isOwner OR myMembership.status === 'accepted'.
+              Adds a small Message button on each accepted member card that opens
+              (or reuses) a DM thread via POST /circle/dm/open then navigates to
+              /explore/messages?thread=:id.
+            * /app/app/explore/(social)/messages/page.js — NEW inbox + thread view.
+              Two-pane on desktop (inbox 320px + thread), single-pane on mobile.
+              Wrapped in <Suspense> per Next.js App Router requirement for
+              useSearchParams(). Supports unread badges, read receipts (✓✓ when
+              recipient has read), text+image, archived read-only banner.
+
+          UI unchanged (all existing chips, glass cards, aurora bg reused). No
+          redesign. Existing NotificationBell already surfaces circle_dm_new
+          notifications (deep-linked to /explore/messages?thread=:id) — no changes
+          needed there.
+
+          Verified via curl (no agents):
+            - 3 users (organizer, traveler, random) end-to-end scenario:
+              * DM before request           → 403 (must be accepted)
+              * DM while pending            → 403
+              * Organizer accepts           → 200
+              * DM open after acceptance    → 200 (thread created)
+              * Random user DM to organizer → 403
+              * Random reads thread         → 403 "Not your thread"
+              * Random posts to group chat  → 403 "Only members can chat"
+              * Non-organizer pins message  → 403 "Only the organizer can pin"
+              * Organizer pins message      → 200
+              * Journey archived → both group send + DM send → 403 read-only;
+                threads/messages still readable with archived:true flag
+              * Read receipts, unread counters, notifications all correct.
+            HTTP 200 on /explore/{home,community,journey,messages,messages?thread=x},
+              /explore/j/:slug, /explore/u/:username.
+            Production `yarn build` completes with zero errors;
+              /explore/messages is static (○), /explore/j/[slug] is dynamic (ƒ).
+
+          NOT built (per user constraints): voice/video calls, public messaging,
+          broadcasts, status/stories, random DMs, marketplace chat, AI, bots.
+
+          Files modified: 2 (route.js, j/[slug]/page.js)
+          Files added:    2 (messages/page.js, components/explore/JourneyChat.jsx)
+          New deps:       0
+          UI redesign:    none
+
+
+
+# ---------------------------------------------------------------------------
 # MODULE 2 (July 2025) — Social Network & Discovery (5-credit budget)
 # ---------------------------------------------------------------------------
 module2_social:

@@ -6,10 +6,11 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   MapPin, Calendar, Users, Wallet, Route as RouteIcon, Sparkles,
   UserPlus, LogOut, Check, X, Bookmark, Share2, Loader2, ArrowLeft,
-  Trash2, Edit3, Send, Clock, Mountain,
+  Trash2, Edit3, Send, Clock, Mountain, MessageCircle,
 } from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
 import BadgeChip from '@/components/explore/BadgeChip';
+import JourneyChat from '@/components/explore/JourneyChat';
 import { useAuth } from '@/lib/auth-context';
 
 export default function JourneyDetails() {
@@ -231,7 +232,7 @@ export default function JourneyDetails() {
       </section>
 
       {/* Members list + curator's pending requests */}
-      <section className="relative e-container pb-24">
+      <section className="relative e-container pb-4">
         <div className="grid lg:grid-cols-2 gap-6">
           <div>
             <div className="e-chip"><Users className="size-3 text-emerald-300" /> Members ({acceptedCount})</div>
@@ -245,6 +246,9 @@ export default function JourneyDetails() {
                     <div className="text-sm font-semibold truncate">{members.owner.userName}</div>
                     <div className="text-[11px]" style={{ color: 'var(--e-text-muted)' }}>Curator</div>
                   </div>
+                  {user && !isOwner && myMem?.status === 'accepted' && (
+                    <MessageMemberButton journey={journey} otherUserId={members.owner.userId} />
+                  )}
                 </div>
               )}
               {(members?.travelers || []).map(t => (
@@ -256,6 +260,9 @@ export default function JourneyDetails() {
                     <div className="text-sm font-semibold truncate">{t.userName}</div>
                     <div className="text-[11px]" style={{ color: 'var(--e-text-muted)' }}>{t.seats} seat{t.seats>1?'s':''}</div>
                   </div>
+                  {isOwner && t.userId !== user?.id && (
+                    <MessageMemberButton journey={journey} otherUserId={t.userId} />
+                  )}
                 </div>
               ))}
               {acceptedCount === 0 && <div className="text-sm" style={{ color: 'var(--e-text-muted)' }}>No members yet — be the first to join.</div>}
@@ -292,7 +299,41 @@ export default function JourneyDetails() {
             </div>
           )}
         </div>
+
+        {/* Group chat — only visible to accepted members */}
+        {(isOwner || myMem?.status === 'accepted') && (
+          <div className="mt-6">
+            <JourneyChat
+              journey={journey}
+              isOwner={!!isOwner}
+              isMember={myMem?.status === 'accepted'}
+              archived={journey.visibility === 'archived'}
+            />
+          </div>
+        )}
       </section>
     </div>
+  );
+}
+
+function MessageMemberButton({ journey, otherUserId }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const open = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch('/api/circle/dm/open', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ journeyId: journey.id, otherUserId }),
+      });
+      const j = await r.json();
+      if (j.thread) router.push(`/explore/messages?thread=${j.thread.id}`);
+    } catch {}
+    setBusy(false);
+  };
+  return (
+    <button onClick={open} disabled={busy} title="Message" className="e-btn-ghost rounded-full size-8 grid place-items-center shrink-0">
+      {busy ? <Loader2 className="size-3 animate-spin" /> : <MessageCircle className="size-3.5" />}
+    </button>
   );
 }
