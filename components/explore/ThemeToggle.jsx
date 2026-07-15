@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 const KEY = 'safar-explore-theme';
+const DEFAULT_THEME = 'premium'; // Safar Curated design language is the default.
 
 export function applyTheme(t) {
   if (typeof document === 'undefined') return;
@@ -12,12 +13,12 @@ export function applyTheme(t) {
 }
 
 export function getInitialTheme() {
-  if (typeof window === 'undefined') return 'aurora';
-  try { return localStorage.getItem(KEY) || 'aurora'; } catch { return 'aurora'; }
+  if (typeof window === 'undefined') return DEFAULT_THEME;
+  try { return localStorage.getItem(KEY) || DEFAULT_THEME; } catch { return DEFAULT_THEME; }
 }
 
 export default function ThemeToggle({ compact = false }) {
-  const [theme, setTheme] = useState('aurora');
+  const [theme, setTheme] = useState(DEFAULT_THEME);
   useEffect(() => {
     const t = getInitialTheme();
     setTheme(t);
@@ -31,12 +32,12 @@ export default function ThemeToggle({ compact = false }) {
   return (
     <button
       onClick={toggle}
-      aria-label={`Switch to ${theme === 'aurora' ? 'Safar Premium' : 'Aurora'} theme`}
-      title={theme === 'aurora' ? 'Safar Premium theme' : 'Aurora theme'}
+      aria-label={`Switch to ${theme === 'aurora' ? 'Safar Curated' : 'Aurora'} theme`}
+      title={theme === 'aurora' ? 'Switch to Safar Curated theme' : 'Switch to Aurora theme'}
       className={`inline-flex items-center gap-1.5 rounded-full border transition ${compact ? 'px-2.5 py-1' : 'px-3 py-1.5'} text-xs font-medium e-theme-toggle`}
     >
       {theme === 'aurora' ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
-      {!compact && <span>{theme === 'aurora' ? 'Premium' : 'Aurora'}</span>}
+      {!compact && <span>{theme === 'aurora' ? 'Curated' : 'Aurora'}</span>}
     </button>
   );
 }

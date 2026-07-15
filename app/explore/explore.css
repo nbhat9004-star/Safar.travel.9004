@@ -27,38 +27,67 @@
   font-family: var(--font-inter), system-ui, sans-serif;
 }
 
-/* Premium (light) theme — matches Safar Curated marketplace look */
+/* Premium (light) theme — mirrors Safar Curated marketplace design tokens exactly.
+   Palette (from /app/app/globals.css):
+     • Background:  #f6f7f3 (HSL 72 21% 96%)  — cream / warm off-white
+     • Secondary:   #eeefe9 (HSL 72 14% 93%)
+     • Primary:     #0F3D2E → #1A6A50 → #0A2C21  (deep emerald gradient)
+     • Accent:      #D4AF37  gold (with #E5C158 highlight, #9C8024 shadow)
+     • Border:      HSL 72 10% 87%
+     • Foreground:  #1a1f2e
+   Cards: pure white, radius 1rem, soft editorial shadow. */
 html[data-explore-theme="premium"] .explore-root {
+  --e-ink: #ffffff;
+  --e-ink-2: #f6f7f3;
   --e-text: #1a1f2e;
   --e-text-muted: rgba(26,31,46,0.72);
   --e-text-dim: rgba(26,31,46,0.5);
-  --e-line: rgba(26,31,46,0.08);
-  --e-line-strong: rgba(26,31,46,0.15);
-  --e-surface: rgba(255,255,255,0.75);
-  --e-surface-strong: rgba(255,255,255,0.92);
+  --e-line: rgba(15,20,25,0.08);
+  --e-line-strong: rgba(15,20,25,0.15);
+  --e-surface: rgba(255,255,255,0.85);
+  --e-surface-strong: #ffffff;
+  --e-accent: #0F3D2E;        /* Safar Curated primary emerald */
+  --e-accent-2: #1A6A50;
+  --e-accent-3: #D4AF37;      /* Safar Curated gold */
+  --e-gold: #D4AF37;
   color: var(--e-text);
   background:
-    radial-gradient(1200px 700px at 90% -10%, rgba(15,61,46,0.10), transparent 60%),
-    radial-gradient(900px 600px at -10% 15%, rgba(247,210,113,0.14), transparent 65%),
-    linear-gradient(180deg, #f7f6f2 0%, #fbfaf6 60%, #f7f6f2 100%);
+    radial-gradient(60vw 40vw at 100% -10%, rgba(15,61,46,0.10), transparent 65%),
+    radial-gradient(50vw 40vw at -10% 15%, rgba(212,175,55,0.14), transparent 65%),
+    linear-gradient(180deg, #f6f7f3 0%, #fbfaf6 60%, #f6f7f3 100%);
 }
-html[data-explore-theme="premium"] .e-aurora { opacity: 0.25; filter: blur(60px); }
-html[data-explore-theme="premium"] .e-glass { background: var(--e-surface); border-color: var(--e-line-strong); box-shadow: 0 20px 60px -30px rgba(15,20,25,0.18), inset 0 1px 0 rgba(255,255,255,0.5); }
-html[data-explore-theme="premium"] .e-glass-strong { background: var(--e-surface-strong); border-color: var(--e-line-strong); }
-html[data-explore-theme="premium"] .e-glass-dark { background: rgba(15,20,25,0.05); border-color: var(--e-line); color: var(--e-text); }
-html[data-explore-theme="premium"] .e-card { background: #ffffff; border-color: rgba(0,0,0,0.06); box-shadow: 0 8px 24px -12px rgba(15,20,25,0.10); }
-html[data-explore-theme="premium"] .e-chip { background: rgba(15,20,25,0.04); border-color: rgba(15,20,25,0.08); color: rgba(26,31,46,0.75); }
-html[data-explore-theme="premium"] .e-subnav-inner { background: rgba(255,255,255,0.85); border-color: rgba(15,20,25,0.10); }
-html[data-explore-theme="premium"] .e-subnav-item { color: rgba(26,31,46,0.65); }
+html[data-explore-theme="premium"] .e-aurora { opacity: 0.22; filter: blur(70px); }
+html[data-explore-theme="premium"] .e-orb    { opacity: 0.28; }
+html[data-explore-theme="premium"] .e-glass         { background: var(--e-surface); border-color: var(--e-line-strong); box-shadow: 0 12px 40px -24px rgba(15,20,25,0.14), inset 0 1px 0 rgba(255,255,255,0.6); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); }
+html[data-explore-theme="premium"] .e-glass-strong  { background: var(--e-surface-strong); border-color: var(--e-line-strong); box-shadow: 0 20px 60px -30px rgba(15,20,25,0.20); }
+html[data-explore-theme="premium"] .e-glass-dark    { background: rgba(15,20,25,0.05); border-color: var(--e-line); color: var(--e-text); }
+html[data-explore-theme="premium"] .e-card          { background: #ffffff; border-color: rgba(0,0,0,0.06); border-radius: 24px; box-shadow: 0 8px 24px -14px rgba(15,20,25,0.12); }
+html[data-explore-theme="premium"] .e-card:hover    { box-shadow: 0 16px 40px -18px rgba(15,20,25,0.18); border-color: rgba(0,0,0,0.10); }
+html[data-explore-theme="premium"] .e-chip          { background: rgba(15,20,25,0.04); border-color: rgba(15,20,25,0.08); color: rgba(26,31,46,0.75); }
+html[data-explore-theme="premium"] .e-subnav-inner  { background: rgba(255,255,255,0.85); border-color: rgba(15,20,25,0.10); box-shadow: 0 10px 30px -18px rgba(15,20,25,0.20); }
+html[data-explore-theme="premium"] .e-subnav-item   { color: rgba(26,31,46,0.65); }
 html[data-explore-theme="premium"] .e-subnav-item:hover { background: rgba(15,20,25,0.05); color: #1a1f2e; }
-html[data-explore-theme="premium"] .e-bottomnav { background: rgba(255,255,255,0.88); border-color: rgba(15,20,25,0.12); }
-html[data-explore-theme="premium"] .e-bottomnav a { color: rgba(26,31,46,0.55); }
-html[data-explore-theme="premium"] .e-btn-ghost { background: rgba(15,20,25,0.04); color: #1a1f2e; border-color: rgba(15,20,25,0.15); }
-html[data-explore-theme="premium"] .e-btn-ghost:hover { background: rgba(15,20,25,0.08); border-color: rgba(15,20,25,0.28); }
-html[data-explore-theme="premium"] .e-input { background: rgba(15,20,25,0.03) !important; border-color: rgba(15,20,25,0.12) !important; color: #1a1f2e !important; }
-html[data-explore-theme="premium"] .e-input option { background: #fff !important; color: #1a1f2e !important; }
-html[data-explore-theme="premium"] .e-theme-toggle { background: rgba(15,20,25,0.05); border-color: rgba(15,20,25,0.10); color: #1a1f2e; }
-html[data-explore-theme="premium"] .e-theme-toggle:hover { background: rgba(15,20,25,0.08); }
+html[data-explore-theme="premium"] .e-subnav-item[data-active="true"] { background: linear-gradient(135deg,#1A6A50 0%,#0F3D2E 60%,#0A2C21 100%); color: #ffffff; box-shadow: 0 8px 24px -8px rgba(15,61,46,0.4); }
+html[data-explore-theme="premium"] .e-bottomnav     { background: rgba(255,255,255,0.90); border-color: rgba(15,20,25,0.12); box-shadow: 0 -8px 30px -14px rgba(15,20,25,0.14); }
+html[data-explore-theme="premium"] .e-bottomnav a   { color: rgba(26,31,46,0.55); }
+html[data-explore-theme="premium"] .e-bottomnav a[data-active="true"] { background: linear-gradient(135deg,#1A6A50,#0F3D2E,#0A2C21); color: #ffffff; box-shadow: 0 6px 16px -6px rgba(15,61,46,0.4); }
+
+/* Safar Curated buttons + gradient text (override the aurora rainbow) */
+html[data-explore-theme="premium"] .e-btn-primary   { background: linear-gradient(135deg,#1A6A50 0%,#0F3D2E 60%,#0A2C21 100%); color: #ffffff; font-weight: 600; box-shadow: 0 10px 30px -10px rgba(15,61,46,0.45); }
+html[data-explore-theme="premium"] .e-btn-primary:hover { filter: brightness(1.08); box-shadow: 0 14px 40px -10px rgba(15,61,46,0.55); }
+html[data-explore-theme="premium"] .e-btn-ghost     { background: rgba(15,20,25,0.04); color: #1a1f2e; border-color: rgba(15,20,25,0.15); }
+html[data-explore-theme="premium"] .e-btn-ghost:hover{ background: rgba(15,20,25,0.08); border-color: rgba(15,20,25,0.28); }
+html[data-explore-theme="premium"] .e-grad-text     { background: linear-gradient(135deg,#1A6A50 0%,#0F3D2E 60%,#0A2C21 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+
+/* Inputs, badges, theme toggle in premium mode */
+html[data-explore-theme="premium"] .e-input         { background: rgba(15,20,25,0.03) !important; border-color: rgba(15,20,25,0.12) !important; color: #1a1f2e !important; border-radius: 14px; }
+html[data-explore-theme="premium"] .e-input option  { background: #fff !important; color: #1a1f2e !important; }
+html[data-explore-theme="premium"] .e-theme-toggle  { background: rgba(15,20,25,0.05); border-color: rgba(15,20,25,0.10); color: #1a1f2e; }
+html[data-explore-theme="premium"] .e-theme-toggle:hover { background: rgba(15,20,25,0.09); }
+html[data-explore-theme="premium"] .e-badge-live    { background: rgba(217,45,80,0.10); color: #c8324f; border-color: rgba(217,45,80,0.25); }
+html[data-explore-theme="premium"] .e-badge-new     { background: rgba(212,175,55,0.15); color: #7c6015; border-color: rgba(212,175,55,0.35); }
+html[data-explore-theme="premium"] .e-badge-ai      { background: rgba(15,61,46,0.10); color: #0F3D2E; border-color: rgba(15,61,46,0.28); }
+html[data-explore-theme="premium"] .e-section-card  { background: #ffffff; border-color: rgba(0,0,0,0.06); box-shadow: 0 10px 32px -18px rgba(15,20,25,0.14); }
 
 /* Aurora theme (default): keep dark toggle chip */
 .e-theme-toggle { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.18); color: #fff; }

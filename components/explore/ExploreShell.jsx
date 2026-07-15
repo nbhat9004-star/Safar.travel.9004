@@ -9,6 +9,13 @@ export default function ExploreShell({ children }) {
   const { user } = useAuth();
   return (
     <div className="explore-root">
+      {/* Pre-hydration theme init — reads localStorage & falls back to Safar Curated (premium).
+          Runs during SSR HTML parse so there's no theme flash on first paint. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){try{var t=localStorage.getItem('safar-explore-theme')||'premium';document.documentElement.setAttribute('data-explore-theme',t);}catch(e){document.documentElement.setAttribute('data-explore-theme','premium');}})();`,
+        }}
+      />
       <header className="sticky top-0 z-40 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--e-ink) 55%, transparent)', borderColor: 'var(--e-line)' }}>
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3 shrink-0">
