@@ -237,13 +237,15 @@ function PostCard({ post, currentUser, onDelete, onEdit }) {
   return (
     <div className="e-glass rounded-2xl p-4 md:p-5">
       <div className="flex items-center gap-3">
-        {post.authorAvatar
-          ? <Image src={post.authorAvatar} alt={post.authorName} width={36} height={36} className="rounded-full ring-1 ring-white/15" unoptimized />
-          : <div className="size-9 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] font-bold text-sm">{(post.authorName||'?')[0]}</div>}
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold truncate">{post.authorName}</div>
-          <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>{post.category?.replace('_',' ')} · {new Date(post.createdAt).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}</div>
-        </div>
+        <Link href={`/explore/u/${post.authorId}`} className="flex items-center gap-3 flex-1 min-w-0 hover:opacity-90 transition">
+          {post.authorAvatar
+            ? <Image src={post.authorAvatar} alt={post.authorName} width={36} height={36} className="rounded-full ring-1 ring-white/15" unoptimized />
+            : <div className="size-9 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] font-bold text-sm">{(post.authorName||'?')[0]}</div>}
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold truncate">{post.authorName}</div>
+            <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>{post.category?.replace('_',' ')} · {new Date(post.createdAt).toLocaleDateString('en-IN', { day:'numeric', month:'short' })}</div>
+          </div>
+        </Link>
         {isOwner && (
           <div className="flex gap-1">
             <button onClick={onEdit} className="text-white/50 hover:text-white/90 transition p-1" title="Edit"><Edit3 className="size-4" /></button>

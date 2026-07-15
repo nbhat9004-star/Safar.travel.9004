@@ -2,7 +2,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, MapPin, Flame, Snowflake, Cloud, CloudSun, Sun, Leaf, TrendingUp, Compass, Users, Camera, Wand2, Mountain, Bike, Car, Utensils, Calendar, MessageCircle, Lightbulb, Route, IdCard, Bookmark, Clock, Send } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Sparkles, ArrowRight, MapPin, Flame, Snowflake, Cloud, CloudSun, Sun, Leaf, TrendingUp, Compass, Users, Camera, Wand2, Mountain, Bike, Car, Utensils, Calendar, MessageCircle, Lightbulb, Route, IdCard, Bookmark, Clock, Send, Search, Gem, UserPlus, Loader2 } from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
 import CommunityHighlights from '@/components/explore/CommunityHighlights';
 import BadgeChip from '@/components/explore/BadgeChip';
@@ -56,17 +57,43 @@ const YOUR_JOURNEY_TILES = [
 
 export default function ExploreHome() {
   const { user } = useAuth();
+  const router = useRouter();
   const [journeys, setJourneys] = useState([]);
   const [jLoading, setJLoading] = useState(true);
   const [cat, setCat] = useState('upcoming');
+  // Module 2: Discovery + Search
+  const [discovery, setDiscovery] = useState(null);
+  const [q, setQ] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     let cancel = false;
     fetch('/api/circle/journeys?limit=6').then(r => r.json()).then(j => {
       if (!cancel) { setJourneys(j.journeys || []); setJLoading(false); }
     }).catch(() => { if (!cancel) setJLoading(false); });
+    fetch('/api/circle/discovery').then(r => r.json()).then(d => {
+      if (!cancel && d.ok) setDiscovery(d);
+    }).catch(() => {});
     return () => { cancel = true; };
   }, []);
+
+  // Universal search: debounced
+  useEffect(() => {
+    const t = q.trim();
+    if (!t) { setSearchResults(null); setSearchOpen(false); return; }
+    setSearchOpen(true); setSearching(true);
+    const h = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/circle/search?q=${encodeURIComponent(t)}&limit=5`);
+        const j = await r.json();
+        setSearchResults(j);
+      } catch {}
+      setSearching(false);
+    }, 250);
+    return () => clearTimeout(h);
+  }, [q]);
 
   return (
     <div className="relative">
@@ -87,6 +114,62 @@ export default function ExploreHome() {
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link href="/explore/journey" className="inline-flex items-center gap-2 px-6 py-3 rounded-full e-btn-primary text-sm md:text-[15px]"><Route className="size-4" /> Create a journey</Link>
                 <Link href="/explore/wander" className="inline-flex items-center gap-2 px-6 py-3 rounded-full e-btn-ghost text-sm md:text-[15px]"><Sparkles className="size-4" /> WanderMatch <ArrowRight className="size-4" /></Link>
+              </div>
+
+              {/* Universal Search */}
+              <div className="mt-6 relative max-w-xl">
+                <div className="e-glass rounded-full flex items-center gap-2 px-4 py-2.5 border border-white/15">
+                  <Search className="size-4 shrink-0" style={{ color: 'var(--e-text-dim)' }} />
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    onFocus={() => q.trim() && setSearchOpen(true)}
+                    placeholder="Search travelers, journeys, posts, destinations…"
+                    className="flex-1 bg-transparent outline-none text-sm"
+                    style={{ color: 'var(--e-text)' }}
+                  />
+                  {searching && <Loader2 className="size-4 animate-spin" style={{ color: 'var(--e-text-dim)' }} />}
+                </div>
+                {searchOpen && searchResults && (
+                  <div className="absolute top-full left-0 right-0 mt-2 e-glass rounded-2xl p-3 z-30 border border-white/15 max-h-[70vh] overflow-y-auto" style={{ background: 'rgba(15,20,32,0.95)' }}>
+                    {(!searchResults.travelers?.length && !searchResults.journeys?.length && !searchResults.posts?.length) && (
+                      <div className="text-sm py-3 text-center" style={{ color: 'var(--e-text-muted)' }}>No matches for "{q}".</div>
+                    )}
+                    {searchResults.travelers?.length > 0 && (
+                      <div className="mb-2">
+                        <div className="text-[10px] uppercase tracking-[0.22em] px-2 mb-1" style={{ color: 'var(--e-text-dim)' }}>Travelers</div>
+                        {searchResults.travelers.map(t => (
+                          <Link key={t.id} href={`/explore/u/${t.username || t.id}`} onClick={() => setSearchOpen(false)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.06]">
+                            {t.avatar ? <Image src={t.avatar} alt={t.name} width={28} height={28} className="rounded-full" unoptimized /> : <div className="size-7 rounded-full bg-white/10 grid place-items-center text-xs">{(t.name||'?')[0]}</div>}
+                            <div className="flex-1 min-w-0"><div className="text-sm font-semibold truncate">{t.name}</div><div className="text-[11px]" style={{ color: 'var(--e-text-dim)' }}>{t.username ? `@${t.username}` : (t.city || t.country || '')}</div></div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    {searchResults.journeys?.length > 0 && (
+                      <div className="mb-2">
+                        <div className="text-[10px] uppercase tracking-[0.22em] px-2 mb-1" style={{ color: 'var(--e-text-dim)' }}>Journeys</div>
+                        {searchResults.journeys.map(j => (
+                          <Link key={j.id} href={`/explore/j/${j.slug}`} onClick={() => setSearchOpen(false)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.06]">
+                            <Route className="size-4 text-emerald-300 shrink-0" />
+                            <div className="flex-1 min-w-0"><div className="text-sm font-semibold truncate">{j.name}</div><div className="text-[11px]" style={{ color: 'var(--e-text-dim)' }}>{j.destination?.name} · by {j.curatorName}</div></div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    {searchResults.posts?.length > 0 && (
+                      <div>
+                        <div className="text-[10px] uppercase tracking-[0.22em] px-2 mb-1" style={{ color: 'var(--e-text-dim)' }}>Posts</div>
+                        {searchResults.posts.map(p => (
+                          <Link key={p.id} href={`/explore/community?post=${p.id}`} onClick={() => setSearchOpen(false)} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.06]">
+                            <MessageCircle className="size-4 text-violet-300 shrink-0" />
+                            <div className="flex-1 min-w-0"><div className="text-sm font-semibold truncate">{p.title || (p.content||'').slice(0, 60)}</div><div className="text-[11px]" style={{ color: 'var(--e-text-dim)' }}>{p.category?.replace('_',' ')} · by {p.authorName}</div></div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -239,6 +322,66 @@ export default function ExploreHome() {
           </div>
         )}
       </section>
+
+      {/* MODULE 2 — DISCOVERY SECTIONS (live backend data) */}
+      {discovery && (
+        <>
+          {/* Popular travelers */}
+          {(discovery.popular || []).length > 0 && (
+            <section className="relative e-container mb-8">
+              <div className="flex items-end justify-between mb-5 flex-wrap gap-2">
+                <div>
+                  <div className="e-chip"><Users className="size-3 text-violet-300" /> Popular travelers</div>
+                  <h2 className="display text-2xl md:text-3xl font-bold mt-3">Follow their journeys</h2>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {discovery.popular.slice(0, 8).map(t => (
+                  <Link key={t.id} href={`/explore/u/${t.username || t.id}`} className="e-glass rounded-2xl p-4 flex flex-col items-center text-center hover:-translate-y-0.5 transition">
+                    {t.avatar ? <Image src={t.avatar} alt={t.name} width={56} height={56} className="rounded-2xl ring-1 ring-white/15" unoptimized /> : <div className="size-14 rounded-2xl bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] font-bold">{(t.name||'?')[0]}</div>}
+                    <div className="mt-2 font-semibold text-sm truncate max-w-full">{t.name}</div>
+                    {t.username && <div className="text-[10px]" style={{ color: 'var(--e-text-dim)' }}>@{t.username}</div>}
+                    {t.city && <div className="text-[11px] mt-0.5" style={{ color: 'var(--e-text-muted)' }}><MapPin className="inline size-3 mr-0.5" />{t.city}</div>}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Hidden gems + Recent discussions side-by-side */}
+          <section className="relative e-container mb-8">
+            <div className="grid lg:grid-cols-2 gap-6">
+              <div>
+                <div className="e-chip"><Gem className="size-3 text-fuchsia-300" /> Hidden gems</div>
+                <h2 className="display text-xl md:text-2xl font-bold mt-3 mb-4">Off the beaten path</h2>
+                <div className="space-y-3">
+                  {(discovery.hiddenGems || []).length === 0 && <div className="e-glass rounded-2xl p-4 text-sm" style={{ color: 'var(--e-text-muted)' }}>No hidden gems yet — <Link href="/explore/community" className="e-grad-text font-semibold">share yours →</Link></div>}
+                  {(discovery.hiddenGems || []).slice(0, 4).map(p => (
+                    <Link key={p.id} href={`/explore/community?post=${p.id}`} className="e-glass rounded-2xl p-4 block hover:-translate-y-0.5 transition">
+                      <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>{p.location || 'Kashmir'} · by {p.authorName}</div>
+                      <div className="font-semibold mt-1 line-clamp-1">{p.title || (p.content||'').slice(0, 60)}</div>
+                      {p.content && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--e-text-muted)' }}>{p.content}</div>}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="e-chip"><MessageCircle className="size-3 text-emerald-300" /> Recent discussions</div>
+                <h2 className="display text-xl md:text-2xl font-bold mt-3 mb-4">What travelers are asking</h2>
+                <div className="space-y-3">
+                  {(discovery.discussions || []).length === 0 && <div className="e-glass rounded-2xl p-4 text-sm" style={{ color: 'var(--e-text-muted)' }}>No discussions yet — <Link href="/explore/community" className="e-grad-text font-semibold">start one →</Link></div>}
+                  {(discovery.discussions || []).slice(0, 4).map(p => (
+                    <Link key={p.id} href={`/explore/community?post=${p.id}`} className="e-glass rounded-2xl p-4 block hover:-translate-y-0.5 transition">
+                      <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>by {p.authorName} · {p.commentsCount || 0} replies</div>
+                      <div className="font-semibold mt-1 line-clamp-2">{p.title || (p.content||'').slice(0, 80)}</div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
 
       {/* SECTION 3 — COMMUNITY */}
       <section className="relative e-container mb-8">

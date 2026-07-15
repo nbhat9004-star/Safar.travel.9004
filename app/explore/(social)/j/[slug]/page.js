@@ -215,15 +215,15 @@ export default function JourneyDetails() {
               {/* Curator */}
               <div className="mt-6 pt-5 border-t border-white/10">
                 <div className="text-[10px] uppercase tracking-[0.22em] mb-2" style={{ color: 'var(--e-text-dim)' }}>Curator</div>
-                <div className="flex items-center gap-3">
+                <Link href={`/explore/u/${journey.curatorId}`} className="flex items-center gap-3 hover:opacity-90 transition">
                   {journey.curatorAvatar
                     ? <Image src={journey.curatorAvatar} alt={journey.curatorName || 'Curator'} width={40} height={40} className="rounded-full ring-1 ring-white/20" />
                     : <div className="size-10 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[#06080f] font-bold">{(journey.curatorName || '?')[0]}</div>}
                   <div className="min-w-0">
                     <div className="font-semibold text-sm truncate">{journey.curatorName}</div>
-                    <div className="text-[11px]" style={{ color: 'var(--e-text-muted)' }}>{journey.curatorRole || 'Traveler'}</div>
+                    <div className="text-[11px]" style={{ color: 'var(--e-text-muted)' }}>View profile →</div>
                   </div>
-                </div>
+                </Link>
               </div>
             </aside>
           </div>

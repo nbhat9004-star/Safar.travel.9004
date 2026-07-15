@@ -120,6 +120,102 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE 2 (July 2025) — Social Network & Discovery (5-credit budget)
+# ---------------------------------------------------------------------------
+module2_social:
+  - task: "Explore Module 2 — Public profiles, Follow, Universal search, Discovery, Suggested travelers, Notifications"
+    implemented: true
+    working: true
+    file: "/app/app/api/[[...path]]/route.js, /app/app/explore/(social)/u/[id]/page.js, /app/app/explore/(social)/home/page.js, /app/app/explore/(social)/community/page.js, /app/app/explore/(social)/j/[slug]/page.js, /app/components/explore/ExploreShell.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          Shipped Module 2 in ~5 credits, no agents, no test agents, no UI redesign,
+          zero new dependencies. All reuses existing collections/APIs where possible.
+
+          BACKEND additions inside route.js (single insertion inside expanded
+          /circle guard, plus notification hooks on existing post like/comment):
+            Extended PATCH /users/me       + accepts bio, country, city, username,
+                                             languages[], interests[]
+                                             (username unique + lowercased + sanitised)
+            GET /users/:id/profile         id-or-username public profile bundle:
+                                             user + stats (followers, following,
+                                             journeys, posts) + isFollowing + top-12
+                                             public journeys + top-12 posts + last-20
+                                             merged activity feed
+            POST /users/:id/follow         toggle follow (unique index prevents dup)
+                                             + sends mkNotif('user_followed')
+            GET /users/:id/followers       list of follower users
+            GET /users/:id/following       list of followed users
+            GET /users/:id/suggested       simple scored recommendations:
+                                             same city / country / interests / mutual
+                                             accepted journeys — no AI
+            GET /circle/search?q=&type=    universal search: travelers (name,
+                                             username, city, country), journeys
+                                             (name, description, destination, theme),
+                                             posts (title, content, location, tags)
+            GET /circle/discovery          trending / new / hiddenGems /
+                                             discussions / popular travelers in one
+                                             payload for homepage
+            Notification hooks: post_liked & post_commented now call mkNotif on
+                                the post author (skip self). user_followed added.
+          Collections: circle_follows (new, unique {followerId, followingId}),
+                       existing notifications table via mkNotif().
+
+          FRONTEND:
+            /explore/u/[id]/page.js — NEW public profile page:
+              * Avatar, name, username, bio, country/city, languages, interests,
+                verified badge, role badge (host/admin), 4 stat tiles.
+              * Follow / Unfollow toggle button. Own profile shows "Edit profile"
+                modal (name, username, country, city, bio, languages CSV,
+                interests CSV → PATCH /users/me).
+              * Tabs: Journeys | Posts | Activity. Activity aggregates published
+                journeys, joined journeys, discussion posts, hidden gems shared.
+              * Deep-links to /explore/j/:slug and /explore/community?post=:id.
+            /explore/home/page.js — added:
+              * Universal search bar in the hero (debounced 250ms), inline dropdown
+                showing travelers/journeys/posts (up to 5 each).
+              * New sections: Popular Travelers (up to 8), Hidden Gems (up to 4),
+                Recent Discussions (up to 4) — all fed from /api/circle/discovery.
+              * Wired discovery + search state, kept all existing content intact.
+            /explore/community/page.js — post author (avatar+name+category)
+              becomes a Link to /explore/u/:authorId.
+            /explore/j/[slug]/page.js — curator sidebar card becomes a Link to
+              /explore/u/:curatorId.
+            /components/explore/ExploreShell.jsx — added NotificationBell:
+              * Polls /api/notifications every 60s; unread badge; dropdown with
+                last 20 notifications; Mark all read; deep-links via notification
+                link. Existing endpoints reused as-is.
+              * User avatar in top-right now links to /explore/u/:username|id
+                (was /explore/passport).
+
+          NOT TOUCHED (per user scope): AI planner, Chat, Passport internals, QR,
+          Rewards, Challenges, Ride Sharing, Marketplace, Payment, Booking,
+          WhatsApp, Video, Build My Trip, Admin panel, Auth.
+
+          Verification (manual curl, no agents):
+            All 12 new/extended endpoints tested end-to-end:
+              register x2 → PATCH bio/username/interests → GET profile by id and
+              by username (with stats + isFollowing) → follow toggle → followers
+              (1) → following (1) → create journey + post → search "gulmarg" (1
+              journey), search "alpha" (2 travelers) → discovery (trending=2,
+              new=2, hidden=2, discussions=0, popular=2) → suggested (4 results)
+              → unfollow → notifications (1 unread type=user_followed).
+            HTTP 200 on /explore/{home,community,journey}, /explore/j/:slug,
+              /explore/u/:username. NotificationBell renders when signed-in.
+
+          Files modified: 5 (route.js, home, community, j/[slug], ExploreShell)
+          Files added:    1 (u/[id]/page.js — only new page needed for profiles)
+          New deps:       0
+          UI redesign:    none (kept existing chips, glass cards, aurora bg)
+
+
+
+# ---------------------------------------------------------------------------
 # MODULE 1 (July 2025) — Journey + Community core wiring
 # ---------------------------------------------------------------------------
 module1_journey_community:

@@ -854,10 +854,28 @@ async function route(request, { params }) {
   if (path === '/users/me' && method === 'PATCH') {
     const me = await getCurrentUser(request);
     if (!me) return err('Authentication required', 401);
-    const { name, phone, avatar } = await readBody(request);
+    const body = await readBody(request);
+    const { name, phone, avatar } = body;
     const update = {};
     if (name && typeof name === 'string' && name.trim().length >= 2) {
       update.name = name.trim();
+    }
+    // Module 2: extended profile fields
+    const stringFields = ['bio','country','city','username'];
+    for (const k of stringFields) {
+      if (body[k] !== undefined) {
+        update[k] = body[k] === null ? null : String(body[k]).slice(0, k === 'bio' ? 500 : 60).trim();
+      }
+    }
+    if (update.username) {
+      update.username = update.username.toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 30);
+      if (update.username.length < 3) return err('Username must be at least 3 characters (a-z, 0-9, _.-)');
+      const users2 = await getCollection('users');
+      const clash = await users2.findOne({ username: update.username, id: { $ne: me.id } });
+      if (clash) return err('Username already taken', 409);
+    }
+    for (const k of ['languages','interests']) {
+      if (Array.isArray(body[k])) update[k] = body[k].slice(0, 12).map(s => String(s).slice(0, 30));
     }
     if (phone !== undefined) {
       // Validate phone number (basic validation)
@@ -10473,7 +10491,7 @@ Return ONLY valid JSON, no markdown.`;
     return ok({ requests: list });
   }
 
-  if (path.startsWith('/circle')) {
+  if (path.startsWith('/circle') || /^\/users\/[\w.\-]+\/(profile|follow|followers|following|suggested)$/.test(path)) {
     await ensureCircleIndexes();
     await ensureCircleMembersIndexes();
     await ensureCircleTimelineIndexes();
@@ -11549,6 +11567,13 @@ Return ONLY valid JSON, no markdown.`;
         }
         try { await likesCol.insertOne({ id: uuid(), postId: pid, userId: me.id, createdAt: new Date() }); } catch {}
         await posts.updateOne({ id: pid }, { $inc: { likesCount: 1 } });
+        // Notify author (skip self-likes)
+        try {
+          const p = await posts.findOne({ id: pid }, { projection: { _id: 0, authorId: 1, title: 1, content: 1 } });
+          if (p && p.authorId && p.authorId !== me.id) {
+            await mkNotif({ userId: p.authorId, type: 'post_liked', category: 'circle', title: `${me.name} liked your post`, body: (p.title || p.content || '').slice(0, 100), link: `/explore/community?post=${pid}`, meta: { postId: pid, actorId: me.id } });
+          }
+        } catch {}
         return ok({ liked: true });
       }
     }
@@ -11594,6 +11619,13 @@ Return ONLY valid JSON, no markdown.`;
           const c = { id: uuid(), postId: pid, userId: me.id, userName: me.name, userAvatar: me.avatar || null, text, createdAt: new Date() };
           await comments.insertOne(c);
           await posts.updateOne({ id: pid }, { $inc: { commentsCount: 1 } });
+          // Notify post author (skip if self)
+          try {
+            const p = await posts.findOne({ id: pid }, { projection: { _id: 0, authorId: 1, title: 1 } });
+            if (p && p.authorId && p.authorId !== me.id) {
+              await mkNotif({ userId: p.authorId, type: 'post_commented', category: 'circle', title: `${me.name} commented on your post`, body: text.slice(0, 100), link: `/explore/community?post=${pid}`, meta: { postId: pid, actorId: me.id, commentId: c.id } });
+            }
+          } catch {}
           const { _id, ...rest } = c;
           return ok({ comment: rest }, 201);
         }
@@ -11635,6 +11667,233 @@ Return ONLY valid JSON, no markdown.`;
       }
     }
     // ================== end Module 1 additions ==================
+
+    // =========================================================================
+    // MODULE 2 (Explore, July 2025): Social Network — Profiles, Follow, Search,
+    //                                Discovery, Suggestions
+    // =========================================================================
+    async function ensureModule2Indexes() {
+      try {
+        const f = await getCollection('circle_follows');
+        await f.createIndex({ followerId: 1, followingId: 1 }, { unique: true });
+        await f.createIndex({ followingId: 1, createdAt: -1 });
+        await f.createIndex({ followerId: 1, createdAt: -1 });
+        const u = await getCollection('users');
+        await u.createIndex({ username: 1 }, { unique: true, sparse: true });
+      } catch {}
+    }
+    await ensureModule2Indexes();
+
+    const publicUserFields = { _id: 0, id: 1, name: 1, username: 1, avatar: 1, role: 1, bio: 1, country: 1, city: 1, languages: 1, interests: 1, verified: 1, createdAt: 1 };
+    const usersColLazy = () => getCollection('users');
+
+    async function computeUserStats(userId) {
+      const [followers, following, jCount, pCount] = await Promise.all([
+        (await getCollection('circle_follows')).countDocuments({ followingId: userId }),
+        (await getCollection('circle_follows')).countDocuments({ followerId: userId }),
+        journeys.countDocuments({ curatorId: userId, visibility: 'public' }),
+        (await getCollection('circle_posts')).countDocuments({ authorId: userId, hidden: { $ne: true } }),
+      ]);
+      return { followers, following, journeys: jCount, posts: pCount };
+    }
+
+    // ---------- GET /users/:id/profile — public profile (id or username) ----------
+    {
+      const m = path.match(/^\/users\/([\w.\-]+)\/profile$/);
+      if (m && method === 'GET') {
+        const key = m[1];
+        const users = await usersColLazy();
+        const u = await users.findOne(
+          { $or: [{ id: key }, { username: key.toLowerCase() }] },
+          { projection: publicUserFields }
+        );
+        if (!u) return err('User not found', 404);
+        const [stats, publicJourneys, publicPosts, isFollowing] = await Promise.all([
+          computeUserStats(u.id),
+          journeys.find({ curatorId: u.id, visibility: 'public' }, { projection: { _id: 0 } }).sort({ publishedAt: -1, createdAt: -1 }).limit(12).toArray(),
+          (await getCollection('circle_posts')).find({ authorId: u.id, hidden: { $ne: true } }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(12).toArray(),
+          me ? (await getCollection('circle_follows')).findOne({ followerId: me.id, followingId: u.id }).then(r => !!r) : Promise.resolve(false),
+        ]);
+        // Activity feed: last 20 items combining published journeys, posts, joined journeys
+        const [joinedMembers] = await Promise.all([
+          circleMembers.find({ userId: u.id, status: 'accepted' }, { projection: { _id: 0 } }).sort({ decidedAt: -1 }).limit(20).toArray(),
+        ]);
+        const joinedJourneyIds = joinedMembers.map(m => m.journeyId);
+        const joinedJourneys = joinedJourneyIds.length
+          ? await journeys.find({ id: { $in: joinedJourneyIds } }, { projection: { _id: 0, id: 1, slug: 1, name: 1, cover: 1 } }).toArray()
+          : [];
+        const jMap = Object.fromEntries(joinedJourneys.map(j => [j.id, j]));
+        const activity = [
+          ...publicJourneys.slice(0, 10).map(j => ({ type: 'journey_published', at: j.publishedAt || j.createdAt, ref: { id: j.id, slug: j.slug, name: j.name, cover: j.cover } })),
+          ...publicPosts.slice(0, 10).map(p => ({ type: p.category === 'hidden_gems' ? 'gem_shared' : (p.category === 'discussions' ? 'discussion_posted' : 'post_shared'), at: p.createdAt, ref: { id: p.id, title: p.title || (p.content||'').slice(0, 80), category: p.category } })),
+          ...joinedMembers.slice(0, 10).map(mm => ({ type: 'journey_joined', at: mm.decidedAt || mm.createdAt, ref: jMap[mm.journeyId] || { id: mm.journeyId } })),
+        ].filter(a => a.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 20);
+        return ok({
+          user: { ...u, isSelf: me?.id === u.id, isFollowing, stats },
+          journeys: publicJourneys,
+          posts: publicPosts,
+          activity,
+        });
+      }
+    }
+
+    // ---------- POST /users/:id/follow (toggle) ----------
+    {
+      const m = path.match(/^\/users\/([\w.\-]+)\/follow$/);
+      if (m && method === 'POST') {
+        if (!me) return err('Sign in required', 401);
+        const key = m[1];
+        const users = await usersColLazy();
+        const target = await users.findOne({ $or: [{ id: key }, { username: key.toLowerCase() }] }, { projection: { _id: 0, id: 1, name: 1 } });
+        if (!target) return err('User not found', 404);
+        if (target.id === me.id) return err('Cannot follow yourself', 400);
+        const follows = await getCollection('circle_follows');
+        const existing = await follows.findOne({ followerId: me.id, followingId: target.id });
+        if (existing) {
+          await follows.deleteOne({ _id: existing._id });
+          return ok({ following: false });
+        }
+        try {
+          await follows.insertOne({ id: uuid(), followerId: me.id, followingId: target.id, createdAt: new Date() });
+        } catch { /* dup */ }
+        // Notify
+        try {
+          await mkNotif({ userId: target.id, type: 'user_followed', category: 'circle', title: `${me.name} started following you`, body: '', link: `/explore/u/${me.id}`, meta: { actorId: me.id } });
+        } catch {}
+        return ok({ following: true });
+      }
+    }
+
+    // ---------- GET /users/:id/{followers|following} ----------
+    {
+      const m = path.match(/^\/users\/([\w.\-]+)\/(followers|following)$/);
+      if (m && method === 'GET') {
+        const key = m[1]; const kind = m[2];
+        const users = await usersColLazy();
+        const target = await users.findOne({ $or: [{ id: key }, { username: key.toLowerCase() }] }, { projection: { _id: 0, id: 1 } });
+        if (!target) return err('User not found', 404);
+        const follows = await getCollection('circle_follows');
+        const limit = Math.min(Number(url.searchParams.get('limit')) || 60, 100);
+        const filter = kind === 'followers' ? { followingId: target.id } : { followerId: target.id };
+        const rows = await follows.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(limit).toArray();
+        const ids = rows.map(r => kind === 'followers' ? r.followerId : r.followingId);
+        const list = ids.length ? await users.find({ id: { $in: ids } }, { projection: publicUserFields }).toArray() : [];
+        return ok({ users: list, total: list.length });
+      }
+    }
+
+    // ---------- GET /circle/search — universal search ----------
+    if (path === '/circle/search' && method === 'GET') {
+      const q = (url.searchParams.get('q') || '').trim();
+      const typeParam = url.searchParams.get('type') || 'all';
+      const limit = Math.min(Number(url.searchParams.get('limit')) || 10, 25);
+      if (!q) return ok({ travelers: [], journeys: [], posts: [] });
+      const rx = { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+      const users = await usersColLazy();
+      const posts = await getCollection('circle_posts');
+      const wantAll = typeParam === 'all';
+      const [travelers, jList, pList] = await Promise.all([
+        (wantAll || typeParam === 'travelers')
+          ? users.find({ $or: [{ name: rx }, { username: rx }, { city: rx }, { country: rx }] }, { projection: publicUserFields }).limit(limit).toArray()
+          : Promise.resolve([]),
+        (wantAll || typeParam === 'journeys')
+          ? journeys.find({ visibility: 'public', $or: [{ name: rx }, { description: rx }, { 'destination.name': rx }, { 'destination.district': rx }, { theme: rx }] }, { projection: { _id: 0 } }).sort({ publishedAt: -1 }).limit(limit).toArray()
+          : Promise.resolve([]),
+        (wantAll || typeParam === 'posts')
+          ? posts.find({ hidden: { $ne: true }, $or: [{ title: rx }, { content: rx }, { location: rx }, { tags: rx }] }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(limit).toArray()
+          : Promise.resolve([]),
+      ]);
+      return ok({ q, travelers, journeys: jList, posts: pList });
+    }
+
+    // ---------- GET /circle/discovery — homepage feed sections ----------
+    if (path === '/circle/discovery' && method === 'GET') {
+      const posts = await getCollection('circle_posts');
+      const users = await usersColLazy();
+      const follows = await getCollection('circle_follows');
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 86400000);
+      const [trending, freshJ, hidden, discussions] = await Promise.all([
+        // Trending journeys: last 7 days, sort by viewsCount desc then likesCount
+        journeys.find({ visibility: 'public', publishedAt: { $gte: weekAgo } }, { projection: { _id: 0 } }).sort({ viewsCount: -1, likesCount: -1, publishedAt: -1 }).limit(6).toArray(),
+        // New journeys
+        journeys.find({ visibility: 'public' }, { projection: { _id: 0 } }).sort({ publishedAt: -1, createdAt: -1 }).limit(6).toArray(),
+        // Hidden gems: category=hidden_gems posts
+        posts.find({ hidden: { $ne: true }, category: 'hidden_gems' }, { projection: { _id: 0 } }).sort({ likesCount: -1, createdAt: -1 }).limit(6).toArray(),
+        // Recent discussions
+        posts.find({ hidden: { $ne: true }, category: 'discussions' }, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(6).toArray(),
+      ]);
+      // Popular travelers: aggregate on follows count
+      const topFollowed = await follows.aggregate([
+        { $group: { _id: '$followingId', c: { $sum: 1 } } },
+        { $sort: { c: -1 } },
+        { $limit: 8 },
+      ]).toArray();
+      let popular = [];
+      if (topFollowed.length) {
+        const ids = topFollowed.map(x => x._id);
+        const rows = await users.find({ id: { $in: ids } }, { projection: publicUserFields }).toArray();
+        const map = Object.fromEntries(rows.map(u => [u.id, u]));
+        popular = topFollowed.map(x => map[x._id]).filter(Boolean).map(u => ({ ...u, followersCount: topFollowed.find(t => t._id === u.id)?.c || 0 }));
+      }
+      if (popular.length < 4) {
+        // Fallback: top curators by journey count
+        const curators = await journeys.aggregate([
+          { $match: { visibility: 'public' } },
+          { $group: { _id: '$curatorId', c: { $sum: 1 } } },
+          { $sort: { c: -1 } },
+          { $limit: 8 },
+        ]).toArray();
+        const cids = curators.map(x => x._id).filter(id => !popular.find(p => p.id === id));
+        if (cids.length) {
+          const rows = await users.find({ id: { $in: cids } }, { projection: publicUserFields }).toArray();
+          popular = [...popular, ...rows.slice(0, 8 - popular.length)];
+        }
+      }
+      return ok({ trending, new: freshJ, hiddenGems: hidden, discussions, popular });
+    }
+
+    // ---------- GET /users/:id/suggested — suggested travelers ----------
+    {
+      const m = path.match(/^\/users\/([\w.\-]+)\/suggested$/);
+      if (m && method === 'GET') {
+        const key = m[1];
+        const users = await usersColLazy();
+        const target = await users.findOne({ $or: [{ id: key }, { username: key.toLowerCase() }] }, { projection: { _id: 0, id: 1, city: 1, country: 1, interests: 1 } });
+        if (!target) return err('User not found', 404);
+        const follows = await getCollection('circle_follows');
+        // Already followed
+        const followedRows = await follows.find({ followerId: target.id }, { projection: { _id: 0, followingId: 1 } }).toArray();
+        const followedIds = new Set(followedRows.map(r => r.followingId));
+        followedIds.add(target.id);
+        // Same destination via mutual journeys
+        const myMemberships = await circleMembers.find({ userId: target.id, status: 'accepted' }, { projection: { _id: 0, journeyId: 1 } }).limit(50).toArray();
+        const jIds = myMemberships.map(m => m.journeyId);
+        const otherMembersDocs = jIds.length
+          ? await circleMembers.find({ journeyId: { $in: jIds }, status: 'accepted', userId: { $ne: target.id } }, { projection: { _id: 0, userId: 1, journeyId: 1 } }).toArray()
+          : [];
+        const mutualCounts = otherMembersDocs.reduce((m, r) => { m[r.userId] = (m[r.userId] || 0) + 1; return m; }, {});
+        // Same city / same interests
+        const or = [];
+        if (target.city) or.push({ city: target.city });
+        if (target.country) or.push({ country: target.country });
+        if (Array.isArray(target.interests) && target.interests.length) or.push({ interests: { $in: target.interests } });
+        const candidateFilter = or.length ? { id: { $nin: [...followedIds] }, $or: or } : { id: { $nin: [...followedIds] } };
+        const cands = await users.find(candidateFilter, { projection: publicUserFields }).limit(30).toArray();
+        // Score
+        const scored = cands.map(u => {
+          let s = 0;
+          if (u.city && u.city === target.city) s += 3;
+          if (u.country && u.country === target.country) s += 1;
+          const overlap = (u.interests || []).filter(i => (target.interests || []).includes(i)).length;
+          s += overlap * 2;
+          if (mutualCounts[u.id]) s += mutualCounts[u.id] * 4;
+          return { ...u, matchScore: s };
+        }).sort((a, b) => b.matchScore - a.matchScore).slice(0, 8);
+        return ok({ suggested: scored });
+      }
+    }
+    // ================== end Module 2 additions ==================
 
 
 
