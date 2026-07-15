@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -61,7 +61,15 @@ const emptyForm = () => ({
   type: 'journey',
 });
 
-export default function ExploreJourney() {
+export default function ExploreJourneyPage() {
+  return (
+    <Suspense fallback={null}>
+      <ExploreJourney />
+    </Suspense>
+  );
+}
+
+function ExploreJourney() {
   const { user } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
