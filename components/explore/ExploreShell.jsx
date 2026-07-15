@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { ArrowLeft, LogIn, MapPin } from 'lucide-react';
+import { LogIn, MapPin } from 'lucide-react';
 import ExploreSubNav from './ExploreSubNav';
 import ThemeToggle from './ThemeToggle';
 
@@ -12,10 +12,6 @@ export default function ExploreShell({ children }) {
       <header className="sticky top-0 z-40 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--e-ink) 55%, transparent)', borderColor: 'var(--e-line)' }}>
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3 shrink-0">
-            <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-medium transition hover:opacity-80" style={{ color: 'var(--e-text-muted)' }}>
-              <ArrowLeft className="size-3.5" /> Safar
-            </Link>
-            <div className="h-4 w-px" style={{ background: 'var(--e-line-strong)' }} />
             <Link href="/explore/home" className="inline-flex items-center gap-2 shrink-0">
               <div className="size-7 rounded-lg bg-gradient-to-br from-emerald-300 via-violet-400 to-fuchsia-400 grid place-items-center shadow-lg shadow-violet-500/30">
                 <MapPin className="size-3.5 text-[#06080f]" strokeWidth={2.6} />
