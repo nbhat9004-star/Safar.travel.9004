@@ -61,7 +61,7 @@ export default function ExplorePassport() {
     <div className="relative">
       <section className="relative overflow-hidden pt-14 md:pt-20 pb-10">
         <AuroraBg />
-        <div className="relative max-w-6xl mx-auto px-4 md:px-8">
+        <div className="relative e-container">
           <div className="e-glass rounded-3xl p-6 md:p-10 e-fade-in">
             <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-8">
               <div className="size-24 md:size-28 rounded-3xl bg-gradient-to-br from-emerald-300 via-violet-400 to-fuchsia-400 grid place-items-center text-[#06080f] text-4xl font-bold shadow-2xl shadow-violet-500/40">
@@ -83,7 +83,7 @@ export default function ExplorePassport() {
       </section>
 
       {/* Stats */}
-      <section className="relative max-w-6xl mx-auto px-4 md:px-8 mb-10">
+      <section className="relative e-container mb-10">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map(s => (
             <div key={s.label} className="e-glass rounded-3xl p-5">
@@ -96,7 +96,7 @@ export default function ExplorePassport() {
       </section>
 
       {/* Badges */}
-      <section className="relative max-w-6xl mx-auto px-4 md:px-8 mb-10">
+      <section className="relative e-container mb-10">
         <div className="flex items-end justify-between mb-4">
           <div>
             <div className="e-chip"><Award className="size-3 text-emerald-300" /> Badges</div>
@@ -115,7 +115,7 @@ export default function ExplorePassport() {
       </section>
 
       {/* Countries + States */}
-      <section className="relative max-w-6xl mx-auto px-4 md:px-8 pb-24 grid md:grid-cols-2 gap-5">
+      <section className="relative e-container pb-24 grid md:grid-cols-2 gap-5">
         <div className="e-glass rounded-3xl p-6">
           <div className="e-chip"><Globe className="size-3" /> Countries</div>
           <h3 className="display text-xl font-bold mt-3">{COUNTRIES.length} visited</h3>

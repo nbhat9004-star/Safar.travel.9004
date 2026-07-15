@@ -142,6 +142,12 @@ html:has(.explore-root), body:has(.explore-root) { overflow-x: hidden; max-width
 .e-badge-ai { background: linear-gradient(120deg,rgba(110,231,183,0.2),rgba(167,139,250,0.25)); color: #cffafe; border: 1px solid rgba(167,139,250,0.4); }
 .e-badge-new { background: rgba(247,210,113,0.15); color: #f7d271; border: 1px solid rgba(247,210,113,0.4); }
 
+/* Shared premium content grid — single source of truth for Explore content width.
+   All major sections use .e-container so left/right edges align across the entire page,
+   while backgrounds stay full-bleed. */
+.e-container { max-width: 80rem; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem; width: 100%; }
+@media (min-width: 768px) { .e-container { padding-left: 2rem; padding-right: 2rem; } }
+
 /* Hero decorative visuals (right column) */
 .e-float-a { animation: eFloatA 7s ease-in-out infinite alternate; will-change: transform; }
 .e-float-b { animation: eFloatB 8.5s ease-in-out infinite alternate; will-change: transform; animation-delay: -1.5s; }

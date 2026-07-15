@@ -73,7 +73,7 @@ export default function ExploreHome() {
       {/* HERO */}
       <section className="relative overflow-hidden pt-14 md:pt-20 pb-10">
         <AuroraBg />
-        <div className="relative max-w-7xl mx-auto px-4 md:px-8 e-fade-in">
+        <div className="relative e-container e-fade-in">
           <div className="grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-8 lg:gap-12 items-center">
             {/* Left — content */}
             <div className="relative z-[1]">
@@ -168,7 +168,7 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 1 — LIVE KASHMIR */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-14">
+      <section className="relative e-container mb-16 md:mb-24">
         <div className="flex items-end justify-between mb-5">
           <div>
             <div className="e-chip"><Sun className="size-3 text-amber-300" /> Live Kashmir</div>
@@ -197,7 +197,7 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 2 — LIVE JOURNEYS */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-14">
+      <section className="relative e-container mb-16 md:mb-24">
         <div className="flex items-end justify-between mb-5 gap-3 flex-wrap">
           <div>
             <div className="e-chip"><Route className="size-3 text-emerald-300" /> Live Journeys</div>
@@ -241,7 +241,7 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 3 — COMMUNITY */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-14">
+      <section className="relative e-container mb-16 md:mb-24">
         <div className="flex items-end justify-between mb-5">
           <div>
             <div className="e-chip"><Users className="size-3 text-violet-300" /> Community</div>
@@ -260,7 +260,7 @@ export default function ExploreHome() {
       </section>
 
       {/* SECTION 4 — YOUR JOURNEY */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-14">
+      <section className="relative e-container mb-16 md:mb-24">
         <div className="flex items-end justify-between mb-5">
           <div>
             <div className="e-chip"><IdCard className="size-3 text-fuchsia-300" /> Your Journey</div>
@@ -288,7 +288,7 @@ export default function ExploreHome() {
       </section>
 
       {/* AI concierge inline */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 pb-24">
+      <section className="relative e-container pb-24">
         <AIPanel
           title="Safar AI — your travel concierge"
           suggestions={['Best weekend trip for me this week', 'Hidden gems near Srinagar', 'Ski + culture combo, ₹35k, 4 days', 'What festivals are on this month?']}

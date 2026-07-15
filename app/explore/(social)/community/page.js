@@ -59,7 +59,7 @@ export default function ExploreCommunity() {
       {/* HERO */}
       <section className="relative overflow-hidden pt-14 md:pt-20 pb-10">
         <AuroraBg />
-        <div className="relative max-w-7xl mx-auto px-4 md:px-8 e-fade-in">
+        <div className="relative e-container e-fade-in">
           <div className="e-chip"><Users className="size-3 text-emerald-300" /> Community</div>
           <h1 className="display font-bold mt-4 text-[clamp(2rem,5.6vw,4rem)] leading-tight max-w-3xl">
             Find your <span className="e-grad-text">travel tribe.</span>
@@ -69,7 +69,7 @@ export default function ExploreCommunity() {
       </section>
 
       {/* AI Buddy Match */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-10">
+      <section className="relative e-container mb-10">
         <AIPanel
           title="Safar AI — Buddy Match"
           suggestions={['I am solo, 26, want photography-focused trip in Nov', 'We are a couple, love adventure but no crowds', 'Family of 4, kids 6 & 9, week-long relaxed trip']}
@@ -78,7 +78,7 @@ export default function ExploreCommunity() {
       </section>
 
       {/* Type filter */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-4">
+      <section className="relative e-container mb-4">
         <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
           <div className="e-chip"><Users className="size-3 text-emerald-300" /> Travel Buddy Finder</div>
           <button onClick={() => setShowFlt(v => !v)} className="text-xs inline-flex items-center gap-1.5 e-btn-ghost rounded-full px-3 py-1.5"><Filter className="size-3.5" /> {showFlt ? 'Hide filters' : 'Show filters'}</button>
@@ -112,7 +112,7 @@ export default function ExploreCommunity() {
       </section>
 
       {/* Buddies grid */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-16">
+      <section className="relative e-container mb-16">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map(b => (
             <div key={b.id} className="e-glass rounded-3xl p-5 e-lift-in">
@@ -137,7 +137,7 @@ export default function ExploreCommunity() {
       </section>
 
       {/* Public trips (reused from /circle backend) */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-16">
+      <section className="relative e-container mb-16">
         <div className="flex items-end justify-between mb-6">
           <div>
             <div className="e-chip"><Plane className="size-3 text-violet-300" /> Public trips</div>
@@ -173,7 +173,7 @@ export default function ExploreCommunity() {
       </section>
 
       {/* Discussions */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 pb-24">
+      <section className="relative e-container pb-24">
         <div className="e-chip"><MessageCircle className="size-3 text-emerald-300" /> Discussions</div>
         <h2 className="display text-2xl md:text-3xl font-bold mt-3 mb-6">The community is talking</h2>
         <div className="grid md:grid-cols-2 gap-4">

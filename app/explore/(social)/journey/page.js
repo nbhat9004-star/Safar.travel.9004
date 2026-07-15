@@ -93,7 +93,7 @@ export default function ExploreJourney() {
     <div className="relative">
       <section className="relative overflow-hidden pt-14 md:pt-20 pb-8">
         <AuroraBg />
-        <div className="relative max-w-7xl mx-auto px-4 md:px-8 e-fade-in">
+        <div className="relative e-container e-fade-in">
           <div className="e-chip"><Route className="size-3 text-emerald-300" /> Journey</div>
           <h1 className="display font-bold mt-4 text-[clamp(2rem,5.6vw,4rem)] leading-tight max-w-3xl">Design a trip <span className="e-grad-text">worth remembering.</span></h1>
           <p className="mt-4 text-white/75 max-w-2xl">One place for your itinerary, packing list, budget, timeline and saved places. Powered by Safar AI end-to-end.</p>
@@ -101,7 +101,7 @@ export default function ExploreJourney() {
       </section>
 
       {/* Tabs */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-6">
+      <section className="relative e-container mb-6">
         {/* Journey type selector */}
         <div className="e-chip mb-3"><Sparkles className="size-3 text-emerald-300" /> Journey type</div>
         <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1 mb-5">
@@ -121,7 +121,7 @@ export default function ExploreJourney() {
       </section>
 
       {/* Panels */}
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 pb-24">
+      <section className="relative e-container pb-24">
         {tab === 'planner' && (
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 e-glass rounded-3xl p-6 md:p-8">

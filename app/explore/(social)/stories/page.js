@@ -43,14 +43,14 @@ export default function ExploreStories() {
     <div className="relative">
       <section className="relative overflow-hidden pt-14 md:pt-20 pb-8">
         <AuroraBg />
-        <div className="relative max-w-7xl mx-auto px-4 md:px-8 e-fade-in">
+        <div className="relative e-container e-fade-in">
           <div className="e-chip"><Camera className="size-3 text-emerald-300" /> Stories</div>
           <h1 className="display font-bold mt-4 text-[clamp(2rem,5.6vw,4rem)] leading-tight max-w-3xl">Moments that <span className="e-grad-text">carried them home.</span></h1>
           <p className="mt-4 text-white/75 max-w-2xl">Photos, videos, journals and collections from every corner of the valley.</p>
         </div>
       </section>
 
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 mb-6">
+      <section className="relative e-container mb-6">
         <div className="flex items-center gap-2 overflow-x-auto e-scroll-x pb-1">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)} className={`shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition border ${tab===id ? 'e-btn-primary border-transparent' : 'bg-white/[0.04] border-white/10 text-white/75 hover:bg-white/[0.08] hover:text-white'}`}>
@@ -60,7 +60,7 @@ export default function ExploreStories() {
         </div>
       </section>
 
-      <section className="relative max-w-7xl mx-auto px-4 md:px-8 pb-24">
+      <section className="relative e-container pb-24">
         {tab === 'photos' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {PHOTOS.map((p, i) => (
