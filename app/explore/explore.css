@@ -142,9 +142,35 @@ html:has(.explore-root), body:has(.explore-root) { overflow-x: hidden; max-width
 .e-badge-ai { background: linear-gradient(120deg,rgba(110,231,183,0.2),rgba(167,139,250,0.25)); color: #cffafe; border: 1px solid rgba(167,139,250,0.4); }
 .e-badge-new { background: rgba(247,210,113,0.15); color: #f7d271; border: 1px solid rgba(247,210,113,0.4); }
 
+/* Hero decorative visuals (right column) */
+.e-float-a { animation: eFloatA 7s ease-in-out infinite alternate; will-change: transform; }
+.e-float-b { animation: eFloatB 8.5s ease-in-out infinite alternate; will-change: transform; animation-delay: -1.5s; }
+.e-float-c { animation: eFloatC 9.2s ease-in-out infinite alternate; will-change: transform; animation-delay: -3s; }
+.e-float-slow { animation: eFloatA 12s ease-in-out infinite alternate; will-change: transform; }
+.e-float-slow-r { animation: eFloatB 14s ease-in-out infinite alternate; will-change: transform; animation-delay: -4s; }
+@keyframes eFloatA { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(-6px,-10px,0); } }
+@keyframes eFloatB { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(8px,-8px,0); } }
+@keyframes eFloatC { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(-8px,6px,0); } }
+
+.e-path-dash { animation: ePathDash 4s linear infinite; }
+.e-path-dash-slow { animation: ePathDash 7s linear infinite reverse; }
+@keyframes ePathDash { to { stroke-dashoffset: -140; } }
+
+.e-compass-spin { animation: eSpin 32s linear infinite; will-change: transform; }
+@keyframes eSpin { to { transform: rotate(360deg); } }
+
+.e-pin-pulse { width: 10px; height: 10px; border-radius: 999px; background: radial-gradient(circle, #6ee7b7 0%, #a78bfa 100%); box-shadow: 0 0 0 0 rgba(110,231,183,0.55); animation: ePinPulse 2.4s ease-out infinite; display: block; }
+@keyframes ePinPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(110,231,183,0.55); transform: scale(1); }
+  70%  { box-shadow: 0 0 0 14px rgba(110,231,183,0);  transform: scale(1.05); }
+  100% { box-shadow: 0 0 0 0 rgba(110,231,183,0);    transform: scale(1); }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .e-aurora, .e-orb, .e-fade-in, .e-lift-in { animation: none !important; }
+  .e-aurora, .e-orb, .e-fade-in, .e-lift-in,
+  .e-float-a, .e-float-b, .e-float-c, .e-float-slow, .e-float-slow-r,
+  .e-path-dash, .e-path-dash-slow, .e-compass-spin, .e-pin-pulse { animation: none !important; }
 }
 
 /* Bottom nav spacer to prevent content hidden behind fixed nav on mobile */
