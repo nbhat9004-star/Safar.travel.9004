@@ -27,6 +27,8 @@ export default function Navbar({ transparent = false }) {
   const [showNotifications, setShowNotifications] = useState(false);
   // Module 11A — "More" dropdown (desktop)
   const [showMore, setShowMore] = useState(false);
+  // Mobile drawer "More" section — collapsed by default; user must tap to expand
+  const [showMobileMore, setShowMobileMore] = useState(false);
   // Desktop nav — "Experience" (marketplace) dropdown
   const [showExperience, setShowExperience] = useState(false);
 
@@ -51,7 +53,6 @@ export default function Navbar({ transparent = false }) {
     { label: 'Terms & Conditions', href: '/terms' },
     { label: 'Trust & Safety', href: '/trust-safety' },
     { label: 'Community Guidelines', href: '/community-guidelines' },
-    { label: 'Blog', href: '/blog', soon: true },
     { label: 'Careers', href: '/careers', soon: true },
   ];
   
@@ -500,24 +501,38 @@ export default function Navbar({ transparent = false }) {
                     </>
                   )}
 
-                  {/* MODULE 11A — MORE Section (informational pages) */}
+                  {/* MODULE 11A — MORE Section (informational pages) — collapsed by default; tap header to toggle */}
                   <div className="h-px bg-border mb-4" />
                   <div className="mb-4">
-                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">More</div>
-                    {MORE_LINKS.map((it) => (
-                      <Link
-                        key={it.href}
-                        href={it.soon ? '#' : it.href}
-                        onClick={(e) => {
-                          if (it.soon) e.preventDefault();
-                          else setOpen(false);
-                        }}
-                        className={`flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition ${it.soon ? 'text-muted-foreground' : ''}`}
-                      >
-                        <span>{it.label}</span>
-                        {it.soon && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
-                      </Link>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setShowMobileMore((v) => !v)}
+                      aria-expanded={showMobileMore}
+                      aria-controls="mobile-more-panel"
+                      className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary transition"
+                    >
+                      <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">More</span>
+                      <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-300 ${showMobileMore ? 'rotate-180' : ''}`} />
+                    </button>
+                    <div
+                      id="mobile-more-panel"
+                      className={`overflow-hidden transition-all duration-300 ease-out ${showMobileMore ? 'max-h-[800px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}
+                    >
+                      {MORE_LINKS.map((it) => (
+                        <Link
+                          key={it.href}
+                          href={it.soon ? '#' : it.href}
+                          onClick={(e) => {
+                            if (it.soon) e.preventDefault();
+                            else setOpen(false);
+                          }}
+                          className={`flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition ${it.soon ? 'text-muted-foreground' : ''}`}
+                        >
+                          <span>{it.label}</span>
+                          {it.soon && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
 
                   {/* ADMINISTRATION Section - Only for admins */}
