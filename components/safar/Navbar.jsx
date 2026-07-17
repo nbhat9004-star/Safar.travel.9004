@@ -182,18 +182,34 @@ export default function Navbar({ transparent = false }) {
       initial={{ y: -24, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${solid ? 'glass-nav border-b border-border/60 shadow-[0_4px_30px_-12px_rgba(15,20,25,0.18)]' : 'bg-transparent'}`}
+      className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 bg-white shadow-[0_1px_2px_rgba(15,20,25,0.04),0_2px_10px_-2px_rgba(15,20,25,0.06)] ${solid ? 'md:glass-nav md:border-b md:border-border/60 md:shadow-[0_4px_30px_-12px_rgba(15,20,25,0.18)]' : 'md:bg-transparent md:shadow-none'}`}
     >
-      <div className="container flex h-16 lg:h-20 items-center justify-between gap-4">
+      <div className="container flex h-16 lg:h-20 items-center justify-between gap-3 md:gap-4">
         <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-          <div className="size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-lg shadow-emerald2/25 ring-1 ring-white/20">
+          <div className="size-9 md:size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-lg shadow-emerald2/25 ring-1 ring-white/20">
             <MapPin className="size-5 text-gold" strokeWidth={2.4} />
           </div>
-          <div className="flex flex-col leading-tight">
-            <span className={`font-display font-bold text-xl tracking-tight ${solid ? 'text-charcoal' : 'text-white'}`}>Safar</span>
-            <span className={`text-[10px] uppercase tracking-[0.22em] -mt-0.5 ${solid ? 'text-muted-foreground' : 'text-white/70'}`}>Kashmir · Curated</span>
+          <div className="hidden sm:flex flex-col leading-tight">
+            <span className={`font-display font-bold text-xl tracking-tight ${solid ? 'text-charcoal' : 'text-charcoal md:text-white'}`}>Safar</span>
+            <span className={`text-[10px] uppercase tracking-[0.22em] -mt-0.5 ${solid ? 'text-muted-foreground' : 'text-muted-foreground md:text-white/70'}`}>Kashmir · Curated</span>
           </div>
+          <span className={`sm:hidden font-display font-bold text-lg tracking-tight ${solid ? 'text-charcoal' : 'text-charcoal md:text-white'}`}>Safar</span>
         </Link>
+
+        {/* Mobile location chip — clean center pill (Polarsteps-inspired).
+            Kept as a simple visual anchor + Link into the marketplace, since the
+            existing app doesn't have a dedicated location-selector service. */}
+        {!isAdminUser && (
+          <Link
+            href="/explore"
+            aria-label="Browse Kashmir"
+            className="md:hidden flex-1 min-w-0 mx-1 flex items-center justify-center gap-1.5 h-10 px-3 rounded-full bg-secondary/70 border border-border/50 text-charcoal text-[13px] font-semibold hover:bg-secondary transition-colors"
+          >
+            <MapPin className="size-3.5 text-emerald2 shrink-0" strokeWidth={2.4} />
+            <span className="truncate">Kashmir</span>
+            <ChevronDown className="size-3.5 text-muted-foreground/70 shrink-0" />
+          </Link>
+        )}
 
         <nav className="hidden xl:flex items-center gap-0.5">
           {/* Experience — consolidated marketplace entry point (dropdown).
@@ -516,28 +532,46 @@ export default function Navbar({ transparent = false }) {
       <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={()=>setAuthMode(null)} />
     </header>
 
-    {/* Mobile bottom navigation — visible only on <md viewports. Fixed at the
-        bottom, respects iOS/Android safe-area, uses existing routes. Hidden
-        for admin/super_admin users. Desktop navigation is unaffected. */}
+    {/* Mobile bottom navigation — Polarsteps-inspired premium layout. Fixed at
+        the bottom, respects iOS/Android safe-area, uses existing Safar routes
+        and brand color. Hidden for admin/super_admin users. Desktop nav is
+        unaffected (md:hidden). */}
     {!isAdminUser && (
       <nav
         aria-label="Primary mobile navigation"
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-border/60 shadow-[0_-4px_20px_-8px_rgba(15,20,25,0.12)]"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/98 backdrop-blur-md shadow-[0_-4px_20px_-6px_rgba(15,20,25,0.08),0_-1px_2px_rgba(15,20,25,0.04)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <ul className="grid grid-cols-5">
+        <ul className="grid grid-cols-5 items-stretch px-1 pt-1.5 pb-1">
           {BOTTOM_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = item.match(pathname || '');
             return (
-              <li key={item.href}>
+              <li key={item.href} className="flex">
                 <Link
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex flex-col items-center justify-center gap-0.5 py-2 px-1 min-h-[56px] transition-colors ${active ? 'text-emerald2' : 'text-charcoal/70 hover:text-charcoal'}`}
+                  className="group flex-1 flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-h-[60px] rounded-2xl transition-colors duration-200"
                 >
-                  <Icon className={`size-5 ${active ? 'text-emerald2' : ''}`} strokeWidth={active ? 2.4 : 2} />
-                  <span className={`text-[10px] leading-tight font-medium tracking-tight ${active ? 'text-emerald2' : ''}`}>{item.label}</span>
+                  <span
+                    className={`relative flex items-center justify-center h-8 w-12 rounded-full transition-all duration-200 ${
+                      active
+                        ? 'bg-emerald2/10'
+                        : 'bg-transparent group-active:bg-secondary'
+                    }`}
+                  >
+                    <Icon
+                      className={`size-[22px] transition-colors ${active ? 'text-emerald2' : 'text-charcoal/60'}`}
+                      strokeWidth={active ? 2.4 : 2}
+                    />
+                  </span>
+                  <span
+                    className={`text-[10.5px] leading-none tracking-tight transition-colors ${
+                      active ? 'text-emerald2 font-semibold' : 'text-charcoal/60 font-medium'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               </li>
             );
