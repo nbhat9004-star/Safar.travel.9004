@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown, Store, Wand2, Home } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown, Store, Wand2, Home, Instagram, Facebook, Twitter, Linkedin, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
@@ -43,18 +43,55 @@ export default function Navbar({ transparent = false }) {
     { href: '/explore?cat=shopping',   label: 'Shopping' },
   ];
   
-  // Module 11A — informational + placeholder links shared by desktop dropdown and mobile drawer
-  const MORE_LINKS = [
-    { label: 'About Safar', href: '/about' },
-    { label: 'Contact Us', href: '/contact' },
-    { label: 'Help Center', href: '/help' },
-    { label: 'Cancellation Policy', href: '/cancellation-policy' },
-    { label: 'Refund Policy', href: '/refund-policy' },
-    { label: 'Privacy Policy', href: '/privacy-policy' },
-    { label: 'Terms & Conditions', href: '/terms' },
-    { label: 'Trust & Safety', href: '/trust-safety' },
-    { label: 'Community Guidelines', href: '/community-guidelines' },
-    { label: 'Careers', href: '/careers', soon: true },
+  // Module 11A — informational links, expanded to include former footer
+  // content (Company / Legal / Support / Connect / Contact). Grouped so the
+  // "More" menu now covers everything the global footer previously did.
+  const MORE_SECTIONS = [
+    {
+      title: 'Company',
+      items: [
+        { label: 'About Safar',   href: '/about' },
+        { label: 'Contact Us',    href: '/contact' },
+        { label: 'Careers',       href: '/careers',        soon: true },
+        { label: 'Blog / Stories', href: '/explore/stories' },
+        { label: 'Press & Media', href: '/press',          soon: true },
+      ],
+    },
+    {
+      title: 'Legal',
+      items: [
+        { label: 'Privacy Policy',      href: '/privacy' },
+        { label: 'Terms & Conditions',  href: '/terms' },
+        { label: 'Refund Policy',       href: '/cancellation-policy' },
+        { label: 'Cookies Policy',      href: '/cookies',            soon: true },
+      ],
+    },
+    {
+      title: 'Support',
+      items: [
+        { label: 'Help Center',           href: '/help' },
+        { label: 'FAQs',                  href: '/help#faqs' },
+        { label: 'Support',               href: '/contact' },
+        { label: 'Trust & Safety',        href: '/trust-safety' },
+        { label: 'Community Guidelines',  href: '/community-guidelines', soon: true },
+      ],
+    },
+    {
+      title: 'Connect',
+      items: [
+        { label: 'Instagram',   href: 'https://instagram.com/safarcurated',        external: true, icon: Instagram },
+        { label: 'Facebook',    href: 'https://facebook.com/safarcurated',         external: true, icon: Facebook },
+        { label: 'X (Twitter)', href: 'https://twitter.com/safarcurated',          external: true, icon: Twitter },
+        { label: 'LinkedIn',    href: 'https://linkedin.com/company/safarcurated', external: true, icon: Linkedin },
+      ],
+    },
+    {
+      title: 'Contact',
+      items: [
+        { label: 'hello@safarcurated.com', href: 'mailto:hello@safarcurated.com', external: true, icon: Mail },
+        { label: 'Srinagar, Kashmir',      href: '/contact',                                       icon: MapPin },
+      ],
+    },
   ];
   
   useEffect(() => {
@@ -291,21 +328,42 @@ export default function Navbar({ transparent = false }) {
                 <ChevronDown className={`size-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
               </button>
               {showMore && (
-                <div role="menu" className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl border shadow-xl z-50 overflow-hidden">
-                  <div className="p-2 max-h-[70vh] overflow-y-auto">
-                    {MORE_LINKS.map((it) => (
-                      <Link
-                        key={it.href}
-                        href={it.soon ? '#' : it.href}
-                        onClick={(e) => {
-                          if (it.soon) e.preventDefault();
-                          setShowMore(false);
-                        }}
-                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition ${it.soon ? 'text-muted-foreground cursor-not-allowed' : 'text-charcoal hover:bg-secondary'}`}
-                      >
-                        <span>{it.label}</span>
-                        {it.soon && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
-                      </Link>
+                <div role="menu" className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border shadow-xl z-50 overflow-hidden">
+                  <div className="p-3 max-h-[75vh] overflow-y-auto">
+                    {MORE_SECTIONS.map((section, sIdx) => (
+                      <div key={section.title} className={sIdx > 0 ? 'mt-2 pt-2 border-t border-border/50' : ''}>
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-bold">{section.title}</div>
+                        {section.items.map((it) => {
+                          const ItIcon = it.icon;
+                          const external = it.external;
+                          const disabled = it.soon;
+                          const linkClass = `flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm transition ${disabled ? 'text-muted-foreground cursor-not-allowed' : 'text-charcoal hover:bg-secondary'}`;
+                          const inner = (
+                            <>
+                              <span className="flex items-center gap-2 min-w-0 truncate">
+                                {ItIcon && <ItIcon className="size-4 shrink-0 text-muted-foreground" />}
+                                <span className="truncate">{it.label}</span>
+                              </span>
+                              {disabled && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
+                            </>
+                          );
+                          if (disabled) {
+                            return <span key={it.label} className={linkClass}>{inner}</span>;
+                          }
+                          if (external) {
+                            return (
+                              <a key={it.label} href={it.href} target={it.href.startsWith('http') ? '_blank' : undefined} rel={it.href.startsWith('http') ? 'noopener noreferrer' : undefined} onClick={() => setShowMore(false)} className={linkClass}>
+                                {inner}
+                              </a>
+                            );
+                          }
+                          return (
+                            <Link key={it.label} href={it.href} onClick={() => setShowMore(false)} className={linkClass}>
+                              {inner}
+                            </Link>
+                          );
+                        })}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -476,21 +534,40 @@ export default function Navbar({ transparent = false }) {
                     </button>
                     <div
                       id="mobile-more-panel"
-                      className={`overflow-hidden transition-all duration-300 ease-out ${showMobileMore ? 'max-h-[800px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}
+                      className={`overflow-hidden transition-all duration-300 ease-out ${showMobileMore ? 'max-h-[1400px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}
                     >
-                      {MORE_LINKS.map((it) => (
-                        <Link
-                          key={it.href}
-                          href={it.soon ? '#' : it.href}
-                          onClick={(e) => {
-                            if (it.soon) e.preventDefault();
-                            else setOpen(false);
-                          }}
-                          className={`flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition ${it.soon ? 'text-muted-foreground' : ''}`}
-                        >
-                          <span>{it.label}</span>
-                          {it.soon && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
-                        </Link>
+                      {MORE_SECTIONS.map((section, sIdx) => (
+                        <div key={section.title} className={sIdx > 0 ? 'mt-3 pt-3 border-t border-border/50' : ''}>
+                          <div className="px-4 py-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-bold">{section.title}</div>
+                          {section.items.map((it) => {
+                            const ItIcon = it.icon;
+                            const external = it.external;
+                            const disabled = it.soon;
+                            const cls = `flex items-center justify-between gap-2 px-4 py-3 rounded-xl hover:bg-secondary text-[14.5px] font-medium transition ${disabled ? 'text-muted-foreground' : ''}`;
+                            const content = (
+                              <>
+                                <span className="flex items-center gap-2.5 min-w-0 truncate">
+                                  {ItIcon && <ItIcon className="size-4 shrink-0 text-muted-foreground" />}
+                                  <span className="truncate">{it.label}</span>
+                                </span>
+                                {disabled && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
+                              </>
+                            );
+                            if (disabled) return <span key={it.label} className={cls}>{content}</span>;
+                            if (external) {
+                              return (
+                                <a key={it.label} href={it.href} target={it.href.startsWith('http') ? '_blank' : undefined} rel={it.href.startsWith('http') ? 'noopener noreferrer' : undefined} onClick={() => setOpen(false)} className={cls}>
+                                  {content}
+                                </a>
+                              );
+                            }
+                            return (
+                              <Link key={it.label} href={it.href} onClick={() => setOpen(false)} className={cls}>
+                                {content}
+                              </Link>
+                            );
+                          })}
+                        </div>
                       ))}
                     </div>
                   </div>
