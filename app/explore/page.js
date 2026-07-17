@@ -392,7 +392,7 @@ function ExploreContent() {
           {!error && !loading && (
             mapView ? (
               <div className="grid lg:grid-cols-2 gap-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-h-[78vh] overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-5 max-h-[78vh] overflow-y-auto pr-1">
                   {list.map((l, i) => (
                     <div key={l.id} id={`property-${l.id}`} className="transition-all duration-300">
                       <PropertyCard item={l} index={i} />
@@ -415,7 +415,7 @@ function ExploreContent() {
                   <Button variant="outline" className="rounded-full mt-5" onClick={()=>{setSelectedServices([]); setPrice([500,15000]); setCat('all');}}>Reset filters</Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
                   {list.map((l, i) => <PropertyCard key={l.id} item={l} index={i} />)}
                 </div>
               )
