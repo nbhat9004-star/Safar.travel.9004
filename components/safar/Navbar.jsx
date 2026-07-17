@@ -3,12 +3,12 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown, Store, Wand2, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
 import { useAuth } from '@/lib/auth-context';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 // PERF: AuthModal is only mounted when the user opens the sign-in/sign-up
 // dialog. Splitting it out means the ~15KB Radix Dialog + form + validation
@@ -18,6 +18,7 @@ const AuthModal = dynamic(() => import('@/components/safar/AuthModal'), { ssr: f
 export default function Navbar({ transparent = false }) {
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null); // 'login' | 'signup' | null
@@ -162,7 +163,21 @@ export default function Navbar({ transparent = false }) {
   };
 
   const visibleNav = getVisibleNavItems();
+
+  // Mobile bottom navigation items — mirror the primary destinations previously
+  // surfaced through the hamburger drawer. Hidden for admin/super_admin who
+  // only see their admin nav.
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+  const BOTTOM_NAV_ITEMS = [
+    { href: '/build-trip',   label: 'Build Trip',   icon: Sparkles, match: (p) => p.startsWith('/build-trip') },
+    { href: '/explore',      label: 'Marketplace',  icon: Store,    match: (p) => p === '/explore' || (p.startsWith('/explore') && !p.startsWith('/explore/')) },
+    { href: '/ai-planner',   label: 'AI Planner',   icon: Wand2,    match: (p) => p.startsWith('/ai-planner') },
+    { href: '/add-listing',  label: 'Become Host',  icon: Home,     match: (p) => p.startsWith('/add-listing') },
+    { href: '/explore/home', label: 'Explore',      icon: Compass,  match: (p) => p.startsWith('/explore/') },
+  ];
+
   return (
+    <>
     <header
       initial={{ y: -24, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
@@ -407,73 +422,9 @@ export default function Navbar({ transparent = false }) {
               {/* Scrollable Navigation Content */}
               <div className="flex-1 overflow-y-auto">
                 <div className="p-3 pb-6">
-                  {/* Build My Trip — featured highlight */}
-                  {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <Link
-                      href="/build-trip"
-                      onClick={() => setOpen(false)}
-                      className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl mb-3 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-md shadow-orange-500/25 hover:shadow-lg hover:shadow-orange-500/40 transition"
-                    >
-                      <div className="size-9 rounded-xl bg-white/20 grid place-items-center backdrop-blur">
-                        <Sparkles className="size-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-[15px]">Build My Trip</div>
-                        <div className="text-[11px] text-white/80 mt-0.5">A guided way to design your perfect trip</div>
-                      </div>
-                      <ChevronDown className="size-4 rotate-[-90deg] text-white/80" />
-                    </Link>
-                  )}
-
-                  {/* Explore — new social/discovery experience (replaces Safar Circle) */}
-                  {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <Link
-                      href="/explore/home"
-                      onClick={() => setOpen(false)}
-                      className="group relative flex items-center gap-3 px-4 py-3.5 rounded-2xl mb-4 bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40 transition"
-                    >
-                      <div className="size-9 rounded-xl bg-white/20 grid place-items-center backdrop-blur">
-                        <Sparkles className="size-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-[15px]">Explore</span>
-                          <span className="text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">New</span>
-                        </div>
-                        <div className="text-[11px] text-white/80 mt-0.5">Community, journeys, stories & AI</div>
-                      </div>
-                      <ChevronDown className="size-4 rotate-[-90deg] text-white/80" />
-                    </Link>
-                  )}
-
-                  {/* MARKETPLACE Section */}
-                  <div className="mb-4">
-                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Marketplace</div>
-                    <Link href="/explore?cat=all" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                      Stays
-                    </Link>
-                    <Link href="/explore?cat=experience" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                      Experiences
-                    </Link>
-                    <Link href="/explore?cat=transport" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                      Bikes & Cars
-                    </Link>
-                    <Link href="/explore?cat=tour" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                      Tour Guides
-                    </Link>
-                    <Link href="/explore?nearme=true" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                      Near Me
-                    </Link>
-                  </div>
-
-                  <div className="h-px bg-border mb-4" />
-
                   {/* TRAVEL Section */}
                   <div className="mb-4">
                     <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Travel</div>
-                    <Link href="/ai-planner" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                      AI Planner
-                    </Link>
                     {(user?.role === 'traveler' || user?.role === 'admin' || user?.role === 'super_admin') && (
                       <Link href="/dashboard/traveler/bookings" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
                         My Bookings
@@ -481,22 +432,15 @@ export default function Navbar({ transparent = false }) {
                     )}
                   </div>
 
-                  {/* HOST Section - Only show if not logged in or if user is host/admin */}
-                  {(!user || user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
+                  {/* HOST Section - Only show if user is host/admin (Become a Host moved to bottom nav) */}
+                  {(user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
                     <>
                       <div className="h-px bg-border mb-4" />
                       <div className="mb-4">
                         <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Host</div>
-                        {!user && (
-                          <Link href="/add-listing" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                            Become a Host
-                          </Link>
-                        )}
-                        {(user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
-                          <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                            Host Dashboard
-                          </Link>
-                        )}
+                        <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
+                          Host Dashboard
+                        </Link>
                       </div>
                     </>
                   )}
@@ -571,6 +515,37 @@ export default function Navbar({ transparent = false }) {
       {/* Root-level AuthModal so Radix Sheet's pointer-events lock doesn't pass clicks through to nav Links underneath. */}
       <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={()=>setAuthMode(null)} />
     </header>
+
+    {/* Mobile bottom navigation — visible only on <md viewports. Fixed at the
+        bottom, respects iOS/Android safe-area, uses existing routes. Hidden
+        for admin/super_admin users. Desktop navigation is unaffected. */}
+    {!isAdminUser && (
+      <nav
+        aria-label="Primary mobile navigation"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-border/60 shadow-[0_-4px_20px_-8px_rgba(15,20,25,0.12)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <ul className="grid grid-cols-5">
+          {BOTTOM_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = item.match(pathname || '');
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2 px-1 min-h-[56px] transition-colors ${active ? 'text-emerald2' : 'text-charcoal/70 hover:text-charcoal'}`}
+                >
+                  <Icon className={`size-5 ${active ? 'text-emerald2' : ''}`} strokeWidth={active ? 2.4 : 2} />
+                  <span className={`text-[10px] leading-tight font-medium tracking-tight ${active ? 'text-emerald2' : ''}`}>{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    )}
+    </>
   );
 }
 
