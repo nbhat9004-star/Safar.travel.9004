@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown, Store, Wand2, Home, Instagram, Facebook, Twitter, Linkedin, Mail } from 'lucide-react';
+import { Menu, User, UserPlus, Sparkles, MapPin, Compass, Bell, MessageCircle, Shield, ChevronDown, Store, Wand2, Home, Instagram, Facebook, Twitter, Linkedin, Mail, Globe, LifeBuoy, Briefcase, Newspaper, Heart, Scale, Languages, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { AuthButtons, MobileAuthButtons } from '@/components/safar/AuthButtons';
@@ -30,6 +30,10 @@ export default function Navbar({ transparent = false }) {
   const [showMore, setShowMore] = useState(false);
   // Mobile drawer "More" section — collapsed by default; user must tap to expand
   const [showMobileMore, setShowMobileMore] = useState(false);
+  // Polarsteps-style main-menu card expansion state (Help Center / News & Press / Legal)
+  const [expandedCard, setExpandedCard] = useState(null);
+  const [lang, setLang] = useState('English');
+  const [showLangMenu, setShowLangMenu] = useState(false);
   // Desktop nav — "Experience" (marketplace) dropdown
   const [showExperience, setShowExperience] = useState(false);
 
@@ -198,6 +202,97 @@ export default function Navbar({ transparent = false }) {
 
     return baseNav;
   };
+
+  // Polarsteps-inspired large icon-card menu (mobile drawer). Groups every
+  // informational/support/legal destination under 6 top-level cards with
+  // sub-items collapsed by default. All routes below map to existing pages;
+  // pages that don't yet exist are marked `soon` so they never 404.
+  const MAIN_MENU_CARDS = [
+    {
+      key: 'about',
+      title: 'About Safar Curated',
+      subtitle: 'Discover our mission and vision.',
+      icon: Globe,
+      iconBg: 'bg-emerald-50',
+      iconColor: 'text-emerald-600',
+      href: '/about',
+    },
+    {
+      key: 'help',
+      title: 'Help Center',
+      subtitle: 'Support, safety, bookings & payments.',
+      icon: LifeBuoy,
+      iconBg: 'bg-sky-50',
+      iconColor: 'text-sky-600',
+      children: [
+        { label: 'Help Center',            href: '/help' },
+        { label: 'FAQs',                   href: '/help#faqs' },
+        { label: 'Contact Support',        href: '/contact' },
+        { label: 'Report a Problem',       href: '/contact' },
+        { label: 'Safety',                 href: '/trust-safety' },
+        { label: 'Booking Support',        href: '/help' },
+        { label: 'Payments Support',       href: '/help' },
+        { label: 'Become a Host Support',  href: '/add-listing' },
+      ],
+    },
+    {
+      key: 'careers',
+      title: 'Careers',
+      subtitle: 'Join our growing team.',
+      icon: Briefcase,
+      iconBg: 'bg-amber-50',
+      iconColor: 'text-amber-600',
+      href: '#',
+      soon: true,
+    },
+    {
+      key: 'news',
+      title: 'News & Press',
+      subtitle: 'Latest updates and media coverage.',
+      icon: Newspaper,
+      iconBg: 'bg-violet-50',
+      iconColor: 'text-violet-600',
+      children: [
+        { label: 'News',           href: '#', soon: true },
+        { label: 'Press Releases', href: '#', soon: true },
+        { label: 'Media Kit',      href: '#', soon: true },
+        { label: 'Announcements',  href: '#', soon: true },
+      ],
+    },
+    {
+      key: 'stories',
+      title: 'Stories',
+      subtitle: 'Travel stories, guides and inspiration.',
+      icon: Heart,
+      iconBg: 'bg-rose-50',
+      iconColor: 'text-rose-600',
+      href: '/explore/stories',
+    },
+    {
+      key: 'legal',
+      title: 'Legal',
+      subtitle: 'Policies and legal terms.',
+      icon: Scale,
+      iconBg: 'bg-slate-100',
+      iconColor: 'text-slate-700',
+      children: [
+        { label: 'Privacy Policy',      href: '/privacy' },
+        { label: 'Terms & Conditions',  href: '/terms' },
+        { label: 'Refund Policy',       href: '/cancellation-policy' },
+        { label: 'Cookie Policy',       href: '#', soon: true },
+        { label: 'Community Guidelines', href: '#', soon: true },
+        { label: 'Host Terms',          href: '#', soon: true },
+        { label: 'Traveller Terms',     href: '#', soon: true },
+      ],
+    },
+  ];
+
+  const SOCIAL_LINKS = [
+    { href: 'https://instagram.com/safarcurated',        icon: Instagram, label: 'Instagram' },
+    { href: 'https://facebook.com/safarcurated',         icon: Facebook,  label: 'Facebook' },
+    { href: 'https://twitter.com/safarcurated',          icon: Twitter,   label: 'X (Twitter)' },
+    { href: 'https://linkedin.com/company/safarcurated', icon: Linkedin,  label: 'LinkedIn' },
+  ];
 
   const visibleNav = getVisibleNavItems();
 
@@ -482,115 +577,186 @@ export default function Navbar({ transparent = false }) {
               </button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background flex flex-col h-full">
-              {/* Fixed Header */}
-              <div className="p-6 border-b flex-shrink-0">
+              {/* Top Section — Safar Curated logo + branding; ShadCN Sheet renders X close top-right */}
+              <div className="p-5 border-b flex-shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="size-10 rounded-2xl bg-gradient-emerald grid place-items-center shadow-md"><MapPin className="size-5 text-gold" /></div>
-                  <div>
-                    <div className="font-display font-bold text-lg">Safar</div>
-                    <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Kashmir · Curated</div>
+                  <div className="size-11 rounded-2xl bg-gradient-emerald grid place-items-center shadow-md shadow-emerald2/25 ring-1 ring-white/20">
+                    <MapPin className="size-5 text-gold" strokeWidth={2.4} />
+                  </div>
+                  <div className="leading-tight">
+                    <div className="font-display font-bold text-[17px]">Safar Curated</div>
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground mt-0.5">Kashmir · Handpicked</div>
                   </div>
                 </div>
               </div>
-              
-              {/* Scrollable Navigation Content */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="p-3 pb-6">
-                  {/* TRAVEL Section */}
-                  <div className="mb-4">
-                    <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Travel</div>
-                    {(user?.role === 'traveler' || user?.role === 'admin' || user?.role === 'super_admin') && (
-                      <Link href="/dashboard/traveler/bookings" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                        My Bookings
-                      </Link>
-                    )}
-                  </div>
 
-                  {/* HOST Section - Only show if user is host/admin (Become a Host moved to bottom nav) */}
-                  {(user?.role === 'host' || user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <>
-                      <div className="h-px bg-border mb-4" />
-                      <div className="mb-4">
-                        <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Host</div>
-                        <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                          Host Dashboard
-                        </Link>
-                      </div>
-                    </>
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-5 pb-6 space-y-5">
+                  {/* Auth buttons (Polarsteps-style pair) — only when logged out */}
+                  {!user && (
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => { setOpen(false); setAuthMode('login'); }}
+                        className="h-11 rounded-full bg-white border border-border text-charcoal font-semibold text-[14px] hover:bg-secondary/70 transition"
+                      >
+                        Sign in
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setOpen(false); setAuthMode('signup'); }}
+                        className="h-11 rounded-full bg-gradient-emerald text-white font-semibold text-[14px] shadow-md shadow-emerald2/25 hover:shadow-lg hover:shadow-emerald2/40 transition"
+                      >
+                        Sign up
+                      </button>
+                    </div>
                   )}
 
-                  {/* MODULE 11A — MORE Section (informational pages) — collapsed by default; tap header to toggle */}
-                  <div className="h-px bg-border mb-4" />
-                  <div className="mb-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowMobileMore((v) => !v)}
-                      aria-expanded={showMobileMore}
-                      aria-controls="mobile-more-panel"
-                      className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary transition"
-                    >
-                      <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">More</span>
-                      <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-300 ${showMobileMore ? 'rotate-180' : ''}`} />
-                    </button>
-                    <div
-                      id="mobile-more-panel"
-                      className={`overflow-hidden transition-all duration-300 ease-out ${showMobileMore ? 'max-h-[1400px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`}
-                    >
-                      {MORE_SECTIONS.map((section, sIdx) => (
-                        <div key={section.title} className={sIdx > 0 ? 'mt-3 pt-3 border-t border-border/50' : ''}>
-                          <div className="px-4 py-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-bold">{section.title}</div>
-                          {section.items.map((it) => {
-                            const ItIcon = it.icon;
-                            const external = it.external;
-                            const disabled = it.soon;
-                            const cls = `flex items-center justify-between gap-2 px-4 py-3 rounded-xl hover:bg-secondary text-[14.5px] font-medium transition ${disabled ? 'text-muted-foreground' : ''}`;
-                            const content = (
-                              <>
-                                <span className="flex items-center gap-2.5 min-w-0 truncate">
-                                  {ItIcon && <ItIcon className="size-4 shrink-0 text-muted-foreground" />}
-                                  <span className="truncate">{it.label}</span>
-                                </span>
-                                {disabled && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
-                              </>
-                            );
-                            if (disabled) return <span key={it.label} className={cls}>{content}</span>;
-                            if (external) {
-                              return (
-                                <a key={it.label} href={it.href} target={it.href.startsWith('http') ? '_blank' : undefined} rel={it.href.startsWith('http') ? 'noopener noreferrer' : undefined} onClick={() => setOpen(false)} className={cls}>
-                                  {content}
-                                </a>
-                              );
-                            }
-                            return (
-                              <Link key={it.label} href={it.href} onClick={() => setOpen(false)} className={cls}>
-                                {content}
-                              </Link>
-                            );
-                          })}
-                        </div>
+                  {/* Social + Language row */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {SOCIAL_LINKS.map(({ href, icon: Icon, label }) => (
+                        <a
+                          key={label}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={label}
+                          className="size-10 rounded-full bg-secondary hover:bg-secondary/70 grid place-items-center text-charcoal/70 hover:text-charcoal transition"
+                        >
+                          <Icon className="size-[16px]" strokeWidth={2} />
+                        </a>
                       ))}
+                    </div>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowLangMenu((v) => !v)}
+                        aria-expanded={showLangMenu}
+                        className="h-10 px-3 rounded-full bg-secondary hover:bg-secondary/70 flex items-center gap-1.5 text-[13px] font-semibold text-charcoal transition"
+                      >
+                        <Languages className="size-4" />
+                        <span className="truncate max-w-[80px]">{lang}</span>
+                        <ChevronDown className={`size-3.5 text-muted-foreground transition-transform ${showLangMenu ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showLangMenu && (
+                        <div className="absolute right-0 top-full mt-1.5 bg-white rounded-xl border shadow-lg py-1 min-w-[150px] z-10">
+                          {['English', 'हिन्दी', 'اردو'].map((l) => (
+                            <button
+                              key={l}
+                              type="button"
+                              onClick={() => { setLang(l); setShowLangMenu(false); }}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-secondary transition ${lang === l ? 'text-emerald2 font-semibold' : 'text-charcoal'}`}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* ADMINISTRATION Section - Only for admins */}
-                  {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <>
-                      <div className="h-px bg-border mb-4" />
-                      <div className="mb-4">
-                        <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Administration</div>
-                        <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-secondary text-[15px] font-medium transition">
-                          <span className="flex items-center gap-2"><Shield className="size-4" /> Admin Dashboard</span>
+                  {/* Account shortcuts — logged-in users only (preserves existing routes) */}
+                  {user && (
+                    <div className="space-y-1">
+                      {(user.role === 'traveler' || user.role === 'admin' || user.role === 'super_admin') && (
+                        <Link href="/dashboard/traveler/bookings" onClick={() => setOpen(false)} className="flex items-center gap-3.5 p-3 rounded-2xl hover:bg-secondary transition">
+                          <div className="size-11 rounded-2xl bg-secondary grid place-items-center"><Compass className="size-5 text-charcoal/70" strokeWidth={2.2} /></div>
+                          <div className="flex-1 min-w-0"><div className="text-[15.5px] font-semibold text-charcoal leading-tight">My Bookings</div><div className="text-[12px] text-muted-foreground mt-0.5 truncate">Your trips and reservations.</div></div>
                         </Link>
-                      </div>
-                    </>
+                      )}
+                      {(user.role === 'host' || user.role === 'admin' || user.role === 'super_admin') && (
+                        <Link href="/dashboard/host" onClick={() => setOpen(false)} className="flex items-center gap-3.5 p-3 rounded-2xl hover:bg-secondary transition">
+                          <div className="size-11 rounded-2xl bg-secondary grid place-items-center"><Home className="size-5 text-charcoal/70" strokeWidth={2.2} /></div>
+                          <div className="flex-1 min-w-0"><div className="text-[15.5px] font-semibold text-charcoal leading-tight">Host Dashboard</div><div className="text-[12px] text-muted-foreground mt-0.5 truncate">Manage your listings.</div></div>
+                        </Link>
+                      )}
+                      {(user.role === 'admin' || user.role === 'super_admin') && (
+                        <Link href="/admin" onClick={() => setOpen(false)} className="flex items-center gap-3.5 p-3 rounded-2xl hover:bg-secondary transition">
+                          <div className="size-11 rounded-2xl bg-secondary grid place-items-center"><Shield className="size-5 text-charcoal/70" strokeWidth={2.2} /></div>
+                          <div className="flex-1 min-w-0"><div className="text-[15.5px] font-semibold text-charcoal leading-tight">Admin Dashboard</div><div className="text-[12px] text-muted-foreground mt-0.5 truncate">Platform administration.</div></div>
+                        </Link>
+                      )}
+                    </div>
                   )}
 
+                  {/* Main menu cards — Polarsteps-inspired large icon rows */}
+                  <div className="space-y-1">
+                    {MAIN_MENU_CARDS.map((card) => {
+                      const Icon = card.icon;
+                      const expanded = expandedCard === card.key;
+                      const hasChildren = Array.isArray(card.children) && card.children.length > 0;
+                      const rowInner = (
+                        <>
+                          <div className={`size-11 rounded-2xl grid place-items-center shrink-0 ${card.iconBg}`}>
+                            <Icon className={`size-5 ${card.iconColor}`} strokeWidth={2.2} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[15.5px] font-semibold text-charcoal leading-tight flex items-center gap-2">
+                              <span className="truncate">{card.title}</span>
+                              {card.soon && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
+                            </div>
+                            {card.subtitle && <div className="text-[12px] text-muted-foreground mt-0.5 truncate">{card.subtitle}</div>}
+                          </div>
+                          {hasChildren && (
+                            <ChevronDown className={`size-4 text-muted-foreground shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                          )}
+                        </>
+                      );
+                      return (
+                        <div key={card.key}>
+                          {card.soon ? (
+                            <span className="w-full flex items-center gap-3.5 p-3 rounded-2xl text-muted-foreground cursor-not-allowed">{rowInner}</span>
+                          ) : hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedCard(expanded ? null : card.key)}
+                              aria-expanded={expanded}
+                              className="w-full flex items-center gap-3.5 p-3 rounded-2xl hover:bg-secondary transition text-left"
+                            >
+                              {rowInner}
+                            </button>
+                          ) : (
+                            <Link
+                              href={card.href}
+                              onClick={() => setOpen(false)}
+                              className="w-full flex items-center gap-3.5 p-3 rounded-2xl hover:bg-secondary transition"
+                            >
+                              {rowInner}
+                            </Link>
+                          )}
+                          {hasChildren && (
+                            <div className={`overflow-hidden transition-all duration-300 ease-out ${expanded ? 'max-h-[640px] opacity-100 mt-0.5' : 'max-h-0 opacity-0'}`}>
+                              <div className="pl-14 pr-2 space-y-0.5 py-1">
+                                {card.children.map((ch) => {
+                                  const chDisabled = ch.soon;
+                                  const chExternal = ch.external;
+                                  const chCls = `flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-[13.5px] transition ${chDisabled ? 'text-muted-foreground cursor-not-allowed' : 'text-charcoal/85 hover:bg-secondary hover:text-charcoal'}`;
+                                  const chContent = (
+                                    <>
+                                      <span className="truncate">{ch.label}</span>
+                                      {chDisabled && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary/70 text-muted-foreground border">Soon</span>}
+                                    </>
+                                  );
+                                  if (chDisabled) return <span key={ch.label} className={chCls}>{chContent}</span>;
+                                  if (chExternal) return <a key={ch.label} href={ch.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className={chCls}>{chContent}</a>;
+                                  return <Link key={ch.label} href={ch.href} onClick={() => setOpen(false)} className={chCls}>{chContent}</Link>;
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   {/* Extra padding at bottom to ensure last item is always visible */}
-                  <div className="h-20" />
+                  <div className="h-6" />
                 </div>
               </div>
-              
-              {/* Fixed Account Section at Bottom */}
+
+              {/* Fixed Account Section at Bottom (unchanged — preserves existing sign-in/sign-up/sign-out logic) */}
               <div className="border-t flex-shrink-0 bg-background">
                 <div className="p-4 pb-safe">
                   {user && (
