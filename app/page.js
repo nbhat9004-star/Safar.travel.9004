@@ -329,7 +329,7 @@ function AppInner() {
             <Link href="/explore" className="text-sm font-semibold text-charcoal inline-flex items-center gap-1 hover:gap-2 transition-all">View all <ChevronRight className="size-4" /></Link>
           </div>
           <CategoryPills value={cat} onChange={setCat} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6 mt-8">
             {filtered.slice(0, 8).map((l, i) => <PropertyCard key={l.id} item={l} index={i} priority={i < 4} />)}
           </div>
         </div>
@@ -424,7 +424,7 @@ function AppInner() {
             </div>
             <Link href="/explore" className="text-sm font-semibold inline-flex items-center gap-1 hover:gap-2 transition-all">View all <ChevronRight className="size-4" /></Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {experiences.map((e, i) => (
               <Link key={e.title} href="/explore?cat=experience">
                 <div 
