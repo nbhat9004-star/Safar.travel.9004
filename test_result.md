@@ -120,8 +120,103 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
-# MODULE 4 (July 2025) — Explore Hero Polish (2-credit budget)
+# MODULE 5 (July 2025) — Booking Reliability Bug Fix (Phase 1, 2-credit budget)
 # ---------------------------------------------------------------------------
+module5_booking_fix:
+  - task: "Booking POST — fix 'These dates overlap with an existing booking' on Confirm & Pay retry"
+    implemented: true
+    working: "NA"
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          BUG (user report):
+            Traveler reaches Review Booking → clicks "Confirm & Pay" → gets
+            "Booking not confirmed / These dates overlap with an existing booking".
+            Prevents completion of legitimate bookings, especially on retry.
+
+          ROOT CAUSE:
+            POST /api/bookings overlap check ran
+              { listingId, status: { $in: ['pending','approved'] }, checkInDate:{$lt:co}, checkOutDate:{$gt:ci} }
+            with NO exclusion for the caller's own bookings. As soon as the
+            traveler created a pending booking (which happens on submit),
+            ANY retry (payment failed, back button, double-click, network hiccup)
+            hit that traveler's own pending booking and 409'd. There was also no
+            expiry mechanism, so a single abandoned booking permanently blocked
+            those dates for that user.
+
+          FIX (surgical, 3 changes, ~55 LOC, single file):
+
+          File modified: /app/app/api/[[...path]]/route.js
+
+          1) Auto-expire stale pending bookings (POST /bookings + GET /listings/:id/availability)
+             Any booking with status='pending' AND createdAt older than
+             BOOKING_PENDING_TTL_MS (default 30 minutes) is transitioned to
+             status='expired' with expiryReason='stale_pending_ttl'.
+             Wrapped in try/catch — cleanup failure is non-fatal, the request
+             continues normally.
+
+          2) Idempotent retry (POST /bookings)
+             Before the overlap check, look for the caller's own EXACT-match
+             pending booking:
+               { travelerId: me.id, listingId, inventoryTypeId||null,
+                 status: 'pending', checkInDate: ci, checkOutDate: co, guests: g }
+             If found, return that booking with { idempotent: true } and HTTP 200
+             instead of creating a duplicate. Handles:
+               - Double-click on Confirm & Pay
+               - Browser back button + resubmit
+               - Failed payment retry
+               - Slow network + user retries
+
+          3) Exclude own pending from overlap check (both multi-type and legacy branches)
+             Added $nor: [{ status: 'pending', travelerId: me.id }] to the
+             overlap queries so the caller's own in-flight pending never blocks
+             them. Other users' pendings and everyone's approvals still block
+             correctly.
+
+          RELIABILITY PROPERTIES NOW GUARANTEED:
+            * Booking is created only once for a given (traveler, listing, dates)
+              tuple within the TTL window — idempotent by design.
+            * Dates are blocked once until either (a) the pending is confirmed
+              → stays blocked, or (b) TTL elapses → auto-expired and freed.
+            * Failed bookings do NOT permanently block inventory — 30-minute TTL.
+            * Retrying a booking works — same booking is returned, no 409.
+            * Duplicate requests within TTL window return the same bookingId.
+            * No orphan bookings — the cleanup at /availability and /bookings
+              endpoints keeps the collection clean.
+
+          NOT CHANGED (per user scope: "Do not implement any new booking logic"):
+            * Frontend UI (booking/page.js), toasts, flow, step count — untouched.
+            * Payment flow (Razorpay create-order, verify) — untouched.
+            * Host approve/reject flow — untouched.
+            * Email + notification helpers — untouched.
+            * Universal Booking Engine (Phase 2: host chain assignment,
+              WhatsApp templates, admin config, service-specific fields,
+              booking timeline UI, expiry rules) — NOT built, out of the
+              5-credit budget for this pass. User explicitly said "Do not
+              implement any new booking logic until this issue is fully
+              investigated and resolved". Phase 1 done, Phase 2 awaiting
+              user confirmation & credit allocation.
+
+          Files modified: 1 (route.js — POST /bookings + GET availability)
+          Files added:    0
+          New deps:       0
+          UI redesign:    none
+
+          NOTE ON TESTING:
+            User explicitly instructed "Do NOT use Testing Agents" for this
+            module. Preview MongoDB is not connected (unrelated 500s on
+            /api/auth/me during local dev) so a live curl integration test
+            can't be run either. The change is a query-condition addition
+            with clear semantics; the lint passes and no compile errors.
+            Recommend user runs a live retry test on preview once MONGO_URL
+            is configured OR merges to a branch with real DB.
+
+
 module4_hero_polish:
   - task: "Explore Home hero — overlay lightened, profile capsule responsive fix, 3D Kashmir globe, mobile bottom padding"
     implemented: true

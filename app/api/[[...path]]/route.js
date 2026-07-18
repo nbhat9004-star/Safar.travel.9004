@@ -1368,6 +1368,15 @@ async function route(request, { params }) {
     // so the booking calendar UI can disable those days.
     if (action === 'availability' && method === 'GET') {
       const bookings = await getCollection('bookings');
+      // Auto-expire stale pending bookings so failed payments / abandoned
+      // checkouts don't permanently block the calendar UI.
+      const PENDING_TTL_MS = Number(process.env.BOOKING_PENDING_TTL_MS || 30 * 60 * 1000);
+      try {
+        await bookings.updateMany(
+          { listingId: id, status: 'pending', createdAt: { $lt: new Date(Date.now() - PENDING_TTL_MS) } },
+          { $set: { status: 'expired', updatedAt: new Date(), expiryReason: 'stale_pending_ttl' } }
+        );
+      } catch {}
       const ranges = await bookings.find(
         { listingId: id, status: { $in: ['pending', 'approved'] } },
         { projection: { _id: 0, checkInDate: 1, checkOutDate: 1, status: 1 } }
@@ -1433,6 +1442,51 @@ async function route(request, { params }) {
     const listing = await listings.findOne({ id: listingId });
     if (!listing || listing.status !== 'approved') return err('Listing not available for booking', 404);
 
+    // ── BOOKING RELIABILITY LAYER (Phase 1 bug fix) ────────────────────────
+    // 1) Auto-expire stale pending bookings so failed payments / abandoned
+    //    checkouts don't permanently block inventory or block the same user
+    //    from retrying. Default TTL: 30 minutes (configurable via env).
+    // 2) Idempotent retry: if the SAME traveler already has a fresh pending
+    //    booking for the same listing + dates + inventoryType + guests, return
+    //    that booking instead of creating a duplicate (handles double-clicks
+    //    and back-button-then-retry flows).
+    // 3) Overlap check ignores the caller's own pending bookings so a user's
+    //    own in-flight request never blocks them.
+    // Reuses the existing `bookings` collection and status vocabulary — no
+    // schema change, no new endpoints, no UI change.
+    // -----------------------------------------------------------------------
+    const bookingsCol = await getCollection('bookings');
+    const PENDING_TTL_MS = Number(process.env.BOOKING_PENDING_TTL_MS || 30 * 60 * 1000); // 30 min default
+    try {
+      await bookingsCol.updateMany(
+        {
+          status: 'pending',
+          createdAt: { $lt: new Date(Date.now() - PENDING_TTL_MS) },
+        },
+        { $set: { status: 'expired', updatedAt: new Date(), expiryReason: 'stale_pending_ttl' } }
+      );
+    } catch (e) {
+      // Non-fatal — worst case is a stale pending still exists; the retry
+      // check below will still handle it for the same user.
+      console.error('booking cleanup (expire pending) failed:', e?.message || e);
+    }
+
+    // Idempotent retry — same traveler retrying same booking within TTL window
+    // returns the existing pending booking instead of failing with 409.
+    const dupPending = await bookingsCol.findOne({
+      travelerId: me.id,
+      listingId,
+      inventoryTypeId: inventoryTypeId || null,
+      status: 'pending',
+      checkInDate: ci,
+      checkOutDate: co,
+      guests: g,
+    });
+    if (dupPending) {
+      const { _id, ...rest } = dupPending;
+      return ok({ booking: rest, idempotent: true }, 200);
+    }
+
     // Determine inventory type and pricing
     let selectedType = null;
     let pricePerNight = listing.price;
@@ -1456,6 +1510,8 @@ async function route(request, { params }) {
       bookingImage = (selectedType.images && selectedType.images[0]) || bookingImage;
 
       // Check availability for this specific type
+      // Excludes the caller's own pending bookings so an in-flight request
+      // never blocks the same user's retry.
       const bookings = await getCollection('bookings');
       const bookedCount = await bookings.countDocuments({
         listingId,
@@ -1463,6 +1519,7 @@ async function route(request, { params }) {
         status: { $in: ['pending', 'approved'] },
         checkInDate: { $lt: co },
         checkOutDate: { $gt: ci },
+        $nor: [{ status: 'pending', travelerId: me.id }],
       });
 
       const available = selectedType.quantity - bookedCount;
@@ -1470,13 +1527,15 @@ async function route(request, { params }) {
         return err(`No ${selectedType.name} available for these dates. ${available === 0 ? 'All units are booked.' : 'Try different dates or another type.'}`, 409);
       }
     } else {
-      // LEGACY SINGLE-UNIT LISTING: Use old overlap logic
+      // LEGACY SINGLE-UNIT LISTING: Use overlap logic that ignores the
+      // caller's own pending bookings.
       const bookings = await getCollection('bookings');
       const overlap = await bookings.findOne({
         listingId,
         status: { $in: ['pending', 'approved'] },
         checkInDate: { $lt: co },
         checkOutDate: { $gt: ci },
+        $nor: [{ status: 'pending', travelerId: me.id }],
       });
       if (overlap) {
         return err('These dates overlap with an existing booking. Please pick other dates.', 409);
