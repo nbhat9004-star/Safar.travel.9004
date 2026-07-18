@@ -118,15 +118,21 @@ export default function ExploreShell({ children }) {
               </div>
             </Link>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 min-w-0 flex-shrink">
             <ThemeToggle compact floating={floating} />
             {user && <NotificationBell floating={floating} />}
             {user ? (
-              <Link href={`/explore/u/${user.username || user.id}`} className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition hover:opacity-90" style={chipStyle}>
-                <div className="size-6 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[10px] font-bold text-[#06080f]">
+              <Link
+                href={`/explore/u/${user.username || user.id}`}
+                className="inline-flex items-center gap-2 pl-1 pr-2 sm:pr-3 py-1 rounded-full border transition hover:opacity-90 min-w-0 max-w-[52px] sm:max-w-[160px] md:max-w-[200px] overflow-hidden"
+                style={chipStyle}
+                title={user.name || 'Traveler'}
+                aria-label={`View profile for ${user.name || 'Traveler'}`}
+              >
+                <div className="size-6 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[10px] font-bold text-[#06080f] shrink-0">
                   {(user.name || user.email || 'S').charAt(0).toUpperCase()}
                 </div>
-                <span className="text-xs max-w-[100px] truncate" style={{ color: floating ? '#fff' : 'var(--e-text-muted)' }}>{user.name || 'Traveler'}</span>
+                <span className="hidden sm:inline text-xs truncate" style={{ color: floating ? '#fff' : 'var(--e-text-muted)' }}>{user.name || 'Traveler'}</span>
               </Link>
             ) : (
               <Link href="/?auth=1" className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold e-btn-primary">

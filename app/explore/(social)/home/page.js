@@ -8,17 +8,20 @@ import {
   Snowflake, Waves, Leaf, Tent, Star, Loader2,
 } from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
+import KashmirGlobe from '@/components/explore/KashmirGlobe';
 import { useAuth } from '@/lib/auth-context';
 
-// Rotating cinematic Kashmir hero images (fade crossfade)
-const HERO_IMAGES = [
-  { src: 'https://images.unsplash.com/photo-1577500588651-5603d971f338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Dal Lake' },
-  { src: 'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Shikara' },
-  { src: 'https://images.pexels.com/photos/29842101/pexels-photo-29842101.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gulmarg · Snow' },
-  { src: 'https://images.pexels.com/photos/27540040/pexels-photo-27540040.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gurez Valley' },
-  { src: 'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Srinagar · Mist' },
-  { src: 'https://images.pexels.com/photos/17078575/pexels-photo-17078575.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Serene' },
-  { src: 'https://images.unsplash.com/photo-1708179070772-abf3a1d16b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Pahalgam · River Valley' },
+// Rotating cinematic hero slides — 1st is an interactive Kashmir globe,
+// then vibrant Kashmir landscape photos crossfade.
+const HERO_SLIDES = [
+  { id: 'globe',     type: 'globe', label: 'Kashmir · 34° N' },
+  { id: 'dal-uns',   type: 'image', src: 'https://images.unsplash.com/photo-1577500588651-5603d971f338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Dal Lake' },
+  { id: 'shikara',   type: 'image', src: 'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Shikara' },
+  { id: 'gulmarg',   type: 'image', src: 'https://images.pexels.com/photos/29842101/pexels-photo-29842101.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gulmarg · Snow' },
+  { id: 'gurez',     type: 'image', src: 'https://images.pexels.com/photos/27540040/pexels-photo-27540040.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gurez Valley' },
+  { id: 'mist',      type: 'image', src: 'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Srinagar · Mist' },
+  { id: 'serene',    type: 'image', src: 'https://images.pexels.com/photos/17078575/pexels-photo-17078575.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Serene' },
+  { id: 'pahalgam',  type: 'image', src: 'https://images.unsplash.com/photo-1708179070772-abf3a1d16b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Pahalgam · River Valley' },
 ];
 
 // Fallback experience presets — only used when the user hasn't unlocked any yet
@@ -149,10 +152,10 @@ export default function ExploreHome() {
   const bio = user?.bio || (user ? 'Chasing valleys, chinar & new stories.' : 'Sign in to start your Kashmir story.');
   const avatar = user?.avatar;
 
-  // Rotating hero image index — crossfades every 6.5s
+  // Rotating hero index — crossfades every 7s (starts on globe → then landscapes)
   const [heroIdx, setHeroIdx] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setHeroIdx(i => (i + 1) % HERO_IMAGES.length), 6500);
+    const t = setInterval(() => setHeroIdx(i => (i + 1) % HERO_SLIDES.length), 7000);
     return () => clearInterval(t);
   }, []);
 
@@ -161,10 +164,10 @@ export default function ExploreHome() {
       {/* ─────────────────────────── HERO ─────────────────────────── */}
       <section className="relative overflow-hidden">
         <div className="relative w-full h-screen min-h-[560px] max-h-[900px]">
-          {/* Rotating Kashmir backgrounds — full viewport crossfade */}
-          {HERO_IMAGES.map((img, i) => (
+          {/* Rotating Kashmir backgrounds — full viewport crossfade (globe first, then photos) */}
+          {HERO_SLIDES.map((slide, i) => (
             <div
-              key={img.src}
+              key={slide.id}
               className="absolute inset-0 transition-opacity ease-in-out"
               style={{
                 opacity: i === heroIdx ? 1 : 0,
@@ -173,22 +176,25 @@ export default function ExploreHome() {
               }}
               aria-hidden={i !== heroIdx}
             >
-              <Image
-                src={img.src}
-                alt={img.label}
-                fill
-                priority={i === 0}
-                sizes="100vw"
-                className="object-cover"
-                unoptimized
-              />
+              {slide.type === 'globe' ? (
+                <KashmirGlobe size={640} spin={i === heroIdx} />
+              ) : (
+                <Image
+                  src={slide.src}
+                  alt={slide.label}
+                  fill
+                  priority={i === 1}
+                  sizes="100vw"
+                  className="object-cover"
+                  unoptimized
+                />
+              )}
             </div>
           ))}
 
-          {/* Layered gradient overlays for premium cinematic feel + text legibility */}
-          <div className="absolute inset-0 z-[2]" style={{ background: 'linear-gradient(180deg, rgba(6,8,15,0.65) 0%, rgba(6,8,15,0.20) 18%, rgba(6,8,15,0.10) 40%, rgba(6,8,15,0.35) 70%, rgba(6,8,15,0.95) 100%)' }} />
-          <div className="absolute inset-0 z-[2]" style={{ background: 'radial-gradient(120% 60% at 50% 0%, rgba(6,8,15,0.55), transparent 55%)' }} />
-          <div className="absolute inset-0 z-[2] pointer-events-none">
+          {/* Subtle overlays — keep imagery vibrant, only shade bottom for text legibility */}
+          <div className="absolute inset-0 z-[2] pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(6,8,15,0.28) 0%, transparent 14%, transparent 55%, rgba(6,8,15,0.55) 88%, rgba(6,8,15,0.85) 100%)' }} />
+          <div className="absolute inset-0 z-[2] pointer-events-none" aria-hidden>
             <AuroraBg />
           </div>
 
@@ -197,24 +203,24 @@ export default function ExploreHome() {
             <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full text-[11px] uppercase tracking-[0.22em] font-semibold backdrop-blur-md border" style={{ background: 'rgba(6,8,15,0.35)', borderColor: 'rgba(255,255,255,0.22)', color: '#fff' }}>
               <span className="size-2 rounded-full bg-emerald-400 animate-pulse" /> Your Kashmir · Live
             </div>
-            <h1 className="display font-bold mt-4 text-[clamp(2.2rem,6vw,4.8rem)] leading-[1.02] tracking-tight text-white drop-shadow-2xl max-w-3xl">
+            <h1 className="display font-bold mt-4 text-[clamp(2.2rem,6vw,4.8rem)] leading-[1.02] tracking-tight text-white max-w-3xl" style={{ textShadow: '0 2px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.6)' }}>
               {user ? <>Welcome back,<br /><span className="e-grad-text">{firstName}</span>.</> : <>Your <span className="e-grad-text">Travel World.</span></>}
             </h1>
-            <p className="mt-4 text-base md:text-lg max-w-xl leading-relaxed text-white/90 drop-shadow-md">
+            <p className="mt-4 text-base md:text-lg max-w-xl leading-relaxed text-white/95" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.55)' }}>
               {user ? 'Continue where you left off, plan the next chapter, and relive every valley you\'ve walked.' : 'A cinematic pass through Kashmir — sign in to build your personal travel dashboard.'}
             </p>
 
             {/* Rotating caption + dots */}
             <div className="mt-6 flex items-center gap-3 text-[11px] font-medium">
-              <span className="uppercase tracking-[0.22em] text-white/80 drop-shadow-md">
-                <MapPin className="inline size-3 mr-1" /> {HERO_IMAGES[heroIdx].label}
+              <span className="uppercase tracking-[0.22em] text-white/90" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.55)' }}>
+                <MapPin className="inline size-3 mr-1" /> {HERO_SLIDES[heroIdx].label}
               </span>
               <div className="flex items-center gap-1.5">
-                {HERO_IMAGES.map((_, i) => (
+                {HERO_SLIDES.map((_, i) => (
                   <button
                     key={i}
                     onClick={() => setHeroIdx(i)}
-                    aria-label={`Show ${HERO_IMAGES[i].label}`}
+                    aria-label={`Show ${HERO_SLIDES[i].label}`}
                     className="transition-all rounded-full"
                     style={{
                       width: i === heroIdx ? 20 : 6,
@@ -382,7 +388,7 @@ export default function ExploreHome() {
       )}
 
       {/* ────────────────────── SAVED PLACES ───────────────────── */}
-      <section className="relative e-container mb-16">
+      <section className="relative e-container mb-16 pb-24 md:pb-16">
         <SectionHeader
           chip={<><Bookmark className="size-3 text-rose-300" /> Saved places</>}
           title="Your wishlist"

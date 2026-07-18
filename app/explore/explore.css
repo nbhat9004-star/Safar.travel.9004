@@ -231,6 +231,12 @@ html[data-explore-theme="premium"] .e-subnav-inner--floating .e-subnav-item[data
   .e-hcarousel { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; }
 }
 
+/* Mobile: reserve space at bottom of page so content never sits underneath the
+   fixed bottom navigation on phones. Height = bottomnav (60) + gap (24) + safe area. */
+@media (max-width: 767px) {
+  .explore-root main { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* Mobile: tighter card padding so info density feels editorial, not messaging-app. */
 @media (max-width: 639px) {
   .explore-root .e-tile-grid .e-glass,

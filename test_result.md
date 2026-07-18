@@ -114,10 +114,126 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Explore evolution — smoke test all pages render at 200. Theme toggle switches themes instantly and persists. Marketplace /explore and /build-trip unchanged."
+    - "Explore Home hero polish — reduced dark overlay, responsive profile capsule (no overflow on mobile), 3D Kashmir globe as first rotating hero slide, and mobile bottom-nav padding to prevent overlap. Only /explore/home hero + ExploreShell header capsule + explore.css touched. Rest of app unchanged."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE 4 (July 2025) — Explore Hero Polish (2-credit budget)
+# ---------------------------------------------------------------------------
+module4_hero_polish:
+  - task: "Explore Home hero — overlay lightened, profile capsule responsive fix, 3D Kashmir globe, mobile bottom padding"
+    implemented: true
+    working: "NA"
+    file: "/app/app/explore/(social)/home/page.js, /app/components/explore/KashmirGlobe.jsx, /app/components/explore/ExploreShell.jsx, /app/app/explore/explore.css, /app/package.json"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          User reported two bugs + one enhancement + one padding request. This shipped
+          all four inside a 2-credit budget, no backend changes, no route changes,
+          no auth changes.
+
+          1) HERO OVERLAY (bug)
+             Was: linear-gradient(180deg, rgba(6,8,15,0.65) 0%, ...) — dark overlay
+             covered most of the hero image, hiding scenery.
+             Now: linear-gradient(180deg, rgba(6,8,15,0.28) 0%, transparent 14%,
+             transparent 55%, rgba(6,8,15,0.55) 88%, rgba(6,8,15,0.85) 100%). Top has
+             only a subtle 28% shade for nav legibility, middle is completely
+             transparent, bottom fades to 85% for text legibility over the hero.
+             Text-shadow on h1/p replaces the drop-shadow-2xl.
+
+          2) PROFILE CAPSULE (bug) — /app/components/explore/ExploreShell.jsx
+             Was: text-xs max-w-[100px] truncate with parent shrink-0 → could overflow
+             viewport on narrow phones with long names.
+             Now:
+              * Removed shrink-0 from parent flex → allow shrinking.
+              * Capsule uses min-w-0 overflow-hidden + adaptive max-w:
+                  mobile:  max-w-[52px] (avatar-only)
+                  ≥sm:     max-w-[160px] (avatar + name)
+                  ≥md:     max-w-[200px]
+              * Name span is 'hidden sm:inline' so only avatar shows on phones.
+              * title="user.name" tooltip shows full name on hover.
+              * aria-label kept for accessibility.
+
+          3) 3D KASHMIR GLOBE (enhancement)
+             Installed cobe@2.0.1 (3.2 kB gzip, zero peer deps).
+             New file: /app/components/explore/KashmirGlobe.jsx
+              * Auto-rotates, pointer-drag interactive.
+              * Marker at 34.0837°N, 74.7973°E (Srinagar).
+              * Deep-space starfield backdrop + soft blue glow + CSS radial
+                sphere fallback (so a visible planet renders even when WebGL is
+                limited, e.g. Playwright software-rendering).
+              * Cleanly destroys on unmount.
+             Wired as the FIRST hero slide (id: 'globe'), 7 s crossfade to the
+             8 Kashmir photos. Kashmir landscape photos remain the primary
+             storytelling loop.
+
+          4) MOBILE BOTTOM PADDING (polish) — /app/app/explore/explore.css
+             Added: @media (max-width: 767px) { .explore-root main {
+               padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+             } }
+             Guarantees the last section (Saved Places / Discover CTA) never sits
+             under the fixed bottom navigation on phones.
+
+          TOUCHED FILES (5):
+            /app/app/explore/(social)/home/page.js
+              — HERO_IMAGES → HERO_SLIDES (types: globe|image), reduced overlay,
+                text-shadow, mounts KashmirGlobe on the globe slide, +pb-24 md:pb-16
+                on Saved Places.
+            /app/components/explore/KashmirGlobe.jsx (NEW)
+              — cobe-based interactive globe + CSS backdrop sphere.
+            /app/components/explore/ExploreShell.jsx
+              — responsive profile capsule (avatar-only on mobile).
+            /app/app/explore/explore.css
+              — mobile main padding-bottom for bottom-nav clearance.
+            /app/package.json / yarn.lock
+              — added dependency: cobe@2.0.1
+
+          UNTOUCHED:
+            Backend, /api routes, auth, DB, Marketplace, Build My Trip, Journey,
+            Community, Wander, Stories, Passport pages, ExploreSubNav functionality,
+            Notification bell, theme toggle logic.
+
+          WHAT TESTING AGENT MUST VERIFY (visual/regression, no backend calls):
+            A) /explore/home renders 200 OK on desktop 1440x900 AND mobile 390x844.
+            B) At scrollY=0, top-of-hero image is CLEAR and vibrant (no dark blanket
+               covering the middle). Bottom of hero fades to dark for text legibility.
+               Middle of hero image (approx 30-70% vertical range) should be visibly
+               brighter than before (measure pixel colour or verify overlay opacity).
+            C) The globe canvas exists on first render (element: 'canvas' inside the
+               hero). Wait ~5s for cobe to initialize. Some pixels should be
+               non-transparent inside the canvas bounding box.
+            D) Rotating hero: click a dot indicator (e.g. index 3) and verify the
+               active dot indicator updates and a landscape Image element becomes
+               opacity:1 for that index. Timer-based auto-rotation is OK but not
+               required to verify.
+            E) Profile capsule / header responsiveness — LOGGED-IN state check:
+               Because there are no live test credentials wired, if a signed-in
+               session can be simulated (e.g. by injecting user context), verify at
+               390x844 that the user chip's right edge stays inside the viewport
+               (rect.right ≤ 390) even with a long name. If auth can't be simulated,
+               verify the ANONYMOUS state ('Sign in' button) stays inside viewport
+               on 320x568 iPhone SE viewport too.
+            F) Mobile bottom padding — on 390x844 scroll to the bottom of
+               /explore/home. The last CTA ("Discover places" or the Saved Places
+               grid last row) must not be visually clipped or overlapped by the
+               .e-bottomnav (which sits at bottom: 16px + safe-area with height ~56px).
+               Padding-bottom of the <main> element should be >= 84px on mobile.
+            G) Regression smoke — /, /explore, /build-trip, /explore/community,
+               /explore/journey, /explore/passport, /explore/wander, /explore/stories
+               all render HTTP 200.
+            H) No console errors related to KashmirGlobe or cobe (WebGL warning like
+               "INVALID_OPERATION: drawArrays" is a known cobe headless-Chromium quirk
+               and should NOT be treated as a failure — cobe still renders the marker
+               and starfield/backdrop always show).
+
+          Screenshots taken locally during development confirm A-F. Testing agent
+          should independently verify.
 
 # ---------------------------------------------------------------------------
 # MODULE 3 (July 2025) — Journey-scoped Messaging (5-credit budget)
