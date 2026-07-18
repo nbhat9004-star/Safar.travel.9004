@@ -12,13 +12,17 @@ const ITEMS = [
   { href: '/explore/passport', label: 'Passport', icon: IdCard },
 ];
 
-export default function ExploreSubNav() {
+export default function ExploreSubNav({ floating = false, isHome = false }) {
   const pathname = usePathname() || '';
   return (
     <>
       {/* Desktop sticky pill */}
-      <nav className="e-subnav hidden md:block mt-6" aria-label="Explore sections">
-        <div className="e-subnav-inner">
+      <nav
+        className="e-subnav hidden md:block"
+        aria-label="Explore sections"
+        style={isHome ? { top: 68, marginTop: 68 } : { marginTop: 24 }}
+      >
+        <div className={`e-subnav-inner${floating ? ' e-subnav-inner--floating' : ''}`}>
           {ITEMS.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + '/');
             return (

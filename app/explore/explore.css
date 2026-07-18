@@ -146,7 +146,13 @@ html:has(.explore-root), body:has(.explore-root) { overflow-x: hidden; max-width
 
 /* Sub-nav bar (top pill) */
 .e-subnav { position: sticky; top: 12px; z-index: 40; margin: 0 auto; max-width: max-content; }
-.e-subnav-inner { display: inline-flex; gap: 4px; padding: 6px; border-radius: 999px; background: rgba(10,14,26,0.65); backdrop-filter: blur(18px); border: 1px solid var(--e-line-strong); box-shadow: 0 12px 40px -12px rgba(0,0,0,0.5); }
+.explore-root[data-explore-home="true"] .e-subnav { position: fixed; top: 68px; left: 50%; transform: translateX(-50%); margin: 0 !important; }
+.e-subnav-inner { display: inline-flex; gap: 4px; padding: 6px; border-radius: 999px; background: rgba(10,14,26,0.65); backdrop-filter: blur(18px); border: 1px solid var(--e-line-strong); box-shadow: 0 12px 40px -12px rgba(0,0,0,0.5); transition: background .3s ease, border-color .3s ease, box-shadow .3s ease; }
+.e-subnav-inner--floating { background: rgba(10,14,26,0.35); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); border-color: rgba(255,255,255,0.22); }
+html[data-explore-theme="premium"] .e-subnav-inner--floating { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.35); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); box-shadow: 0 10px 30px -12px rgba(0,0,0,0.35); }
+html[data-explore-theme="premium"] .e-subnav-inner--floating .e-subnav-item { color: rgba(255,255,255,0.92); }
+html[data-explore-theme="premium"] .e-subnav-inner--floating .e-subnav-item:hover { background: rgba(255,255,255,0.15); color: #fff; }
+html[data-explore-theme="premium"] .e-subnav-inner--floating .e-subnav-item[data-active="true"] { background: linear-gradient(135deg,#1A6A50,#0F3D2E); color: #fff; box-shadow: 0 8px 24px -8px rgba(15,61,46,0.5); }
 .e-subnav-item { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.75); transition: color .2s ease, background .3s ease, transform .2s ease; white-space: nowrap; }
 .e-subnav-item:hover { color: white; background: rgba(255,255,255,0.06); }
 .e-subnav-item[data-active="true"] { color: #06080f; background: linear-gradient(120deg,#6ee7b7 0%,#a78bfa 60%,#f0abfc 100%); box-shadow: 0 8px 24px -8px rgba(167,139,250,0.5); font-weight: 600; }

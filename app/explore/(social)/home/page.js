@@ -10,8 +10,16 @@ import {
 import AuroraBg from '@/components/explore/AuroraBg';
 import { useAuth } from '@/lib/auth-context';
 
-// Cinematic Kashmir hero image (Dal Lake · houseboats)
-const HERO_IMAGE = 'https://images.unsplash.com/photo-1577500588651-5603d971f338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85';
+// Rotating cinematic Kashmir hero images (fade crossfade)
+const HERO_IMAGES = [
+  { src: 'https://images.unsplash.com/photo-1577500588651-5603d971f338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Dal Lake' },
+  { src: 'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Shikara' },
+  { src: 'https://images.pexels.com/photos/29842101/pexels-photo-29842101.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gulmarg · Snow' },
+  { src: 'https://images.pexels.com/photos/27540040/pexels-photo-27540040.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gurez Valley' },
+  { src: 'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Srinagar · Mist' },
+  { src: 'https://images.pexels.com/photos/17078575/pexels-photo-17078575.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Serene' },
+  { src: 'https://images.unsplash.com/photo-1708179070772-abf3a1d16b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Pahalgam · River Valley' },
+];
 
 // Fallback experience presets — only used when the user hasn't unlocked any yet
 const EXPERIENCE_PRESETS = [
@@ -141,42 +149,88 @@ export default function ExploreHome() {
   const bio = user?.bio || (user ? 'Chasing valleys, chinar & new stories.' : 'Sign in to start your Kashmir story.');
   const avatar = user?.avatar;
 
+  // Rotating hero image index — crossfades every 6.5s
+  const [heroIdx, setHeroIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setHeroIdx(i => (i + 1) % HERO_IMAGES.length), 6500);
+    return () => clearInterval(t);
+  }, []);
+
   return (
     <div className="relative">
       {/* ─────────────────────────── HERO ─────────────────────────── */}
       <section className="relative overflow-hidden">
-        <div className="relative w-full h-[62vh] min-h-[420px] max-h-[640px]">
-          <Image
-            src={HERO_IMAGE}
-            alt="Kashmir landscape"
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover"
-            unoptimized
-          />
-          {/* Gradient overlays */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(6,8,15,0.35) 0%, rgba(6,8,15,0.15) 35%, rgba(6,8,15,0.85) 100%)' }} />
-          <div className="absolute inset-0" style={{ background: 'radial-gradient(120% 60% at 50% 0%, rgba(6,8,15,0.55), transparent 60%)' }} />
-          <AuroraBg />
+        <div className="relative w-full h-screen min-h-[560px] max-h-[900px]">
+          {/* Rotating Kashmir backgrounds — full viewport crossfade */}
+          {HERO_IMAGES.map((img, i) => (
+            <div
+              key={img.src}
+              className="absolute inset-0 transition-opacity ease-in-out"
+              style={{
+                opacity: i === heroIdx ? 1 : 0,
+                transitionDuration: '1400ms',
+                zIndex: i === heroIdx ? 1 : 0,
+              }}
+              aria-hidden={i !== heroIdx}
+            >
+              <Image
+                src={img.src}
+                alt={img.label}
+                fill
+                priority={i === 0}
+                sizes="100vw"
+                className="object-cover"
+                unoptimized
+              />
+            </div>
+          ))}
+
+          {/* Layered gradient overlays for premium cinematic feel + text legibility */}
+          <div className="absolute inset-0 z-[2]" style={{ background: 'linear-gradient(180deg, rgba(6,8,15,0.65) 0%, rgba(6,8,15,0.20) 18%, rgba(6,8,15,0.10) 40%, rgba(6,8,15,0.35) 70%, rgba(6,8,15,0.95) 100%)' }} />
+          <div className="absolute inset-0 z-[2]" style={{ background: 'radial-gradient(120% 60% at 50% 0%, rgba(6,8,15,0.55), transparent 55%)' }} />
+          <div className="absolute inset-0 z-[2] pointer-events-none">
+            <AuroraBg />
+          </div>
 
           {/* Hero content */}
-          <div className="relative z-10 h-full e-container flex flex-col justify-end pb-24 md:pb-32">
-            <div className="e-chip inline-flex w-max backdrop-blur-md" style={{ background: 'rgba(6,8,15,0.35)', borderColor: 'rgba(255,255,255,0.18)', color: '#fff' }}>
+          <div className="relative z-10 h-full e-container flex flex-col justify-end pb-[220px] md:pb-[240px]">
+            <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full text-[11px] uppercase tracking-[0.22em] font-semibold backdrop-blur-md border" style={{ background: 'rgba(6,8,15,0.35)', borderColor: 'rgba(255,255,255,0.22)', color: '#fff' }}>
               <span className="size-2 rounded-full bg-emerald-400 animate-pulse" /> Your Kashmir · Live
             </div>
-            <h1 className="display font-bold mt-4 text-[clamp(2rem,5.6vw,4.4rem)] leading-[1.05] tracking-tight text-white drop-shadow-2xl max-w-3xl">
-              {user ? <>Welcome back, <span className="e-grad-text">{firstName}</span>.</> : <>Your <span className="e-grad-text">travel world</span>, alive.</>}
+            <h1 className="display font-bold mt-4 text-[clamp(2.2rem,6vw,4.8rem)] leading-[1.02] tracking-tight text-white drop-shadow-2xl max-w-3xl">
+              {user ? <>Welcome back,<br /><span className="e-grad-text">{firstName}</span>.</> : <>Your <span className="e-grad-text">Travel World.</span></>}
             </h1>
-            <p className="mt-3 text-base md:text-lg max-w-xl leading-relaxed text-white/85 drop-shadow-md">
-              {user ? 'Continue where you left off, plan the next chapter, and relive every valley you\'ve walked.' : 'Sign in to unlock your personal travel dashboard for Kashmir.'}
+            <p className="mt-4 text-base md:text-lg max-w-xl leading-relaxed text-white/90 drop-shadow-md">
+              {user ? 'Continue where you left off, plan the next chapter, and relive every valley you\'ve walked.' : 'A cinematic pass through Kashmir — sign in to build your personal travel dashboard.'}
             </p>
+
+            {/* Rotating caption + dots */}
+            <div className="mt-6 flex items-center gap-3 text-[11px] font-medium">
+              <span className="uppercase tracking-[0.22em] text-white/80 drop-shadow-md">
+                <MapPin className="inline size-3 mr-1" /> {HERO_IMAGES[heroIdx].label}
+              </span>
+              <div className="flex items-center gap-1.5">
+                {HERO_IMAGES.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setHeroIdx(i)}
+                    aria-label={`Show ${HERO_IMAGES[i].label}`}
+                    className="transition-all rounded-full"
+                    style={{
+                      width: i === heroIdx ? 20 : 6,
+                      height: 6,
+                      background: i === heroIdx ? '#fff' : 'rgba(255,255,255,0.45)',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* ─────────────── Profile Card (overlaps hero) ─────────────── */}
-        <div className="relative -mt-16 md:-mt-20 e-container z-20">
-          <div className="e-glass rounded-3xl p-5 md:p-7 border border-white/15">
+        <div className="relative -mt-40 md:-mt-44 e-container z-20 pb-2">
+          <div className="e-glass rounded-3xl p-5 md:p-7 border shadow-2xl" style={{ borderColor: 'var(--e-line-strong)' }}>
             <div className="flex flex-col md:flex-row md:items-center gap-5 md:gap-7">
               {/* Avatar */}
               <div className="shrink-0">

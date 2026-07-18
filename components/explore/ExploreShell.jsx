@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { LogIn, MapPin, Bell, Loader2 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import ExploreSubNav from './ExploreSubNav';
 import ThemeToggle from './ThemeToggle';
 
-function NotificationBell() {
+function NotificationBell({ floating }) {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState({ notifications: [], unreadCount: 0 });
   const [loading, setLoading] = useState(false);
@@ -24,10 +25,13 @@ function NotificationBell() {
     await fetch('/api/notifications/read-all', { method: 'POST' });
     setData(d => ({ ...d, unreadCount: 0, notifications: d.notifications.map(n => ({ ...n, read: true })) }));
   };
+  const btnStyle = floating
+    ? { background: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.28)', color: '#fff', backdropFilter: 'blur(10px)' }
+    : { background: 'var(--e-surface)', borderColor: 'var(--e-line-strong)' };
   return (
     <div className="relative">
-      <button onClick={() => setOpen(v => !v)} className="relative size-8 rounded-full border grid place-items-center transition hover:opacity-90" style={{ background: 'var(--e-surface)', borderColor: 'var(--e-line-strong)' }} aria-label="Notifications">
-        <Bell className="size-4" style={{ color: 'var(--e-text)' }} />
+      <button onClick={() => setOpen(v => !v)} className="relative size-8 rounded-full border grid place-items-center transition hover:opacity-90" style={btnStyle} aria-label="Notifications">
+        <Bell className="size-4" style={{ color: floating ? '#fff' : 'var(--e-text)' }} />
         {data.unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">{data.unreadCount > 9 ? '9+' : data.unreadCount}</span>}
       </button>
       {open && (
@@ -58,16 +62,50 @@ function NotificationBell() {
 
 export default function ExploreShell({ children }) {
   const { user } = useAuth();
+  const pathname = usePathname() || '';
+  const isHome = pathname === '/explore/home' || pathname === '/explore/home/';
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    if (!isHome) { setScrolled(true); return; }
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [isHome]);
+
+  // Floating (transparent-over-hero) when: on home page AND at top of scroll
+  const floating = isHome && !scrolled;
+
+  const headerStyle = floating
+    ? {
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        boxShadow: 'none',
+      }
+    : {
+        backgroundColor: 'color-mix(in srgb, var(--e-ink) 62%, transparent)',
+        borderColor: 'var(--e-line)',
+        boxShadow: '0 6px 24px -18px rgba(0,0,0,0.35)',
+      };
+  const textColor = floating ? '#ffffff' : 'var(--e-text)';
+  const dimColor  = floating ? 'rgba(255,255,255,0.75)' : 'var(--e-text-dim)';
+  const chipStyle = floating
+    ? { background: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.28)', color: '#fff', backdropFilter: 'blur(10px)' }
+    : { background: 'var(--e-surface)', borderColor: 'var(--e-line-strong)' };
+
   return (
-    <div className="explore-root">
-      {/* Pre-hydration theme init — reads localStorage & falls back to Safar Curated (premium).
-          Runs during SSR HTML parse so there's no theme flash on first paint. */}
+    <div className="explore-root" data-explore-home={isHome ? 'true' : 'false'}>
+      {/* Pre-hydration theme init */}
       <script
         dangerouslySetInnerHTML={{
           __html: `(function(){try{var t=localStorage.getItem('safar-explore-theme')||'premium';document.documentElement.setAttribute('data-explore-theme',t);}catch(e){document.documentElement.setAttribute('data-explore-theme','premium');}})();`,
         }}
       />
-      <header className="sticky top-0 z-40 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--e-ink) 55%, transparent)', borderColor: 'var(--e-line)' }}>
+      <header
+        className={`${isHome ? 'fixed' : 'sticky'} top-0 left-0 right-0 z-40 border-b transition-all duration-300 ${floating ? '' : 'backdrop-blur-md'}`}
+        style={headerStyle}
+      >
         <div className="e-container h-14 flex items-center justify-between">
           <div className="flex items-center gap-3 shrink-0">
             <Link href="/explore/home" className="inline-flex items-center gap-2 shrink-0">
@@ -75,20 +113,20 @@ export default function ExploreShell({ children }) {
                 <MapPin className="size-3.5 text-[#06080f]" strokeWidth={2.6} />
               </div>
               <div className="leading-tight">
-                <div className="font-semibold text-sm" style={{ color: 'var(--e-text)' }}>Explore</div>
-                <div className="text-[9px] uppercase tracking-[0.22em] -mt-0.5" style={{ color: 'var(--e-text-dim)' }}>Living Travel World</div>
+                <div className="font-semibold text-sm transition-colors" style={{ color: textColor, textShadow: floating ? '0 1px 8px rgba(0,0,0,0.35)' : 'none' }}>Explore</div>
+                <div className="text-[9px] uppercase tracking-[0.22em] -mt-0.5 transition-colors" style={{ color: dimColor, textShadow: floating ? '0 1px 6px rgba(0,0,0,0.35)' : 'none' }}>Living Travel World</div>
               </div>
             </Link>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <ThemeToggle compact />
-            {user && <NotificationBell />}
+            <ThemeToggle compact floating={floating} />
+            {user && <NotificationBell floating={floating} />}
             {user ? (
-              <Link href={`/explore/u/${user.username || user.id}`} className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition hover:opacity-90" style={{ background: 'var(--e-surface)', borderColor: 'var(--e-line-strong)' }}>
+              <Link href={`/explore/u/${user.username || user.id}`} className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition hover:opacity-90" style={chipStyle}>
                 <div className="size-6 rounded-full bg-gradient-to-br from-emerald-300 to-violet-400 grid place-items-center text-[10px] font-bold text-[#06080f]">
                   {(user.name || user.email || 'S').charAt(0).toUpperCase()}
                 </div>
-                <span className="text-xs max-w-[100px] truncate" style={{ color: 'var(--e-text-muted)' }}>{user.name || 'Traveler'}</span>
+                <span className="text-xs max-w-[100px] truncate" style={{ color: floating ? '#fff' : 'var(--e-text-muted)' }}>{user.name || 'Traveler'}</span>
               </Link>
             ) : (
               <Link href="/?auth=1" className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold e-btn-primary">
@@ -98,8 +136,9 @@ export default function ExploreShell({ children }) {
           </div>
         </div>
       </header>
-      <div className="e-container flex justify-center">
-        <ExploreSubNav />
+      {/* Sub-nav — pushed further down on home so it sits inside/below the hero visually */}
+      <div className={`e-container flex justify-center ${isHome ? 'relative z-30' : ''}`} style={isHome ? { marginTop: 0 } : undefined}>
+        <ExploreSubNav floating={floating} isHome={isHome} />
       </div>
       <main className="relative">{children}</main>
     </div>

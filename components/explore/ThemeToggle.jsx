@@ -17,7 +17,7 @@ export function getInitialTheme() {
   try { return localStorage.getItem(KEY) || DEFAULT_THEME; } catch { return DEFAULT_THEME; }
 }
 
-export default function ThemeToggle({ compact = false }) {
+export default function ThemeToggle({ compact = false, floating = false }) {
   const [theme, setTheme] = useState(DEFAULT_THEME);
   useEffect(() => {
     const t = getInitialTheme();
@@ -29,12 +29,16 @@ export default function ThemeToggle({ compact = false }) {
     setTheme(next);
     applyTheme(next);
   };
+  const floatStyle = floating
+    ? { background: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.28)', color: '#fff', backdropFilter: 'blur(10px)' }
+    : undefined;
   return (
     <button
       onClick={toggle}
       aria-label={`Switch to ${theme === 'aurora' ? 'Safar Curated' : 'Aurora'} theme`}
       title={theme === 'aurora' ? 'Switch to Safar Curated theme' : 'Switch to Aurora theme'}
       className={`inline-flex items-center gap-1.5 rounded-full border transition ${compact ? 'px-2.5 py-1' : 'px-3 py-1.5'} text-xs font-medium e-theme-toggle`}
+      style={floatStyle}
     >
       {theme === 'aurora' ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
       {!compact && <span>{theme === 'aurora' ? 'Curated' : 'Aurora'}</span>}
