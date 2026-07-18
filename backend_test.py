@@ -11,7 +11,7 @@ import sys
 import os
 
 # Get base URL from environment
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://github-viewer-27.preview.emergentagent.com')
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://explore-journey-hub.preview.emergentagent.com')
 API_URL = f"{BASE_URL}/api"
 
 # Test counters

@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://github-viewer-27.preview.emergentagent.com"
+BASE_URL = "https://explore-journey-hub.preview.emergentagent.com"
 API_BASE = f"{BASE_URL}/api"
 
 # Super Admin credentials
