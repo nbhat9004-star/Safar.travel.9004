@@ -1429,7 +1429,7 @@ async function route(request, { params }) {
     const me = await getCurrentUser(request);
     if (!me) return err('Authentication required', 401);
     const v = requireVerifiedEmail(me); if (!v.ok) return err(v.error, v.status);
-    const { listingId, checkInDate, checkOutDate, guests, inventoryTypeId, serviceOptions } = await readBody(request);
+    const { listingId, checkInDate, checkOutDate, guests, inventoryTypeId, serviceOptions, paymentId, paymentOrderId } = await readBody(request);
     if (!listingId) return err('listingId is required');
     const ci = new Date(checkInDate), co = new Date(checkOutDate);
     if (isNaN(ci) || isNaN(co)) return err('Invalid dates');
@@ -1437,6 +1437,35 @@ async function route(request, { params }) {
     if (co <= ci) return err('Check-out must be after check-in');
     const g = Number(guests);
     if (!Number.isFinite(g) || g < 1 || g > 30) return err('Guests must be between 1 and 30');
+
+    // ── PAYMENT-FIRST GUARD ──────────────────────────────────────────────
+    // Booking creation REQUIRES a verified & paid Razorpay payment that
+    // belongs to the caller and references this listing. This enforces
+    // "payment before booking" even if a rogue client tries to skip it.
+    // Behavior is opt-out only when explicitly disabled by ops (offline
+    // bookings / demo mode / test envs) via ALLOW_BOOKINGS_WITHOUT_PAYMENT=1.
+    // ---------------------------------------------------------------------
+    const allowNoPay = process.env.ALLOW_BOOKINGS_WITHOUT_PAYMENT === '1';
+    let paymentRecord = null;
+    if (!allowNoPay) {
+      if (!paymentId || !paymentOrderId) {
+        return err('Payment required. Please complete payment via Razorpay before booking.', 402);
+      }
+      const paymentsCol = await getCollection('payments');
+      paymentRecord = await paymentsCol.findOne({ orderId: paymentOrderId, paymentId });
+      if (!paymentRecord) return err('Payment not found. Please retry payment.', 404);
+      if (paymentRecord.userId !== me.id) return err('Payment does not belong to this user', 403);
+      if (paymentRecord.status !== 'paid') return err('Payment not verified. Please complete payment first.', 402);
+      if (paymentRecord.purpose !== 'booking') return err('Payment is not for a booking', 400);
+      if (paymentRecord.refId && paymentRecord.refId !== listingId) {
+        return err('Payment does not match this listing', 400);
+      }
+      if (paymentRecord.bookingId && paymentRecord.bookingId !== null) {
+        // Payment already tied to a different booking — reject to prevent double-booking on one payment
+        return err('This payment is already linked to another booking', 409);
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     const listings = await getCollection('listings');
     const listing = await listings.findOne({ id: listingId });
@@ -1566,10 +1595,41 @@ async function route(request, { params }) {
       inventoryTypeId: inventoryTypeId || null,
       inventoryTypeName: selectedType?.name || null,
       serviceOptions: (serviceOptions && typeof serviceOptions === 'object') ? serviceOptions : {},
+      paymentId: paymentRecord?.paymentId || null,
+      paymentOrderId: paymentRecord?.orderId || null,
+      paymentState: paymentRecord ? 'held_by_safar' : 'pending_confirmation',
+      paymentAmount: paymentRecord?.amount || null,
+      paymentHeldAt: paymentRecord ? new Date() : null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     await bookings.insertOne(doc);
+
+    // ── Link payment ↔ booking + mark payment as HELD_BY_SAFAR ─────
+    if (paymentRecord) {
+      try {
+        const paymentsCol = await getCollection('payments');
+        await paymentsCol.updateOne(
+          { orderId: paymentRecord.orderId },
+          { $set: {
+            bookingId: doc.bookingId,
+            status: 'held_by_safar',   // held under Safar Curated custody until service completion
+            heldAt: new Date(),
+            updatedAt: new Date(),
+          } }
+        );
+        logBookingEvent(doc.bookingId, 'payment_received', me, {
+          paymentId: paymentRecord.paymentId,
+          orderId: paymentRecord.orderId,
+          amount: paymentRecord.amount,
+          currency: paymentRecord.currency,
+          state: 'held_by_safar',
+        }).catch(() => {});
+      } catch (e) {
+        console.error('Failed to link payment to booking', doc.bookingId, e?.message || e);
+      }
+    }
+    // ────────────────────────────────────────────────────────────────
 
     // ── UBE Phase 2: initialise state machine + host chain ────────────
     // Non-blocking beyond the initial write — if anything fails we still

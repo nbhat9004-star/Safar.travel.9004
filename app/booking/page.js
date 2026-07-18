@@ -575,8 +575,8 @@ function BookingContent() {
             {step === 4 && (
               <div className="text-center py-6">
                 <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }} className="size-20 rounded-full bg-gradient-emerald text-white grid place-items-center mx-auto shadow-2xl"><PartyPopper className="size-10" /></motion.div>
-                <h2 className="font-display text-3xl font-bold mt-5">Booking confirmed!</h2>
-                <p className="text-muted-foreground mt-2 max-w-md mx-auto">Your reservation at {item.title} from {fmt(checkIn)} — {fmt(checkOut)} is confirmed. We&apos;ve sent the details to your email.</p>
+                <h2 className="font-display text-3xl font-bold mt-5">Payment secured 🔒</h2>
+                <p className="text-muted-foreground mt-2 max-w-lg mx-auto">Your payment has been securely received by Safar Curated. We are now contacting the best available host for {item.title} · {fmt(checkIn)} — {fmt(checkOut)}. Your payment will only be released after the booking is confirmed according to platform rules.</p>
                 <div className="mt-6 inline-flex flex-wrap items-center justify-center gap-3">
                   <Button variant="outline" className="rounded-full" onClick={handleEmailInvoice} disabled={emailingSending}>
                     {emailingSending ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Mail className="size-4 mr-2" />} 
@@ -638,37 +638,146 @@ function BookingContent() {
                   disabled={submitting || (step === 0 && !canContinueDates)}
                   className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold px-6 disabled:opacity-50"
                   onClick={async ()=>{
-                    if (step === 3) {
-                      if (!user) { setShowAuth(true); return; }
-                      if (!listingId) { toast.error('No listing selected. Pick a stay from Explore first.'); return; }
-                      if (!canContinueDates) { toast.error('Please pick valid, available dates.'); setStep(0); return; }
-                      setSubmitting(true);
-                      const { ok, data } = await bookingsApi.create({ 
-                        listingId, 
-                        checkInDate: checkIn, 
-                        checkOutDate: checkOut, 
-                        guests,
-                        inventoryTypeId: typeId || null
+                    if (step !== 3) { setStep(step+1); return; }
+                    // ── Payment-first booking flow (Razorpay) ─────────────────
+                    if (!user) { setShowAuth(true); return; }
+                    if (!listingId) { toast.error('No listing selected. Pick a stay from Explore first.'); return; }
+                    if (!canContinueDates) { toast.error('Please pick valid, available dates.'); setStep(0); return; }
+                    if (!total || total <= 0) { toast.error('Invalid amount. Please refresh and try again.'); return; }
+
+                    setSubmitting(true);
+                    try {
+                      // 1) Load Razorpay checkout script (idempotent — no-op if already there)
+                      await new Promise((resolve, reject) => {
+                        if (typeof window === 'undefined') return reject(new Error('No window'));
+                        if (window.Razorpay) return resolve();
+                        const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+                        if (existing) { existing.addEventListener('load', resolve); existing.addEventListener('error', () => reject(new Error('Failed to load Razorpay'))); return; }
+                        const s = document.createElement('script');
+                        s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+                        s.async = true;
+                        s.onload = resolve;
+                        s.onerror = () => reject(new Error('Failed to load Razorpay Checkout. Please check your connection.'));
+                        document.body.appendChild(s);
                       });
-                      setSubmitting(false);
-                      if (!ok) { 
-                        const errorMsg = data?.error || 'Booking failed';
-                        // Check if error is about email verification
-                        if (errorMsg.toLowerCase().includes('verify your email')) {
-                          setShowVerificationError(true);
-                        }
-                        toast.error(errorMsg); 
-                        return; 
+
+                      // 2) Create Razorpay order (server-side) BEFORE any booking
+                      const orderRes = await fetch('/api/payments/create-order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                          amount: total,
+                          currency: 'INR',
+                          purpose: 'booking',
+                          refId: listingId,
+                          notes: {
+                            listingTitle: item.title,
+                            checkInDate: checkIn,
+                            checkOutDate: checkOut,
+                            guests,
+                            inventoryTypeId: typeId || '',
+                          },
+                        }),
+                      });
+                      const orderData = await orderRes.json().catch(() => ({}));
+                      if (!orderRes.ok || !orderData?.ok) {
+                        setSubmitting(false);
+                        toast.error(orderData?.error || 'Could not initialise payment. Please try again.');
+                        return;
                       }
-                      setBookingId(data.booking.bookingId);
-                      toast.success('Booking request sent to host!');
-                      setStep(4);
-                    } else {
-                      setStep(step+1);
+                      const { orderId, keyId, amount: rzpAmount, currency } = orderData;
+
+                      // 3) Open Razorpay Checkout — customer MUST pay before booking is created.
+                      await new Promise((resolveCheckout) => {
+                        const rzp = new window.Razorpay({
+                          key: keyId,
+                          order_id: orderId,
+                          amount: rzpAmount * 100,
+                          currency,
+                          name: 'Safar Curated',
+                          description: item.title,
+                          image: '/logo.png',
+                          prefill: {
+                            name: user?.name || '',
+                            email: user?.email || '',
+                          },
+                          notes: { listingId, checkInDate: checkIn, checkOutDate: checkOut, guests },
+                          theme: { color: '#0F3D2E' },
+                          modal: {
+                            ondismiss: () => {
+                              setSubmitting(false);
+                              toast('Payment cancelled — you were not charged.', { icon: '⚠️' });
+                              resolveCheckout();
+                            },
+                          },
+                          handler: async (response) => {
+                            try {
+                              // 4) Verify signature server-side (proves payment authenticity)
+                              const verifyRes = await fetch('/api/payments/verify', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({
+                                  razorpay_order_id: response.razorpay_order_id,
+                                  razorpay_payment_id: response.razorpay_payment_id,
+                                  razorpay_signature: response.razorpay_signature,
+                                }),
+                              });
+                              const verifyData = await verifyRes.json().catch(() => ({}));
+                              if (!verifyRes.ok || !verifyData?.ok || !verifyData?.verified) {
+                                setSubmitting(false);
+                                toast.error(verifyData?.error || 'Payment verification failed. Please contact support.');
+                                resolveCheckout();
+                                return;
+                              }
+
+                              // 5) ONLY NOW create the booking — payment is held by Safar Curated.
+                              const { ok: bOk, data: bData } = await bookingsApi.create({
+                                listingId,
+                                checkInDate: checkIn,
+                                checkOutDate: checkOut,
+                                guests,
+                                inventoryTypeId: typeId || null,
+                                paymentId: response.razorpay_payment_id,
+                                paymentOrderId: response.razorpay_order_id,
+                              });
+                              if (!bOk) {
+                                setSubmitting(false);
+                                const errorMsg = bData?.error || 'Booking creation failed after payment. Our team will resolve within 24 hours.';
+                                if (errorMsg.toLowerCase().includes('verify your email')) {
+                                  setShowVerificationError(true);
+                                }
+                                toast.error(errorMsg);
+                                resolveCheckout();
+                                return;
+                              }
+                              setBookingId(bData.booking.bookingId);
+                              toast.success('Payment secured. Your booking request has been sent to the host.');
+                              setStep(4);
+                              setSubmitting(false);
+                              resolveCheckout();
+                            } catch (e) {
+                              setSubmitting(false);
+                              toast.error('Something went wrong finalising your booking. Please contact support with your payment ID.');
+                              resolveCheckout();
+                            }
+                          },
+                        });
+                        rzp.on('payment.failed', (resp) => {
+                          setSubmitting(false);
+                          toast.error(resp?.error?.description || 'Payment failed. Please try again.');
+                          resolveCheckout();
+                        });
+                        rzp.open();
+                      });
+                    } catch (e) {
+                      setSubmitting(false);
+                      toast.error(e?.message || 'Could not open Razorpay Checkout. Please try again.');
                     }
                   }}
                 >
-                  {submitting ? <Loader2 className="size-4 animate-spin" /> : (<>{step===3?'Confirm & Send Request':'Continue'} <ChevronRight className="size-4 ml-1" /></>)}
+                  {submitting ? <Loader2 className="size-4 animate-spin" /> : (<>{step===3?'Confirm & Pay':'Continue'} <ChevronRight className="size-4 ml-1" /></>)}
                 </Button>
                 </div>
               </div>
