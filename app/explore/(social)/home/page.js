@@ -8,20 +8,17 @@ import {
   Snowflake, Waves, Leaf, Tent, Star, Loader2,
 } from 'lucide-react';
 import AuroraBg from '@/components/explore/AuroraBg';
-import KashmirGlobe from '@/components/explore/KashmirGlobe';
 import { useAuth } from '@/lib/auth-context';
 
-// Rotating cinematic hero slides — 1st is an interactive Kashmir globe,
-// then vibrant Kashmir landscape photos crossfade.
+// Rotating cinematic Kashmir hero images (fade crossfade)
 const HERO_SLIDES = [
-  { id: 'globe',     type: 'globe', label: 'Kashmir · 34° N' },
-  { id: 'dal-uns',   type: 'image', src: 'https://images.unsplash.com/photo-1577500588651-5603d971f338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Dal Lake' },
-  { id: 'shikara',   type: 'image', src: 'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Shikara' },
-  { id: 'gulmarg',   type: 'image', src: 'https://images.pexels.com/photos/29842101/pexels-photo-29842101.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gulmarg · Snow' },
-  { id: 'gurez',     type: 'image', src: 'https://images.pexels.com/photos/27540040/pexels-photo-27540040.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gurez Valley' },
-  { id: 'mist',      type: 'image', src: 'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Srinagar · Mist' },
-  { id: 'serene',    type: 'image', src: 'https://images.pexels.com/photos/17078575/pexels-photo-17078575.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Serene' },
-  { id: 'pahalgam',  type: 'image', src: 'https://images.unsplash.com/photo-1708179070772-abf3a1d16b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Pahalgam · River Valley' },
+  { id: 'dal-uns',   src: 'https://images.unsplash.com/photo-1577500588651-5603d971f338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Dal Lake' },
+  { id: 'shikara',   src: 'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Shikara' },
+  { id: 'gulmarg',   src: 'https://images.pexels.com/photos/29842101/pexels-photo-29842101.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gulmarg · Snow' },
+  { id: 'gurez',     src: 'https://images.pexels.com/photos/27540040/pexels-photo-27540040.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gurez Valley' },
+  { id: 'mist',      src: 'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Srinagar · Mist' },
+  { id: 'serene',    src: 'https://images.pexels.com/photos/17078575/pexels-photo-17078575.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Serene' },
+  { id: 'pahalgam',  src: 'https://images.unsplash.com/photo-1708179070772-abf3a1d16b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Pahalgam · River Valley' },
 ];
 
 // Fallback experience presets — only used when the user hasn't unlocked any yet
@@ -163,8 +160,8 @@ export default function ExploreHome() {
     <div className="relative">
       {/* ─────────────────────────── HERO ─────────────────────────── */}
       <section className="relative overflow-hidden">
-        <div className="relative w-full h-screen min-h-[560px] max-h-[900px]">
-          {/* Rotating Kashmir backgrounds — full viewport crossfade (globe first, then photos) */}
+        <div className="relative w-full h-[52vh] min-h-[380px] max-h-[520px] md:h-screen md:min-h-[560px] md:max-h-[900px]">
+          {/* Rotating Kashmir backgrounds — full viewport crossfade */}
           {HERO_SLIDES.map((slide, i) => (
             <div
               key={slide.id}
@@ -176,19 +173,15 @@ export default function ExploreHome() {
               }}
               aria-hidden={i !== heroIdx}
             >
-              {slide.type === 'globe' ? (
-                <KashmirGlobe size={640} spin={i === heroIdx} />
-              ) : (
-                <Image
-                  src={slide.src}
-                  alt={slide.label}
-                  fill
-                  priority={i === 1}
-                  sizes="100vw"
-                  className="object-cover"
-                  unoptimized
-                />
-              )}
+              <Image
+                src={slide.src}
+                alt={slide.label}
+                fill
+                priority={i === 0}
+                sizes="100vw"
+                className="object-cover"
+                unoptimized
+              />
             </div>
           ))}
 
@@ -199,20 +192,20 @@ export default function ExploreHome() {
           </div>
 
           {/* Hero content */}
-          <div className="relative z-10 h-full e-container flex flex-col justify-end pb-[220px] md:pb-[240px]">
-            <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full text-[11px] uppercase tracking-[0.22em] font-semibold backdrop-blur-md border" style={{ background: 'rgba(6,8,15,0.35)', borderColor: 'rgba(255,255,255,0.22)', color: '#fff' }}>
+          <div className="relative z-10 h-full e-container flex flex-col justify-end pb-8 md:pb-[240px]">
+            <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full text-[10px] md:text-[11px] uppercase tracking-[0.22em] font-semibold backdrop-blur-md border" style={{ background: 'rgba(6,8,15,0.35)', borderColor: 'rgba(255,255,255,0.22)', color: '#fff' }}>
               <span className="size-2 rounded-full bg-emerald-400 animate-pulse" /> Your Kashmir · Live
             </div>
-            <h1 className="display font-bold mt-4 text-[clamp(2.2rem,6vw,4.8rem)] leading-[1.02] tracking-tight text-white max-w-3xl" style={{ textShadow: '0 2px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.6)' }}>
+            <h1 className="display font-bold mt-3 md:mt-4 text-[clamp(1.7rem,7vw,4.8rem)] leading-[1.05] tracking-tight text-white max-w-3xl" style={{ textShadow: '0 2px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.6)' }}>
               {user ? <>Welcome back,<br /><span className="e-grad-text">{firstName}</span>.</> : <>Your <span className="e-grad-text">Travel World.</span></>}
             </h1>
-            <p className="mt-4 text-base md:text-lg max-w-xl leading-relaxed text-white/95" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.55)' }}>
+            <p className="mt-2 md:mt-4 text-sm md:text-lg max-w-xl leading-snug md:leading-relaxed text-white/95 hidden sm:block" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.55)' }}>
               {user ? 'Continue where you left off, plan the next chapter, and relive every valley you\'ve walked.' : 'A cinematic pass through Kashmir — sign in to build your personal travel dashboard.'}
             </p>
 
             {/* Rotating caption + dots */}
-            <div className="mt-6 flex items-center gap-3 text-[11px] font-medium">
-              <span className="uppercase tracking-[0.22em] text-white/90" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.55)' }}>
+            <div className="mt-3 md:mt-6 flex items-center gap-3 text-[11px] font-medium">
+              <span className="uppercase tracking-[0.22em] text-white/90 text-[10px] md:text-[11px]" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.55)' }}>
                 <MapPin className="inline size-3 mr-1" /> {HERO_SLIDES[heroIdx].label}
               </span>
               <div className="flex items-center gap-1.5">
@@ -235,8 +228,8 @@ export default function ExploreHome() {
         </div>
 
         {/* ─────────────── Profile Card (overlaps hero) ─────────────── */}
-        <div className="relative -mt-40 md:-mt-44 e-container z-20 pb-2">
-          <div className="e-glass rounded-3xl p-5 md:p-7 border shadow-2xl" style={{ borderColor: 'var(--e-line-strong)' }}>
+        <div className="relative -mt-14 sm:-mt-24 md:-mt-44 e-container z-20 pb-2">
+          <div className="e-glass rounded-3xl p-4 md:p-7 border shadow-2xl" style={{ borderColor: 'var(--e-line-strong)' }}>
             <div className="flex flex-col md:flex-row md:items-center gap-5 md:gap-7">
               {/* Avatar */}
               <div className="shrink-0">
@@ -294,7 +287,7 @@ export default function ExploreHome() {
       </section>
 
       {/* ────────────────── CONTINUE YOUR JOURNEY ────────────────── */}
-      <section className="relative e-container mt-10 mb-10">
+      <section className="relative e-container mt-4 md:mt-10 mb-8 md:mb-10">
         <SectionHeader
           chip={<><Clock className="size-3 text-emerald-300" /> Continue your journey</>}
           title={activeJourney ? 'Resume where you left off' : 'Your next chapter starts here'}
