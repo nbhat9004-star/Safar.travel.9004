@@ -25,14 +25,48 @@ const StatusPill = ({ s }) => {
   return <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${map[s]||'bg-secondary'}`}>{s}</span>;
 };
 
+// Rich engine-state pill from the Universal Booking Engine.
+// Reads the extended `engineState` on booking + optional host deadline.
+const EngineStatePill = ({ s, deadlineAt, forwardCount }) => {
+  const map = {
+    pending_confirmation:      { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Pending confirmation' },
+    searching_host:            { cls: 'bg-sky-50 text-sky-700 border-sky-200',       label: '🔍 Searching for host' },
+    host_reviewing:            { cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', label: '👤 Host reviewing' },
+    forwarded_to_another_host: { cls: 'bg-violet-50 text-violet-700 border-violet-200', label: '🔄 Finding another host' },
+    confirmed:                 { cls: 'bg-emerald-50 text-emerald2 border-emerald-200', label: '✅ Confirmed' },
+    completed:                 { cls: 'bg-emerald-50 text-emerald2 border-emerald-200', label: '🏁 Completed' },
+    cancelled:                 { cls: 'bg-secondary text-muted-foreground border-border', label: 'Cancelled' },
+    expired:                   { cls: 'bg-secondary text-muted-foreground border-border', label: 'Expired' },
+    rejected_by_all_hosts:     { cls: 'bg-rose-50 text-rose-600 border-rose-200',   label: 'No host available' },
+    payment_issue:             { cls: 'bg-rose-50 text-rose-600 border-rose-200',   label: 'Payment issue' },
+  };
+  const m = map[s] || { cls: 'bg-secondary', label: String(s || '').replace(/_/g, ' ') };
+  const showTimer = deadlineAt && ['host_reviewing','forwarded_to_another_host'].includes(s);
+  const mins = showTimer ? Math.max(0, Math.round((new Date(deadlineAt).getTime() - Date.now()) / 60000)) : null;
+  return (
+    <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border inline-flex items-center gap-1.5 ${m.cls}`}>
+      {m.label}
+      {typeof forwardCount === 'number' && forwardCount > 0 && <span className="opacity-70">· hop {forwardCount}</span>}
+      {showTimer && mins !== null && <span className="opacity-70">· {mins}m left</span>}
+    </span>
+  );
+};
+
 const ACTION_META = {
-  created:        { i: Sparkles,     color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: 'Booking created' },
-  approved:       { i: CheckCircle2, color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: 'Booking approved by host' },
-  rejected:       { i: XCircle,      color: 'text-rose-600',    bg: 'bg-rose-50 border-rose-200',        label: 'Booking rejected by host' },
-  cancelled:      { i: X,            color: 'text-muted-foreground', bg: 'bg-secondary border-border',   label: 'Booking cancelled' },
-  refunded:       { i: RotateCcw,    color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-200',        label: 'Refund issued' },
-  invoice_sent:   { i: Mail,         color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: 'Invoice sent' },
-  status_changed: { i: FileText,     color: 'text-charcoal',    bg: 'bg-secondary border-border',        label: 'Status updated' },
+  created:                    { i: Sparkles,     color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: 'Booking created' },
+  approved:                   { i: CheckCircle2, color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: 'Booking approved by host' },
+  rejected:                   { i: XCircle,      color: 'text-rose-600',    bg: 'bg-rose-50 border-rose-200',        label: 'Booking rejected by host' },
+  cancelled:                  { i: X,            color: 'text-muted-foreground', bg: 'bg-secondary border-border',   label: 'Booking cancelled' },
+  refunded:                   { i: RotateCcw,    color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-200',        label: 'Refund issued' },
+  invoice_sent:               { i: Mail,         color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: 'Invoice sent' },
+  status_changed:             { i: FileText,     color: 'text-charcoal',    bg: 'bg-secondary border-border',        label: 'Status updated' },
+  // Universal Booking Engine
+  host_reviewing:             { i: User,         color: 'text-indigo-600',  bg: 'bg-indigo-50 border-indigo-200',    label: '👤 Host reviewing' },
+  host_rejected:              { i: XCircle,      color: 'text-rose-500',    bg: 'bg-rose-50 border-rose-200',        label: 'Host declined' },
+  forwarded_to_another_host:  { i: RotateCcw,    color: 'text-violet-600',  bg: 'bg-violet-50 border-violet-200',    label: '🔄 Forwarded to another host' },
+  confirmed:                  { i: CheckCircle2, color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: '✅ Booking confirmed' },
+  rejected_by_all_hosts:      { i: XCircle,      color: 'text-rose-600',    bg: 'bg-rose-50 border-rose-200',        label: 'No host available' },
+  payment_received:           { i: CheckCircle2, color: 'text-emerald2',    bg: 'bg-emerald-50 border-emerald-200',  label: '💳 Payment received' },
 };
 
 function fmtDate(d) {
@@ -118,7 +152,12 @@ function BookingDetailInner() {
               )}
               <div className="p-6 md:p-8 flex-1">
                 <div className="flex items-start justify-between gap-3 mb-3">
-                  <StatusPill s={booking.status} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <StatusPill s={booking.status} />
+                    {booking.engineState && booking.engineState !== booking.status && (
+                      <EngineStatePill s={booking.engineState} deadlineAt={booking.hostDeadlineAt} forwardCount={booking.hostForwardCount} />
+                    )}
+                  </div>
                   <div className="text-[11px] text-muted-foreground font-mono">#{booking.bookingId.slice(0, 12)}</div>
                 </div>
                 <h1 className="font-display text-3xl md:text-4xl font-bold">{booking.listingTitle}</h1>

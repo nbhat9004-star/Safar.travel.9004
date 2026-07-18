@@ -120,8 +120,148 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
-# MODULE 5 (July 2025) — Booking Reliability Bug Fix (Phase 1, 2-credit budget)
+# MODULE UBE (July 2025) — Universal Booking Engine Phase 2 (20-credit budget)
 # ---------------------------------------------------------------------------
+module_ube_phase2:
+  - task: "Universal Booking Engine — state machine, host chain, deadlines, admin config, timeline UI"
+    implemented: true
+    working: "NA"
+    file: "/app/app/api/[[...path]]/route.js, /app/app/dashboard/traveler/bookings/[id]/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Shipped Phase 2 in ~2 files, ~380 LOC added, no new deps, no UI redesign,
+          no schema migration (all additive fields on existing bookings collection).
+
+          NEW FIELDS on bookings collection (additive):
+            engineState             — 10-state richer state (see UBE_STATES)
+            hostChain[]             — ordered candidate host list w/ scores
+            hostChainIndex          — current position (-1 = primary listing owner)
+            hostDeadlineAt          — Date; current host's response deadline
+            hostForwardCount        — number of hops so far
+            serviceOptions          — free-form JSON for service-specific fields
+            paymentState            — 'pending_confirmation'|'paid'|... (future)
+            confirmedAt / cancelledAt / rejectedByAllAt
+
+          NEW COLLECTION (auto-seeds default doc on first read):
+            bookingEngineConfig     — { id:'default', hostResponseMinutes,
+                                         maxForwardingAttempts, matchWeights{},
+                                         autoAdvanceOnRejection }
+
+          RICH STATES (10):
+            pending_confirmation, searching_host, host_reviewing,
+            forwarded_to_another_host, confirmed, completed,
+            cancelled, expired, rejected_by_all_hosts, payment_issue
+
+          NEW ENDPOINTS (all backward compatible; existing legacy PATCH still works):
+            POST   /api/bookings/:id/host-decision   { decision:'accept'|'reject', reason? }
+                   — host accept → engineState='confirmed', status='approved'
+                   — host reject → auto-advance chain OR rejected_by_all_hosts
+                   — logs timeline events + notifies both parties
+            POST   /api/bookings/expire-check
+                   — cron endpoint; caller must be admin OR provide
+                     x-cron-key header matching env BOOKING_ENGINE_CRON_KEY
+                   — expires timed-out reviews and forwards them
+                   — returns { scanned, advanced, terminated }
+            GET    /api/admin/booking-engine-config   (admin/super_admin)
+            PUT    /api/admin/booking-engine-config   (admin/super_admin)
+                   body: hostResponseMinutes(5..1440), maxForwardingAttempts(1..20),
+                         autoAdvanceOnRejection, matchWeights{...}
+
+          MODIFIED ENDPOINTS:
+            POST /api/bookings
+              — now accepts `serviceOptions` (free-form JSON) in body
+              — after insertOne, initialises engineState='host_reviewing',
+                builds hostChain via ubeBuildHostChain(), sets hostDeadlineAt
+              — non-blocking on failure (legacy status='pending' flow still valid)
+            PATCH /api/bookings/:id
+              — synchronises engineState alongside legacy status:
+                  approved  → engineState='confirmed'
+                  cancelled → engineState='cancelled'
+                  rejected  → auto-advances chain (if cfg.autoAdvanceOnRejection)
+                             OR sets engineState='rejected_by_all_hosts'
+              — resets status='pending' when auto-forwarded to next host
+
+          HOST CHAIN MATCHING (ubeBuildHostChain):
+            Finds alternate active listings scoring by:
+              sameCategory / sameSubcategory / sameCity / sameCountry
+              + verifiedHost / superHost / rating
+            Groups by hostId, orders by score desc, caps at maxForwardingAttempts.
+            All weights admin-configurable via /api/admin/booking-engine-config.
+
+          NOTIFICATIONS (in-app, uses existing notifications collection):
+            booking_forwarded    → sent to next host on every advancement
+            booking_searching_host → sent to traveler on initial assignment
+            booking_confirmed    → sent to traveler on host accept
+            (Emails: existing sendBookingApprovedEmail/RejectedEmail still fire
+             via legacy PATCH path — no email regression.)
+
+          TIMELINE EVENTS (uses existing bookingTimeline collection):
+            host_reviewing, forwarded_to_another_host, confirmed,
+            host_rejected, rejected_by_all_hosts, payment_received
+            All render with icons+labels in traveler booking detail UI.
+
+          UI CHANGES (traveler booking detail page ONLY):
+            /app/app/dashboard/traveler/bookings/[id]/page.js
+              + EngineStatePill component — shows rich state with hop counter
+                and live countdown to host deadline when in review/forwarded.
+              + ACTION_META extended with UBE event icons+labels so the
+                existing Booking Timeline section renders every new event.
+              No other UI touched. Host dashboard already accepts/rejects via
+              legacy PATCH which now feeds the state machine.
+
+          NOT BUILT (out of budget or awaiting user input):
+            - WhatsApp integration    → needs credentials (Twilio/Meta/Gupshup).
+              User to confirm provider & supply keys → I can add in a follow-up.
+            - Email templates for the 10 rich UBE states → existing 4 booking
+              emails (created/approved/rejected/cancelled) still fire correctly.
+              New template files can be added in a separate 3-credit slice.
+            - Admin UI panel for booking-engine-config → the GET/PUT endpoints
+              exist; the admin can call via /api or a small settings page can
+              be added in a 2-credit slice.
+            - Cron scheduler → the /api/bookings/expire-check endpoint exists;
+              needs user to wire up a Vercel Cron (or equivalent) hitting it
+              every 5 minutes with x-cron-key header. Sample vercel.json snippet:
+                { "crons": [{ "path": "/api/bookings/expire-check", "schedule": "*/5 * * * *" }] }
+              Vercel automatically sends the request; add x-cron-key handling
+              via Vercel env if needed.
+            - Per-service booking option UIs → backend accepts arbitrary
+              `serviceOptions` JSON; UI forms for each service type can be
+              added incrementally without further engine changes.
+            - Payment "hold" logic in Razorpay → current flow charges immediately
+              on booking. True escrow requires Razorpay Route/Managed Escrow
+              setup (~5 credits + KYC). paymentState field is scaffolded for
+              this future integration.
+
+          RELIABILITY GUARANTEES INHERITED FROM PHASE 1:
+            * Customer pays only once — idempotent retry returns existing booking.
+            * Failed bookings don't permanently block inventory (30-min TTL).
+            * Own pending bookings never block the caller's retries.
+            * No orphan bookings.
+
+          TOTAL CREDITS SPEND (approx): Phase 1 = 2, Phase 2 = 8. Delivered
+          under the 20-credit ceiling by leveraging existing helpers
+          (mkNotif inserts, logBookingEvent, getCollection, ok/err).
+
+          Files modified: 2  (route.js, traveler bookings/[id]/page.js)
+          Files added:    0
+          New deps:       0
+          UI redesign:    none
+
+          TESTING per user constraint: NO test agents invoked. Code lints clean.
+          MongoDB not connected in preview so no e2e curl either. Recommended
+          user runs a live 3-host chain scenario on prod:
+            1) traveler POST /bookings → confirm engineState=host_reviewing
+            2) host1 POST /bookings/:id/host-decision {decision:'reject'} →
+               confirm engineState=forwarded_to_another_host, new hostId
+            3) host2 POST /bookings/:id/host-decision {decision:'accept'} →
+               confirm engineState=confirmed, status=approved.
+
+
 module5_booking_fix:
   - task: "Booking POST — fix 'These dates overlap with an existing booking' on Confirm & Pay retry"
     implemented: true

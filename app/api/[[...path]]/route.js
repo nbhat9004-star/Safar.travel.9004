@@ -1429,7 +1429,7 @@ async function route(request, { params }) {
     const me = await getCurrentUser(request);
     if (!me) return err('Authentication required', 401);
     const v = requireVerifiedEmail(me); if (!v.ok) return err(v.error, v.status);
-    const { listingId, checkInDate, checkOutDate, guests, inventoryTypeId } = await readBody(request);
+    const { listingId, checkInDate, checkOutDate, guests, inventoryTypeId, serviceOptions } = await readBody(request);
     if (!listingId) return err('listingId is required');
     const ci = new Date(checkInDate), co = new Date(checkOutDate);
     if (isNaN(ci) || isNaN(co)) return err('Invalid dates');
@@ -1565,10 +1565,44 @@ async function route(request, { params }) {
       status: 'pending',
       inventoryTypeId: inventoryTypeId || null,
       inventoryTypeName: selectedType?.name || null,
+      serviceOptions: (serviceOptions && typeof serviceOptions === 'object') ? serviceOptions : {},
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     await bookings.insertOne(doc);
+
+    // ── UBE Phase 2: initialise state machine + host chain ────────────
+    // Non-blocking beyond the initial write — if anything fails we still
+    // return a valid booking response (older status='pending' flow works).
+    try {
+      const ubeCfg = await ubeGetConfig();
+      const chain = await ubeBuildHostChain(listing, listing.hostId, ubeCfg);
+      const deadline = new Date(Date.now() + ubeCfg.hostResponseMinutes * 60 * 1000);
+      await bookings.updateOne(
+        { bookingId: doc.bookingId },
+        { $set: {
+          engineState: 'host_reviewing',
+          hostChain: chain,
+          hostChainIndex: -1, // primary host = "position -1" (listing owner)
+          hostDeadlineAt: deadline,
+          hostForwardCount: 0,
+          serviceOptions: doc.serviceOptions || {},
+          paymentState: doc.paymentState || 'pending_confirmation',
+          updatedAt: new Date(),
+        } }
+      );
+      doc.engineState = 'host_reviewing';
+      doc.hostChain = chain;
+      doc.hostChainIndex = -1;
+      doc.hostDeadlineAt = deadline;
+      // Timeline
+      logBookingEvent(doc.bookingId, 'host_reviewing', { id: 'system', name: 'System', role: 'system' }, {
+        hostId: listing.hostId, deadlineAt: deadline, chainSize: chain.length,
+      }).catch(() => {});
+    } catch (e) {
+      console.error('UBE init failed for booking', doc.bookingId, e?.message || e);
+    }
+    // ──────────────────────────────────────────────────────────────────
 
     // Module 12: create host earnings record (pending until hold period elapses)
     m12CreateHostEarnings(doc, listing).catch(() => {});
@@ -1676,6 +1710,37 @@ async function route(request, { params }) {
     
     // Update booking status
     await bookings.updateOne({ bookingId: id }, { $set: { status, updatedAt: new Date() } });
+
+    // ── UBE Phase 2: sync engineState + auto-advance host chain on rejection ─
+    try {
+      const cfg = await ubeGetConfig();
+      if (status === 'approved') {
+        await bookings.updateOne({ bookingId: id }, { $set: {
+          engineState: 'confirmed', hostDeadlineAt: null, confirmedAt: new Date(),
+        } });
+        await logBookingEvent(id, 'confirmed', me, { via: 'PATCH_approved' });
+      } else if (status === 'cancelled') {
+        await bookings.updateOne({ bookingId: id }, { $set: {
+          engineState: 'cancelled', hostDeadlineAt: null, cancelledAt: new Date(),
+        } });
+      } else if (status === 'rejected') {
+        // Host declined via legacy PATCH — auto-advance the chain when enabled.
+        if (cfg.autoAdvanceOnRejection && me.id === b.hostId) {
+          const bFresh = await bookings.findOne({ bookingId: id });
+          await ubeAdvanceChain(bFresh, cfg, 'host_rejected_via_legacy_patch');
+          // Note: this may promote status back to 'pending' for the next host.
+          const bAfter = await bookings.findOne({ bookingId: id });
+          if (bAfter && ['host_reviewing','forwarded_to_another_host'].includes(bAfter.engineState)) {
+            await bookings.updateOne({ bookingId: id }, { $set: { status: 'pending' } });
+          }
+        } else {
+          await bookings.updateOne({ bookingId: id }, { $set: {
+            engineState: 'rejected_by_all_hosts', hostDeadlineAt: null,
+          } });
+        }
+      }
+    } catch (e) { console.error('UBE PATCH sync failed', e?.message || e); }
+    // ────────────────────────────────────────────────────────────────────────
     
     // Restore inventory counter if booking is cancelled or rejected
     if ((status === 'cancelled' || status === 'rejected') && b.inventoryTypeId) {
@@ -2052,6 +2117,305 @@ async function route(request, { params }) {
     }
     return ok({ booking: b });
   }
+
+  // =====================================================================
+  // MODULE UBE — UNIVERSAL BOOKING ENGINE (Phase 2)
+  // ---------------------------------------------------------------------
+  // State machine on top of existing bookings collection. Additive only:
+  //  - Keeps existing `status` (pending|approved|rejected|cancelled) intact.
+  //  - Adds `engineState` (richer state) + `hostChain[]` + `hostChainIndex`
+  //    + `hostDeadlineAt` + `hostForwardCount` + `serviceOptions{}`.
+  //  - Reuses existing bookings collection, bookingTimeline, mkNotif hooks,
+  //    and email helpers. No new collections required.
+  //
+  // Rich states:
+  //    pending_confirmation, searching_host, host_reviewing,
+  //    forwarded_to_another_host, confirmed, completed, cancelled,
+  //    expired, rejected_by_all_hosts, payment_issue
+  // =====================================================================
+
+  const UBE_STATES = [
+    'pending_confirmation', 'searching_host', 'host_reviewing',
+    'forwarded_to_another_host', 'confirmed', 'completed',
+    'cancelled', 'expired', 'rejected_by_all_hosts', 'payment_issue',
+  ];
+
+  const UBE_DEFAULTS = {
+    id: 'default',
+    hostResponseMinutes: 60,          // how long a host has to accept
+    maxForwardingAttempts: 5,          // hop cap in the host chain
+    matchWeights: {                    // scoring weights for candidate hosts
+      sameListing: 100,                // prefer another unit at same listing
+      sameHostRoster: 25,              // prefer hosts w/ multi-listing
+      sameCategory: 40,
+      sameSubcategory: 30,
+      sameCity: 25,
+      sameCountry: 8,
+      verifiedHost: 15,
+      superHost: 20,
+      ratingBoost: 6,                  // multiplied by rating (0..5)
+    },
+    autoAdvanceOnRejection: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const ubeGetConfig = async () => {
+    const col = await getCollection('bookingEngineConfig');
+    let doc = await col.findOne({ id: 'default' }, { projection: { _id: 0 } });
+    if (!doc) {
+      doc = { ...UBE_DEFAULTS };
+      try { await col.insertOne({ ...doc }); } catch {}
+    }
+    return doc;
+  };
+
+  // Compute an ordered list of host candidates for a booking. Falls back to
+  // the listing's own host when nothing else matches.
+  async function ubeBuildHostChain(listing, primaryHostId, cfg) {
+    const listingsCol = await getCollection('listings');
+    const usersCol = await getCollection('users');
+    // Pull ACTIVE listings that could serve as alternates (same category
+    // and city preferred, subcategory helps, verified/super hosts weighted).
+    const alternates = await listingsCol.find({
+      status: 'approved',
+      hostId: { $ne: primaryHostId },
+      $or: [
+        { category: listing.category },
+        { subcategory: listing.subcategory },
+        { 'location.city': listing?.location?.city },
+      ],
+    }, { projection: { _id: 0, hostId: 1, category: 1, subcategory: 1, location: 1 } })
+      .limit(200)
+      .toArray();
+
+    // Score by host, then dedupe
+    const w = cfg?.matchWeights || UBE_DEFAULTS.matchWeights;
+    const hostScores = new Map();
+    for (const a of alternates) {
+      const hid = a.hostId; if (!hid) continue;
+      let s = 0;
+      if (a.category === listing.category) s += w.sameCategory;
+      if (a.subcategory === listing.subcategory) s += w.sameSubcategory;
+      if ((a.location?.city || '') === (listing?.location?.city || '')) s += w.sameCity;
+      if ((a.location?.country || '') === (listing?.location?.country || '')) s += w.sameCountry;
+      hostScores.set(hid, (hostScores.get(hid) || 0) + s);
+    }
+    // Boost by host reputation
+    if (hostScores.size) {
+      const hostIds = Array.from(hostScores.keys());
+      const users = await usersCol.find({ id: { $in: hostIds } }, {
+        projection: { _id: 0, id: 1, name: 1, email: 1, emailVerified: 1, role: 1, hostFlags: 1, rating: 1 }
+      }).toArray();
+      for (const u of users) {
+        let s = hostScores.get(u.id) || 0;
+        if (u.emailVerified) s += w.verifiedHost;
+        if (u.hostFlags?.super) s += w.superHost;
+        if (typeof u.rating === 'number') s += Math.min(5, u.rating) * w.ratingBoost;
+        hostScores.set(u.id, s);
+      }
+    }
+    // Order by score desc; keep max attempts
+    const chain = Array.from(hostScores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, Math.max(1, cfg?.maxForwardingAttempts || 5))
+      .map(([hostId, score]) => ({ hostId, score }));
+    return chain;
+  }
+
+  // Move booking to the next host in its chain, or terminate as rejected_all.
+  // Returns the booking's next engineState and refreshed hostId.
+  async function ubeAdvanceChain(booking, cfg, reason) {
+    const bookingsCol = await getCollection('bookings');
+    const chain = Array.isArray(booking.hostChain) ? booking.hostChain : [];
+    const nextIdx = (typeof booking.hostChainIndex === 'number' ? booking.hostChainIndex : -1) + 1;
+    const maxAttempts = cfg?.maxForwardingAttempts || UBE_DEFAULTS.maxForwardingAttempts;
+    const responseMinutes = cfg?.hostResponseMinutes || UBE_DEFAULTS.hostResponseMinutes;
+    if (nextIdx >= chain.length || nextIdx >= maxAttempts) {
+      await bookingsCol.updateOne(
+        { bookingId: booking.bookingId },
+        { $set: {
+          engineState: 'rejected_by_all_hosts',
+          status: 'rejected',
+          hostDeadlineAt: null,
+          updatedAt: new Date(),
+          rejectedByAllAt: new Date(),
+        } }
+      );
+      await logBookingEvent(booking.bookingId, 'rejected_by_all_hosts', { id: 'system', name: 'System', role: 'system' }, { reason: reason || 'chain_exhausted', chainLength: chain.length });
+      return { engineState: 'rejected_by_all_hosts', hostId: booking.hostId };
+    }
+    const next = chain[nextIdx];
+    const deadline = new Date(Date.now() + responseMinutes * 60 * 1000);
+    // Look up the next host's public info
+    const usersCol = await getCollection('users');
+    const nextUser = await usersCol.findOne({ id: next.hostId }, { projection: { _id: 0, name: 1 } });
+    await bookingsCol.updateOne(
+      { bookingId: booking.bookingId },
+      { $set: {
+        engineState: nextIdx === 0 ? 'host_reviewing' : 'forwarded_to_another_host',
+        hostId: next.hostId,
+        hostName: nextUser?.name || booking.hostName || 'Safar Host',
+        hostChainIndex: nextIdx,
+        hostDeadlineAt: deadline,
+        hostForwardCount: nextIdx,
+        updatedAt: new Date(),
+      } }
+    );
+    await logBookingEvent(booking.bookingId, nextIdx === 0 ? 'host_reviewing' : 'forwarded_to_another_host',
+      { id: 'system', name: 'System', role: 'system' },
+      { hostId: next.hostId, hostName: nextUser?.name, deadlineAt: deadline, reason: reason || null }
+    );
+    // Notify the next host (in-app)
+    try {
+      const notifs = await getCollection('notifications');
+      await notifs.insertOne({
+        id: uuid(),
+        userId: next.hostId,
+        type: 'booking_forwarded',
+        category: 'booking',
+        title: nextIdx === 0 ? 'New booking request' : 'Booking forwarded to you',
+        body: `${booking.travelerName || 'A traveler'} · ${booking.listingTitle} · respond within ${responseMinutes} min`,
+        link: `/dashboard/host?tab=bookings`,
+        meta: { bookingId: booking.bookingId, deadlineAt: deadline },
+        read: false,
+        createdAt: new Date(),
+      });
+    } catch {}
+    // Notify the traveler about the forwarding (in-app)
+    try {
+      const notifs = await getCollection('notifications');
+      await notifs.insertOne({
+        id: uuid(),
+        userId: booking.travelerId,
+        type: nextIdx === 0 ? 'booking_searching_host' : 'booking_forwarded',
+        category: 'booking',
+        title: nextIdx === 0 ? 'Searching for a host…' : 'Finding another host…',
+        body: nextIdx === 0
+          ? `We're confirming your booking for ${booking.listingTitle} with the best available host.`
+          : `Previous host couldn't take it — we've forwarded to another host and we'll keep you updated.`,
+        link: `/dashboard/traveler/bookings/${booking.bookingId}`,
+        meta: { bookingId: booking.bookingId },
+        read: false,
+        createdAt: new Date(),
+      });
+    } catch {}
+    return { engineState: nextIdx === 0 ? 'host_reviewing' : 'forwarded_to_another_host', hostId: next.hostId };
+  }
+
+  // POST /api/bookings/:id/host-decision  {decision:'accept'|'reject', reason?}
+  //  Host accepts → engineState='confirmed', status='approved'.
+  //  Host rejects → auto-advance chain (or rejected_by_all_hosts if terminal).
+  if (segments[0] === 'bookings' && segments[1] && segments[2] === 'host-decision' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const id = segments[1];
+    const body = await readBody(request);
+    const decision = body?.decision;
+    const reason = body?.reason || null;
+    if (!['accept','reject'].includes(decision)) return err('decision must be accept or reject');
+    const bookingsCol = await getCollection('bookings');
+    const b = await bookingsCol.findOne({ bookingId: id });
+    if (!b) return err('Booking not found', 404);
+    if (me.role !== 'admin' && me.id !== b.hostId) return err('Only the assigned host can decide', 403);
+    if (['confirmed','cancelled','completed','rejected_by_all_hosts'].includes(b.engineState || '')) {
+      return err(`Booking is already ${b.engineState}`, 409);
+    }
+    const cfg = await ubeGetConfig();
+    if (decision === 'accept') {
+      await bookingsCol.updateOne({ bookingId: id }, { $set: {
+        engineState: 'confirmed',
+        status: 'approved',
+        hostDeadlineAt: null,
+        confirmedAt: new Date(),
+        updatedAt: new Date(),
+      } });
+      await logBookingEvent(id, 'confirmed', me, { hostId: me.id, chainIndex: b.hostChainIndex ?? 0 });
+      // Notify traveler
+      try {
+        const notifs = await getCollection('notifications');
+        await notifs.insertOne({
+          id: uuid(),
+          userId: b.travelerId,
+          type: 'booking_confirmed',
+          category: 'booking',
+          title: 'Booking confirmed 🎉',
+          body: `${b.hostName || 'Your host'} accepted your booking for ${b.listingTitle}.`,
+          link: `/dashboard/traveler/bookings/${b.bookingId}`,
+          meta: { bookingId: b.bookingId },
+          read: false,
+          createdAt: new Date(),
+        });
+      } catch {}
+      const fresh = await bookingsCol.findOne({ bookingId: id }, { projection: { _id: 0 } });
+      return ok({ booking: fresh, engineState: 'confirmed' });
+    }
+    // decision === 'reject' → advance chain
+    await logBookingEvent(id, 'host_rejected', me, { hostId: me.id, reason, chainIndex: b.hostChainIndex });
+    const result = await ubeAdvanceChain(b, cfg, reason);
+    const fresh = await bookingsCol.findOne({ bookingId: id }, { projection: { _id: 0 } });
+    return ok({ booking: fresh, engineState: result.engineState });
+  }
+
+  // POST /api/bookings/expire-check  (cron / admin-triggered)
+  //  Auto-expires bookings whose current host missed the deadline and forwards
+  //  them along the chain. Safe to call frequently — idempotent.
+  if (path === '/bookings/expire-check' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const isAdmin = me?.role === 'admin';
+    const cronKey = request.headers.get('x-cron-key');
+    const envKey = process.env.BOOKING_ENGINE_CRON_KEY;
+    if (!isAdmin && !(envKey && cronKey && cronKey === envKey)) {
+      return err('Forbidden', 403);
+    }
+    const cfg = await ubeGetConfig();
+    const bookingsCol = await getCollection('bookings');
+    const now = new Date();
+    const stale = await bookingsCol.find({
+      engineState: { $in: ['host_reviewing','forwarded_to_another_host'] },
+      hostDeadlineAt: { $lt: now },
+    }).limit(50).toArray();
+    let advanced = 0, terminated = 0;
+    for (const b of stale) {
+      const before = b.engineState;
+      const r = await ubeAdvanceChain(b, cfg, 'host_response_timeout');
+      if (r.engineState === 'rejected_by_all_hosts') terminated++; else advanced++;
+    }
+    return ok({ scanned: stale.length, advanced, terminated });
+  }
+
+  // GET /api/admin/booking-engine-config  (super_admin / admin)
+  if (path === '/admin/booking-engine-config' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const cfg = await ubeGetConfig();
+    return ok({ config: cfg });
+  }
+
+  // PUT /api/admin/booking-engine-config  (super_admin / admin)
+  if (path === '/admin/booking-engine-config' && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    const col = await getCollection('bookingEngineConfig');
+    const cur = await ubeGetConfig();
+    const next = {
+      ...cur,
+      hostResponseMinutes: Math.max(5, Math.min(1440, Number(b.hostResponseMinutes) || cur.hostResponseMinutes)),
+      maxForwardingAttempts: Math.max(1, Math.min(20, Number(b.maxForwardingAttempts) || cur.maxForwardingAttempts)),
+      autoAdvanceOnRejection: b.autoAdvanceOnRejection !== undefined ? !!b.autoAdvanceOnRejection : cur.autoAdvanceOnRejection,
+      matchWeights: { ...cur.matchWeights, ...(b.matchWeights || {}) },
+      updatedAt: new Date(),
+    };
+    await col.updateOne({ id: 'default' }, { $set: next }, { upsert: true });
+    return ok({ config: next });
+  }
+
+  // =====================================================================
+  // END MODULE UBE
+  // =====================================================================
+
+
 
   // ---------- ADMIN BOOKING MANAGEMENT ----------
   // POST /api/admin/bookings/:id/cancel (admin cancel booking)
