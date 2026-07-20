@@ -120,6 +120,52 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE: PREMIUM LAUNCH MODE (July 2026) — 3-credit budget, no testing agents
+# ---------------------------------------------------------------------------
+module_launch_mode:
+  - task: "Premium Launch Mode — Super Admin togglable pre-launch landing page + Founding Partner applications"
+    implemented: true
+    working: "NA"
+    files_changed:
+      - /app/middleware.js  # new: rewrites public routes -> /launch when enabled
+      - /app/app/launch/page.js  # new: premium bright-white landing (hero, cards, commitment, IG, contact, modal)
+      - /app/app/admin/website-builder/launch-mode/page.js  # new: super-admin management UI
+      - /app/app/admin/founding-partners/page.js  # new: applications table + CSV export
+      - /app/app/api/[[...path]]/route.js  # +6 endpoints for launch-mode + founding-partners
+      - /app/lib/email.js  # + sendFoundingPartnerReceivedEmail (uses SafarEmailTemplate)
+      - /app/components/safar/WebsiteBuilderShell.jsx  # + "Launch Mode" nav item
+    endpoints:
+      - GET  /api/launch-mode/public  (public, auto-seeds default doc)
+      - GET  /api/admin/launch-mode   (admin/super_admin)
+      - PUT  /api/admin/launch-mode   (admin/super_admin)
+      - POST /api/founding-partners   (public application submit)
+      - GET  /api/admin/founding-partners        (list w/ filter+search)
+      - GET  /api/admin/founding-partners/export (CSV)
+      - PATCH /api/admin/founding-partners/:id   (status/notes)
+    collections:
+      - launchModeSettings (single doc id='default')
+      - foundingPartners
+    reused:
+      - Existing MongoDB helpers (getCollection), auth (getCurrentUser, requireRole)
+      - Existing SafarEmailTemplate + Resend integration via sendEmail
+      - Notifications collection for admin alerts
+      - WebsiteBuilderShell for the settings page
+      - ProtectedRoute for admin applications page
+    behavior:
+      - Middleware caches launch-mode flag in-memory 30s; rewrites (not redirect)
+        every non-whitelisted public URL to /launch when enabled
+      - Whitelist: /api, /admin, /dashboard, /auth, /launch, _next, static assets
+      - Toggle from Super Admin → Website Management → Launch Mode is instant
+        (max 30s propagation) with zero redeployment
+    notes:
+      - Preview MongoDB is not connected in this env → /api/launch-mode/public
+        returns 500 which is a pre-existing infrastructure issue documented
+        elsewhere in this file. Code path is correct (endpoint hit, not 404).
+      - No testing agents used per user instruction (3-credit budget).
+    stuck_count: 0
+
+
+# ---------------------------------------------------------------------------
 # MODULE UBE (July 2025) — Universal Booking Engine Phase 2 (20-credit budget)
 # ---------------------------------------------------------------------------
 module_ube_phase2:

@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, LayoutDashboard, Home, FileText, Menu, PanelTop, Image as ImageIcon, Palette, Search, Clock, Code2, Sparkles, Layers } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, Home, FileText, Menu, PanelTop, Image as ImageIcon, Palette, Search, Clock, Code2, Sparkles, Layers, Rocket } from 'lucide-react';
 import ProtectedRoute from '@/components/safar/ProtectedRoute';
 
 // Shared shell for /admin/website-builder/*
@@ -21,6 +21,7 @@ const NAV = [
   { href: '/admin/website-builder/seo', label: 'SEO', icon: Search },
   { href: '/admin/website-builder/versions', label: 'Version History', icon: Clock },
   { href: '/admin/website-builder/custom-code', label: 'Custom Code', icon: Code2 },
+  { href: '/admin/website-builder/launch-mode', label: 'Launch Mode', icon: Rocket },
 ];
 
 export default function WebsiteBuilderShell({ children, title, subtitle, actions }) {

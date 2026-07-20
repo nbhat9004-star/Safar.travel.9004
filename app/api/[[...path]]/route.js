@@ -20,6 +20,7 @@ import {
   sendPasswordResetEmail,
   sendJourneyPublishedEmail,
   sendPaymentSuccessEmail,
+  sendFoundingPartnerReceivedEmail,
   sendEmail,
 } from '@/lib/email';
 import { verifyFirebaseToken } from '@/lib/firebase-admin';
@@ -13102,6 +13103,180 @@ Return ONLY valid JSON, no markdown.`;
         }
       }
     }
+  }
+
+  // ---------- PREMIUM LAUNCH MODE ----------
+  // Public settings endpoint (no auth) — read by /launch page + middleware.
+  // Auto-seeds a default document on first read so admins have something to
+  // edit immediately without a migration script.
+  if (path === '/launch-mode/public' && method === 'GET') {
+    const col = await getCollection('launchModeSettings');
+    let doc = await col.findOne({ id: 'default' });
+    if (!doc) {
+      doc = {
+        id: 'default',
+        enabled: false,
+        logoText: 'Safar Curated',
+        logoUrl: '',
+        heroBackground: 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=1920',
+        heroTitle: 'Kashmir Deserves Something Extraordinary.',
+        heroSubtitle: "Something beautiful is quietly taking shape. We're inviting a limited number of Founding Partners before our official launch.",
+        primaryButtonText: 'Become a Founding Partner',
+        secondaryButtonText: 'Follow Our Journey',
+        instagramUrl: 'https://instagram.com/safarcurated',
+        supportEmail: 'support@safarcurated.com',
+        partnershipEmail: 'partners@safarcurated.com',
+        whatsappNumber: '',
+        phoneNumber: '',
+        enableHostRegistration: true,
+        enableInstagramSection: true,
+        enableContactSection: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      try { await col.insertOne(doc); } catch {}
+    }
+    const { _id, ...rest } = doc;
+    return ok({ settings: rest });
+  }
+
+  if (path === '/admin/launch-mode' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('launchModeSettings');
+    let doc = await col.findOne({ id: 'default' });
+    if (!doc) return err('Not initialized — visit /api/launch-mode/public first', 404);
+    const { _id, ...rest } = doc;
+    return ok({ settings: rest });
+  }
+
+  if (path === '/admin/launch-mode' && method === 'PUT') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const body = await readBody(request);
+    const ALLOWED = ['enabled','logoText','logoUrl','heroBackground','heroTitle','heroSubtitle','primaryButtonText','secondaryButtonText','instagramUrl','supportEmail','partnershipEmail','whatsappNumber','phoneNumber','enableHostRegistration','enableInstagramSection','enableContactSection'];
+    const update = {};
+    for (const k of ALLOWED) if (k in body) update[k] = body[k];
+    update.updatedAt = new Date();
+    const col = await getCollection('launchModeSettings');
+    await col.updateOne(
+      { id: 'default' },
+      { $set: update, $setOnInsert: { id: 'default', createdAt: new Date() } },
+      { upsert: true }
+    );
+    const doc = await col.findOne({ id: 'default' });
+    const { _id, ...rest } = doc;
+    return ok({ settings: rest });
+  }
+
+  // Founding Partner application submission (public)
+  if (path === '/founding-partners' && method === 'POST') {
+    const b = await readBody(request);
+    if (!b.fullName || !String(b.fullName).trim()) return err('Full name required');
+    if (!isEmail(b.email)) return err('Valid email required');
+    if (!b.mobile || !String(b.mobile).trim()) return err('Mobile number required');
+    if (!b.category || !String(b.category).trim()) return err('Category required');
+    if (!b.city || !String(b.city).trim()) return err('City required');
+    if (!b.district || !String(b.district).trim()) return err('District required');
+    if (!b.consent) return err('Please accept the consent checkbox');
+    const col = await getCollection('foundingPartners');
+    const doc = {
+      id: uuid(),
+      applicationId: 'FP-' + Math.random().toString(36).slice(2, 8).toUpperCase(),
+      fullName: String(b.fullName).trim(),
+      businessName: String(b.businessName || '').trim(),
+      email: String(b.email).toLowerCase().trim(),
+      mobile: String(b.mobile).trim(),
+      whatsapp: String(b.whatsapp || b.mobile).trim(),
+      category: String(b.category).trim(),
+      city: String(b.city).trim(),
+      district: String(b.district).trim(),
+      businessAddress: String(b.businessAddress || '').trim(),
+      description: String(b.description || '').trim(),
+      status: 'Pending Review',
+      notes: '',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await col.insertOne(doc);
+    // Notify super admins in-app (best effort)
+    try {
+      const users = await getCollection('users');
+      const admins = await users.find({ role: { $in: ['admin', 'super_admin'] } }, { projection: { id: 1 } }).toArray();
+      const notifs = await getCollection('notifications');
+      const now = new Date();
+      for (const a of admins) {
+        await notifs.insertOne({
+          id: uuid(), userId: a.id, type: 'founding_partner_application',
+          title: 'New Founding Partner Application',
+          message: `${doc.fullName} (${doc.category}) applied`,
+          link: '/admin/founding-partners', read: false, createdAt: now,
+        });
+      }
+    } catch (e) { console.error('founding partner notify failed', e); }
+    // Send welcome email (best effort)
+    try { await sendFoundingPartnerReceivedEmail(doc); } catch (e) { console.error('founding partner email failed', e); }
+    const { _id, ...rest } = doc;
+    return ok({ application: rest });
+  }
+
+  // Admin — list applications
+  if (path === '/admin/founding-partners' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const status = url.searchParams.get('status') || '';
+    const q = (url.searchParams.get('q') || '').toLowerCase();
+    const col = await getCollection('foundingPartners');
+    const filter = {};
+    if (status) filter.status = status;
+    let docs = await col.find(filter, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(1000).toArray();
+    if (q) docs = docs.filter((d) =>
+      (d.fullName || '').toLowerCase().includes(q) ||
+      (d.email || '').toLowerCase().includes(q) ||
+      (d.mobile || '').includes(q) ||
+      (d.category || '').toLowerCase().includes(q) ||
+      (d.city || '').toLowerCase().includes(q)
+    );
+    return ok({ applications: docs });
+  }
+
+  // Admin — CSV export
+  if (path === '/admin/founding-partners/export' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const col = await getCollection('foundingPartners');
+    const docs = await col.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    const headers = ['applicationId','fullName','businessName','email','mobile','whatsapp','category','city','district','businessAddress','description','status','createdAt'];
+    const esc = (v) => { const s = v == null ? '' : (v instanceof Date ? v.toISOString() : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const rows = [headers.join(',')].concat(docs.map((d) => headers.map((h) => esc(d[h])).join(',')));
+    return new NextResponse(rows.join('\n'), {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="founding-partners.csv"',
+      },
+    });
+  }
+
+  // Admin — update application (status / notes)
+  if (path.startsWith('/admin/founding-partners/') && method === 'PATCH') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const id = path.split('/')[3];
+    if (!id || id === 'export') return err('Invalid id');
+    const b = await readBody(request);
+    const STATUSES_FP = ['Pending Review', 'Contacted', 'Documents Requested', 'Approved', 'Rejected'];
+    const upd = { updatedAt: new Date() };
+    if (b.status !== undefined) {
+      if (!STATUSES_FP.includes(b.status)) return err('Invalid status');
+      upd.status = b.status;
+    }
+    if (b.notes !== undefined) upd.notes = String(b.notes || '');
+    const col = await getCollection('foundingPartners');
+    await col.updateOne({ id }, { $set: upd });
+    const doc = await col.findOne({ id }, { projection: { _id: 0 } });
+    if (!doc) return err('Not found', 404);
+    return ok({ application: doc });
   }
 
   // Health
