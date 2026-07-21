@@ -120,6 +120,74 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE: EXPLORE V3 (July 2026) — Dedicated Nav + Publish/Join/Map/Messenger/Rewards/Profile + Admin
+# ---------------------------------------------------------------------------
+module_explore_v3:
+  - task: "Explore V3 — Full redesign with dedicated navigation and 8 admin panels"
+    implemented: true
+    working: "NA"
+    budget: "5 credits, no testing agents"
+    frontend_files:
+      - /app/components/explore/ExploreShell2.jsx        # NEW: dedicated Explore nav (7 items), replaces main Navbar+Footer within /explore/*
+      - /app/app/explore/(social)/layout.js               # rewritten: mounts ExploreShell2
+      - /app/app/explore/(social)/home/page.js            # rewritten: top-60% hero (dynamic from settings), search, published-trip grid, floating promotions
+      - /app/app/explore/(social)/journey/page.js         # rewritten: 3-step publish flow — trip info + multi-photo upload (device/gallery/camera) + cover selection → Safar Verified vs My Own arrangements → Success screen with QR code + Share/Copy/WhatsApp/System-share
+      - /app/app/explore/(social)/join/page.js            # NEW: filter view with category chips + budget filter + search
+      - /app/app/explore/(social)/map/page.js             # NEW: Live Map (zero-dep stylized canvas with animated pin markers, click for preview)
+      - /app/app/explore/(social)/messenger/page.js       # NEW: polling-based text+image chat for approved trip participants
+      - /app/app/explore/(social)/rewards/page.js         # NEW: 3×3 wanderer's board with hidden reward reveal after 9 completed trips
+      - /app/app/explore/(social)/profile/page.js         # NEW: 4-tab profile (My Trips / Saved / Memories / Settings)
+    admin_files:
+      - /app/app/admin/explore/page.js                    # NEW: Explore Admin dashboard (stats + 7 section cards)
+      - /app/app/admin/explore/hero/page.js               # NEW: Hero Management (upload image, title, subtitle, overlay toggle, live preview)
+      - /app/app/admin/explore/promotions/page.js         # NEW: Floating promotion card manager (image upload + title/body/CTA/URL/enabled)
+      - /app/app/admin/explore/rewards/page.js            # NEW: 9-card board editor + hidden reward config
+      - /app/app/admin/explore/map/page.js                # NEW: Overview of every published trip + link to public live map
+      - /app/app/admin/explore/messenger/page.js          # NEW: Chat moderation — last 300 msgs across all trips, delete any
+      - /app/app/admin/explore/media/page.js              # NEW: Grid of uploaded trip photos & covers
+      - (existing /app/app/admin/trips remains "Trip Management")
+    backend_endpoints_added:
+      - GET  /api/explore/settings         # public: hero + enabled promotions + rewards preview
+      - GET  /api/admin/explore/settings   # admin: full settings incl. all promotions
+      - PUT  /api/admin/explore/settings   # admin: patch hero / promotions / rewards
+      - POST /api/explore/upload           # signed-in: base64→url pass-through (5MB cap, image/* mime enforced)
+      - GET  /api/explore/me/rewards       # user: 3×3 board state + revealed reward
+      - GET  /api/explore/chat/threads     # user: my trip chats (curator or accepted member)
+      - GET  /api/explore/chat/:tripId/messages   # user (must be approved)
+      - POST /api/explore/chat/:tripId/messages   # user (text + optional image data URL)
+      - GET  /api/admin/explore/media      # admin: trip photos overview
+      - GET  /api/admin/explore/chat       # admin: last 300 messages
+      - DELETE /api/admin/explore/chat/:id # admin: delete a message
+    reused_endpoints_zero_new_backend:
+      - POST /api/circle/journeys, GET /api/circle/journeys, GET /api/circle/journeys/slug/:slug
+      - GET /api/circle/journeys/:id/members, POST /api/circle/journeys/:id/join
+      - GET /api/circle/marketplace, POST /api/circle/estimate
+      - GET /api/admin/circle/journeys, DELETE /api/admin/circle/journeys/:id
+    collections_added:
+      - exploreSettings (single doc id='default'): hero, promotions[], rewards
+      - circleChat: trip chat messages
+    packages_added: []    # zero new dependencies; QR code via api.qrserver.com URL
+    key_behaviors:
+      - Explore nav completely replaces the standard Safar Navbar/Footer only within /explore/* — no impact elsewhere.
+      - Trip photo uploader supports device, gallery and camera (native <input type=file capture=environment>), multiple photos, one-click cover selection, and pre-upload validation.
+      - Publish success screen: full-size QR code (via api.qrserver.com — no package), copy link, native share, WhatsApp share.
+      - Live Map: lightweight zero-dep visual with deterministic pseudo-random pin positions + ripple animation; a real leaflet layer can be swapped in later without other changes.
+      - Rewards board: 9 cards, one flips off per completed trip (curator or accepted member with endDate in past), final admin-configurable reward reveals when board is cleared.
+      - Promotions are floating cards on the Explore home (Travel Deals, Gear Exchange, seasonal offers) — no separate menu item, admin controls enabled/position.
+      - Every admin page uses ProtectedRoute roles=['super_admin','admin'].
+    scope_preservation:
+      - All non-Explore modules untouched (Marketplace, Bookings, Payments, AI Planner, Auth, existing Admin pages, Homepage).
+      - Retired feature pages (Passport, Wander, Community, Stories) remain as redirect stubs to /explore/home.
+    intentional_lightweight_choices_within_budget:
+      - Live Map is a stylized canvas (no leaflet install) — real map integration deferred.
+      - Messenger is text + image only. Voice notes and emoji reactions deferred (would add ~150 lines and one dep for waveform).
+    notes:
+      - Preview MongoDB not connected → all backend endpoints return 500 in this preview sandbox; empty states render cleanly. Will function end-to-end once deployed.
+      - No testing agents used per user instruction.
+    stuck_count: 0
+
+
+# ---------------------------------------------------------------------------
 # MODULE: EXPLORE V2 (July 2026) — Community Trip Planning & Shared Travel
 # ---------------------------------------------------------------------------
 module_explore_v2:

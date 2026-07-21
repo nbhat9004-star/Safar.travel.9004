@@ -11202,6 +11202,239 @@ Return ONLY valid JSON, no markdown.`;
       return ok({ journeys: docs, total: docs.length });
     }
 
+    // ============================================================
+    // EXPLORE V3 — Settings (hero, promotions, rewards config)
+    // Single-document store: exploreSettings { id: 'default', ... }
+    // ============================================================
+    const EXPLORE_DEFAULT_SETTINGS = {
+      id: 'default',
+      hero: {
+        image: 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=1920',
+        title: 'Kashmir, Together.',
+        subtitle: 'Discover, publish and join community trips across the valley.',
+        overlayEnabled: true,
+      },
+      promotions: [
+        // { id, title, body, cta, href, image, enabled, position }
+      ],
+      rewards: {
+        // 9-card board with a hidden reward revealed after 9 completed trips
+        boardTitle: 'Wanderer\'s Board',
+        boardSubtitle: 'Complete a trip. Flip a card. Reveal the reward.',
+        cards: [
+          { id: 'c1', label: 'Mystery', emoji: '🎁' },
+          { id: 'c2', label: 'Discovery', emoji: '🗺️' },
+          { id: 'c3', label: 'Adventure', emoji: '🏔️' },
+          { id: 'c4', label: 'Culture', emoji: '🎭' },
+          { id: 'c5', label: 'Cuisine', emoji: '🍲' },
+          { id: 'c6', label: 'Memory', emoji: '📸' },
+          { id: 'c7', label: 'Friendship', emoji: '🤝' },
+          { id: 'c8', label: 'Nature', emoji: '🌲' },
+          { id: 'c9', label: 'Legend', emoji: '⭐' },
+        ],
+        finalReward: {
+          title: 'Founding Explorer Perks',
+          body: 'Exclusive Founding Explorer badge, 20% off your next booking, and early access to Safar experiences.',
+          emoji: '🏆',
+        },
+      },
+      updatedAt: new Date(),
+    };
+
+    async function getExploreSettings() {
+      const col = await getCollection('exploreSettings');
+      let doc = await col.findOne({ id: 'default' });
+      if (!doc) {
+        doc = { ...EXPLORE_DEFAULT_SETTINGS };
+        try { await col.insertOne(doc); } catch {}
+      }
+      const { _id, ...rest } = doc;
+      return rest;
+    }
+
+    if (path === '/explore/settings' && method === 'GET') {
+      const s = await getExploreSettings();
+      // Public payload — expose only enabled promotions
+      const promos = (s.promotions || []).filter((p) => p.enabled).sort((a, b) => (a.position || 0) - (b.position || 0));
+      return ok({ settings: { hero: s.hero, promotions: promos, rewards: s.rewards } });
+    }
+
+    if (path === '/admin/explore/settings' && method === 'GET') {
+      const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+      const s = await getExploreSettings();
+      return ok({ settings: s });
+    }
+
+    if (path === '/admin/explore/settings' && method === 'PUT') {
+      const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+      const b = await readBody(request);
+      const patch = { updatedAt: new Date() };
+      if (b.hero && typeof b.hero === 'object') patch.hero = b.hero;
+      if (Array.isArray(b.promotions)) patch.promotions = b.promotions;
+      if (b.rewards && typeof b.rewards === 'object') patch.rewards = b.rewards;
+      const col = await getCollection('exploreSettings');
+      await col.updateOne({ id: 'default' }, { $set: patch, $setOnInsert: { id: 'default' } }, { upsert: true });
+      const s = await getExploreSettings();
+      return ok({ settings: s });
+    }
+
+    // ============================================================
+    // EXPLORE V3 — Image upload (base64 data URLs for MVP)
+    // Storing as data URLs in the trip document keeps the impl. zero-dep.
+    // The route validates size + mime-type only and echoes the URL back so
+    // the client can attach it to the trip record.
+    // ============================================================
+    if (path === '/explore/upload' && method === 'POST') {
+      if (!me) return err('Sign in to upload', 401);
+      const b = await readBody(request);
+      const dataUrl = b.dataUrl || '';
+      if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+        return err('Invalid image data');
+      }
+      // Cap ~5MB base64 (=~3.75MB image)
+      if (dataUrl.length > 6_500_000) return err('Image too large (max 5MB)');
+      return ok({ url: dataUrl });
+    }
+
+    // ============================================================
+    // EXPLORE V3 — Rewards board state for the current user
+    // Reward state derives from the number of completed trips the user has
+    // curated OR been an accepted member of. Every completed trip flips one
+    // card off the 3×3 board. When all 9 are gone the final reward reveals.
+    // ============================================================
+    if (path === '/explore/me/rewards' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const s = await getExploreSettings();
+      const now = new Date();
+      // Completed = trip endDate < now AND user is curator OR accepted member.
+      const mineCurated = await journeys.find({ curatorId: me.id, endDate: { $lte: now } }, { projection: { _id: 0, id: 1 } }).toArray();
+      let joinedIds = [];
+      try {
+        const membersCol = await getCollection('circleMembers');
+        const accepted = await membersCol.find({ userId: me.id, status: 'accepted' }, { projection: { journeyId: 1 } }).toArray();
+        const ids = accepted.map((m) => m.journeyId);
+        if (ids.length) {
+          const done = await journeys.find({ id: { $in: ids }, endDate: { $lte: now } }, { projection: { id: 1 } }).toArray();
+          joinedIds = done.map((d) => d.id);
+        }
+      } catch {}
+      const completedIds = new Set([...mineCurated.map((d) => d.id), ...joinedIds]);
+      const completed = completedIds.size;
+      const total = (s.rewards?.cards || []).length || 9;
+      const revealed = completed >= total;
+      const cards = (s.rewards?.cards || []).map((c, idx) => ({ ...c, removed: idx < Math.min(completed, total) }));
+      return ok({
+        completed,
+        remaining: Math.max(0, total - completed),
+        total,
+        boardTitle: s.rewards?.boardTitle,
+        boardSubtitle: s.rewards?.boardSubtitle,
+        cards,
+        finalReward: revealed ? s.rewards?.finalReward : null,
+        revealed,
+      });
+    }
+
+    // ============================================================
+    // EXPLORE V3 — Messenger (approved trip participants only)
+    // Simple polling-based text chat. One thread per trip.
+    //   GET  /explore/chat/:tripId/messages?after=timestamp
+    //   POST /explore/chat/:tripId/messages { text, attachment? }
+    //   GET  /explore/chat/threads   — my threads (trips I belong to)
+    // ============================================================
+    async function canAccessTripChat(user, tripId) {
+      if (!user) return false;
+      const t = await journeys.findOne({ id: tripId }, { projection: { _id: 0, curatorId: 1, id: 1 } });
+      if (!t) return false;
+      if (t.curatorId === user.id) return true;
+      try {
+        const membersCol = await getCollection('circleMembers');
+        const m = await membersCol.findOne({ journeyId: tripId, userId: user.id, status: 'accepted' });
+        return !!m;
+      } catch { return false; }
+    }
+
+    if (path === '/explore/chat/threads' && method === 'GET') {
+      if (!me) return err('Sign in required', 401);
+      const curated = await journeys.find({ curatorId: me.id }, { projection: { _id: 0, id: 1, name: 1, cover: 1, destination: 1, endDate: 1 } }).sort({ updatedAt: -1 }).limit(50).toArray();
+      let joined = [];
+      try {
+        const membersCol = await getCollection('circleMembers');
+        const accepted = await membersCol.find({ userId: me.id, status: 'accepted' }, { projection: { journeyId: 1 } }).toArray();
+        const ids = accepted.map((m) => m.journeyId).filter((i) => !curated.find((c) => c.id === i));
+        if (ids.length) joined = await journeys.find({ id: { $in: ids } }, { projection: { _id: 0, id: 1, name: 1, cover: 1, destination: 1, endDate: 1 } }).toArray();
+      } catch {}
+      const threads = [...curated, ...joined];
+      // Last message for each
+      try {
+        const chatCol = await getCollection('circleChat');
+        for (const t of threads) {
+          const last = await chatCol.find({ tripId: t.id }).sort({ createdAt: -1 }).limit(1).toArray();
+          t.lastMessage = last[0] ? { text: last[0].text, userName: last[0].userName, createdAt: last[0].createdAt } : null;
+        }
+      } catch {}
+      return ok({ threads });
+    }
+
+    if (path.startsWith('/explore/chat/') && path.endsWith('/messages') && method === 'GET') {
+      const tripId = path.split('/')[3];
+      if (!me) return err('Sign in required', 401);
+      const canAccess = await canAccessTripChat(me, tripId);
+      if (!canAccess) return err('You are not an approved participant', 403);
+      const after = url.searchParams.get('after');
+      const chatCol = await getCollection('circleChat');
+      const filter = { tripId };
+      if (after) filter.createdAt = { $gt: new Date(after) };
+      const messages = await chatCol.find(filter, { projection: { _id: 0 } }).sort({ createdAt: 1 }).limit(500).toArray();
+      return ok({ messages });
+    }
+
+    if (path.startsWith('/explore/chat/') && path.endsWith('/messages') && method === 'POST') {
+      const tripId = path.split('/')[3];
+      if (!me) return err('Sign in required', 401);
+      const canAccess = await canAccessTripChat(me, tripId);
+      if (!canAccess) return err('You are not an approved participant', 403);
+      const b = await readBody(request);
+      const text = String(b.text || '').trim();
+      const attachment = b.attachment && typeof b.attachment === 'string' && b.attachment.startsWith('data:image/') && b.attachment.length < 3_000_000 ? b.attachment : null;
+      if (!text && !attachment) return err('Message is empty');
+      const doc = {
+        id: uuid(), tripId,
+        userId: me.id, userName: me.name || 'Traveller', userAvatar: me.avatar || null,
+        text, attachment,
+        createdAt: new Date(),
+      };
+      const chatCol = await getCollection('circleChat');
+      await chatCol.insertOne(doc);
+      const { _id, ...rest } = doc;
+      return ok({ message: rest });
+    }
+
+    // ============================================================
+    // EXPLORE V3 — Admin: media, chat moderation
+    // ============================================================
+    if (path === '/admin/explore/media' && method === 'GET') {
+      const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+      const docs = await journeys.find({ $or: [{ cover: { $ne: null } }, { photos: { $exists: true, $ne: [] } }] }, { projection: { _id: 0, id: 1, slug: 1, name: 1, cover: 1, photos: 1, curatorName: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(200).toArray();
+      return ok({ media: docs });
+    }
+
+    if (path === '/admin/explore/chat' && method === 'GET') {
+      const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+      const chatCol = await getCollection('circleChat');
+      const messages = await chatCol.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(300).toArray();
+      return ok({ messages });
+    }
+
+    if (path.startsWith('/admin/explore/chat/') && method === 'DELETE') {
+      const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+      const id = path.split('/')[4];
+      const chatCol = await getCollection('circleChat');
+      const r = await chatCol.deleteOne({ id });
+      if (!r.deletedCount) return err('Not found', 404);
+      return ok({ deleted: id });
+    }
+
     // -------- Admin: delete a journey --------
     if (path.startsWith('/admin/circle/journeys/') && method === 'DELETE') {
       const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
