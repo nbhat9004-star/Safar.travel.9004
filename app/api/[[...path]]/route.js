@@ -11177,6 +11177,44 @@ Return ONLY valid JSON, no markdown.`;
       return ok({ journey: rest }, 201);
     }
 
+    // -------- Admin: list ALL journeys (any visibility) --------
+    if (path === '/admin/circle/journeys' && method === 'GET') {
+      const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+      const visibility = url.searchParams.get('visibility');
+      const filter = {};
+      if (visibility) filter.visibility = visibility;
+      const docs = await journeys.find(filter, { projection: { _id: 0 } })
+        .sort({ createdAt: -1 })
+        .limit(500)
+        .toArray();
+      // Attach a lightweight member count so the admin table can render it
+      // without a second round-trip per row.
+      try {
+        const membersCol = await getCollection('circleMembers');
+        const ids = docs.map((d) => d.id);
+        const counts = await membersCol.aggregate([
+          { $match: { journeyId: { $in: ids }, status: 'accepted' } },
+          { $group: { _id: '$journeyId', count: { $sum: 1 } } },
+        ]).toArray();
+        const cMap = new Map(counts.map((c) => [c._id, c.count]));
+        for (const d of docs) d.membersCount = cMap.get(d.id) || 0;
+      } catch { /* members collection may not exist yet */ }
+      return ok({ journeys: docs, total: docs.length });
+    }
+
+    // -------- Admin: delete a journey --------
+    if (path.startsWith('/admin/circle/journeys/') && method === 'DELETE') {
+      const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+      const id = path.split('/')[4];
+      if (!id) return err('Missing id');
+      const r = await journeys.deleteOne({ id });
+      if (!r.deletedCount) return err('Not found', 404);
+      // Best-effort cleanup of members + events
+      try { const m = await getCollection('circleMembers'); await m.deleteMany({ journeyId: id }); } catch {}
+      try { const e = await getCollection('circleEvents');  await e.deleteMany({ journeyId: id }); } catch {}
+      return ok({ deleted: id });
+    }
+
     // -------- Discover / list journeys --------
     if (path === '/circle/journeys' && method === 'GET') {
       const filter = {};

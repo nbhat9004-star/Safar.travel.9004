@@ -120,6 +120,64 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE: EXPLORE V2 (July 2026) — Community Trip Planning & Shared Travel
+# ---------------------------------------------------------------------------
+module_explore_v2:
+  - task: "Explore V2 — replace dark 'Living Travel World' with a Safar-branded Community Trip Planning experience"
+    implemented: true
+    working: "NA"
+    budget: "3 credits, no testing agents"
+    files_changed:
+      - /app/app/explore/(social)/layout.js       # rewritten: uses standard Navbar + Footer (dropped ExploreShell + dark theme)
+      - /app/app/explore/(social)/home/page.js    # rewritten: premium Explore Home (hero + shelves)
+      - /app/app/explore/(social)/journey/page.js # rewritten: 3-step Create-a-Trip flow (DIY vs Plan with Safar Curated)
+      - /app/app/explore/(social)/j/[slug]/page.js # rewritten: light-theme trip detail + Join
+      - /app/app/explore/(social)/passport/page.js  # stub: redirect to /explore/home
+      - /app/app/explore/(social)/wander/page.js    # stub: redirect
+      - /app/app/explore/(social)/community/page.js # stub: redirect
+      - /app/app/explore/(social)/stories/page.js   # stub: redirect
+      - /app/app/explore/(social)/messages/page.js  # stub: redirect
+      - /app/app/admin/trips/page.js              # new: admin management (list, delete, filter, search)
+      - /app/app/api/[[...path]]/route.js         # + GET/DELETE /api/admin/circle/journeys
+    reused_endpoints:
+      - GET  /api/circle/journeys           (public discover — already existed)
+      - POST /api/circle/journeys           (create trip — already existed)
+      - GET  /api/circle/journeys/slug/:slug
+      - GET  /api/circle/journeys/:id/members
+      - POST /api/circle/journeys/:id/join
+      - GET  /api/circle/marketplace        (approved listings for the picker)
+      - POST /api/circle/estimate           (rule-based budget split)
+    new_endpoints:
+      - GET    /api/admin/circle/journeys       (admin list all + member counts)
+      - DELETE /api/admin/circle/journeys/:id   (admin delete)
+    ux_flow:
+      - Explore Home hero: "Travel Better. Travel Together." + Create/Join CTAs +
+        Featured / Recently Published / Popular Destinations / Weekend / Adventure /
+        Family / Road Trips shelves. Search bar filters locally.
+      - Create a Trip Step 0: DIY vs "Plan with Safar Curated" (gold "Recommended" badge).
+      - Step 1: destination, dates, participants, budget (DIY), trip type chips (12
+        types), about, meeting point, rules, cover image.
+      - Step 2 (Safar Curated only): live Marketplace picker (category chips + search)
+        that adds listings into the trip's `services` array.
+      - Step 3: budget split card (auto-recalculates via /api/circle/estimate)
+        with per-person amount that updates as participant limit changes.
+      - Trip detail page: hero, organiser, about, meeting/rules, included services,
+        joined travellers list, sticky booking card with "Request to Join" button.
+    design_alignment:
+      - Uses standard Navbar + Footer (removed dark AuroraBg + ExploreShell).
+      - Bright white background, safar green (emerald2) primary, amber-400 gold
+        accents. Consistent with the rest of Safar Curated.
+      - Retired features (Passport, Wander/Find My Tribe, Journey Timeline,
+        Challenges, Collectibles, gamification) are removed via redirect stubs.
+    notes:
+      - Preview MongoDB not connected → circle endpoints return 500 in this sandbox
+        (pre-existing infra issue, unchanged by this feature). Empty-state renders
+        cleanly. Will work end-to-end in production.
+      - No testing agents used per user instruction.
+    stuck_count: 0
+
+
+# ---------------------------------------------------------------------------
 # MODULE: PREMIUM LAUNCH MODE (July 2026) — 3-credit budget, no testing agents
 # ---------------------------------------------------------------------------
 module_launch_mode:

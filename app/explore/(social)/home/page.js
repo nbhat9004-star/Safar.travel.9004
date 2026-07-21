@@ -1,513 +1,294 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import {
-  Sparkles, ArrowRight, MapPin, Compass, Route, Users, Calendar, Bookmark,
-  Clock, Camera, Mountain, Trophy, Award, Heart, Flag, Plus, ChevronRight,
-  Snowflake, Waves, Leaf, Tent, Star, Loader2,
+  Plus, Search, ArrowRight, MapPin, Users, Calendar, Wallet, Sparkles,
+  Mountain, Camera, Car, Home as HomeIcon, Heart, Star, Loader2,
 } from 'lucide-react';
-import AuroraBg from '@/components/explore/AuroraBg';
 import { useAuth } from '@/lib/auth-context';
 
-// Rotating cinematic Kashmir hero images (fade crossfade)
-const HERO_SLIDES = [
-  { id: 'dal-uns',   src: 'https://images.unsplash.com/photo-1577500588651-5603d971f338?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Dal Lake' },
-  { id: 'shikara',   src: 'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Shikara' },
-  { id: 'gulmarg',   src: 'https://images.pexels.com/photos/29842101/pexels-photo-29842101.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gulmarg · Snow' },
-  { id: 'gurez',     src: 'https://images.pexels.com/photos/27540040/pexels-photo-27540040.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Gurez Valley' },
-  { id: 'mist',      src: 'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Srinagar · Mist' },
-  { id: 'serene',    src: 'https://images.pexels.com/photos/17078575/pexels-photo-17078575.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1080', label: 'Dal Lake · Serene' },
-  { id: 'pahalgam',  src: 'https://images.unsplash.com/photo-1708179070772-abf3a1d16b74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwzfHxrYXNobWlyJTIwbGFuZHNjYXBlfGVufDB8fHxibHVlfDE3ODQzNjY0MTV8MA&ixlib=rb-4.1.0&q=85', label: 'Pahalgam · River Valley' },
+// ------------------------------------------------------------------
+// EXPLORE V2 — Community Trip Planning Home
+// Sections: Hero → Featured → Recently Published → Popular Destinations
+// → Weekend / Adventure / Family / Road Trips (theme-filtered).
+// All data comes from the existing GET /api/circle/journeys endpoint
+// which returns public, published journeys ordered by publishedAt desc.
+// ------------------------------------------------------------------
+
+const HERO_IMG = 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=1920';
+
+const POPULAR_DESTINATIONS = [
+  { name: 'Srinagar',   img: 'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&w=800' },
+  { name: 'Gulmarg',    img: 'https://images.pexels.com/photos/29842101/pexels-photo-29842101.jpeg?auto=compress&cs=tinysrgb&w=800' },
+  { name: 'Pahalgam',   img: 'https://images.unsplash.com/photo-1708179070772-abf3a1d16b74?w=800&auto=format' },
+  { name: 'Sonamarg',   img: 'https://images.pexels.com/photos/17078575/pexels-photo-17078575.jpeg?auto=compress&cs=tinysrgb&w=800' },
+  { name: 'Gurez',      img: 'https://images.pexels.com/photos/27540040/pexels-photo-27540040.jpeg?auto=compress&cs=tinysrgb&w=800' },
+  { name: 'Kupwara',    img: 'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&w=800' },
 ];
 
-// Fallback experience presets — only used when the user hasn't unlocked any yet
-const EXPERIENCE_PRESETS = [
-  { key: 'shikara',  emoji: '🚣', label: 'Shikara Ride' },
-  { key: 'trek',     emoji: '🥾', label: 'Trek' },
-  { key: 'gondola',  emoji: '🚠', label: 'Gondola' },
-  { key: 'camp',     emoji: '🏕️', label: 'Camping' },
-  { key: 'village',  emoji: '🏘️', label: 'Village Tour' },
-  { key: 'photo',    emoji: '📸', label: 'Photo Walk' },
-  { key: 'food',     emoji: '🍲', label: 'Wazwan' },
-  { key: 'tulip',    emoji: '🌸', label: 'Tulip Festival' },
+// Theme keys map to the API's `theme` field on journeys.
+const SHELVES = [
+  { key: 'weekend_escape', title: 'Weekend Getaways',  icon: Sparkles },
+  { key: 'adventure',      title: 'Adventure Trips',   icon: Mountain },
+  { key: 'family',         title: 'Family Trips',      icon: Users    },
+  { key: 'road_trip',      title: 'Road Trips',        icon: Car      },
 ];
 
-// Achievements — derived + fallback library
-const ACHIEVEMENT_LIBRARY = [
-  { id: 'first-journey',  icon: Flag,      emoji: '🚩', title: 'First Journey',        gate: (s) => s.journeys >= 1 },
-  { id: 'trek',           icon: Mountain,  emoji: '🏔', title: 'First Mountain Trek',   gate: (s) => s.experiences >= 1 },
-  { id: 'shikara',        icon: Waves,     emoji: '🚣', title: 'Shikara Ride',          gate: (s) => s.experiences >= 2 },
-  { id: 'gondola',        icon: Snowflake, emoji: '🚠', title: 'Gondola Explorer',      gate: (s) => s.experiences >= 3 },
-  { id: 'camper',         icon: Tent,      emoji: '🏕', title: 'Camper',                gate: (s) => s.experiences >= 4 },
-  { id: 'photographer',   icon: Camera,    emoji: '📸', title: 'Photographer',          gate: (s) => s.journeys >= 2 },
-  { id: 'places',         icon: MapPin,    emoji: '📍', title: '10+ Places',            gate: (s) => s.places >= 10 },
-  { id: 'multi-journey',  icon: Route,     emoji: '🧭', title: 'Trail Blazer',          gate: (s) => s.journeys >= 5 },
-];
-
-function journeyStatus(j) {
-  const now = Date.now();
-  const start = j.startDate ? new Date(j.startDate).getTime() : null;
-  const end   = j.endDate   ? new Date(j.endDate).getTime()   : null;
-  if (start && end && now >= start && now <= end) return 'live';
-  if (start && start > now) return 'upcoming';
-  if (end && end < now) return 'completed';
-  return 'draft';
-}
-function statusChip(s) {
-  if (s === 'live')      return { label: 'Live now', dot: 'bg-emerald-400', text: 'text-emerald-300' };
-  if (s === 'upcoming')  return { label: 'Upcoming', dot: 'bg-sky-400',     text: 'text-sky-300' };
-  if (s === 'completed') return { label: 'Completed', dot: 'bg-white/50',   text: 'text-white/70' };
-  return { label: 'Draft', dot: 'bg-amber-400', text: 'text-amber-300' };
-}
-function fmtDateRange(a, b) {
-  const opts = { day: 'numeric', month: 'short' };
-  const A = a ? new Date(a).toLocaleDateString('en-IN', opts) : null;
-  const B = b ? new Date(b).toLocaleDateString('en-IN', opts) : null;
-  if (A && B) return `${A} — ${B}`;
-  return A || B || 'Dates TBD';
-}
-
-export default function ExploreHome() {
+export default function ExploreHomeV2() {
   const { user } = useAuth();
-  const [passport, setPassport] = useState(null);
-  const [myJourneys, setMyJourneys] = useState([]);
-  const [saved, setSaved] = useState([]);
+  const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
 
   useEffect(() => {
-    let cancel = false;
-    async function load() {
+    (async () => {
       try {
-        const reqs = [
-          fetch('/api/circle/passport').then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/api/circle/journeys/mine').then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch('/api/circle/bookmarks/mine?type=journey').then(r => r.ok ? r.json() : null).catch(() => null),
-        ];
-        const [p, m, b] = await Promise.all(reqs);
-        if (cancel) return;
-        if (p?.passport) setPassport(p);
-        if (m?.journeys) setMyJourneys(m.journeys);
-        if (b?.journeys) setSaved(b.journeys);
-      } finally {
-        if (!cancel) setLoading(false);
-      }
-    }
-    if (user) load(); else setLoading(false);
-    return () => { cancel = true; };
-  }, [user]);
-
-  // Derived stats
-  const stats = useMemo(() => {
-    const p = passport?.passport;
-    const places = p ? (p.cities || 0) : 0;
-    const journeys = p ? (p.journeysCurated || 0) : 0;
-    // Experiences: unique themes across curated journeys + earned badges (proxy for completed activities)
-    const themeSet = new Set(myJourneys.map(j => j.theme).filter(Boolean));
-    const badgeCount = (p?.badges || []).length;
-    const experiences = Math.max(themeSet.size, badgeCount);
-    return { places, journeys, experiences };
-  }, [passport, myJourneys]);
-
-  // Active journey (Live > Upcoming (soonest) > else null)
-  const activeJourney = useMemo(() => {
-    if (!myJourneys.length) return null;
-    const live = myJourneys.find(j => journeyStatus(j) === 'live');
-    if (live) return { ...live, _status: 'live' };
-    const upcoming = myJourneys
-      .filter(j => journeyStatus(j) === 'upcoming' && j.startDate)
-      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))[0];
-    if (upcoming) return { ...upcoming, _status: 'upcoming' };
-    return null;
-  }, [myJourneys]);
-
-  // Recent Journeys (max 6, exclude the active one to avoid dupe)
-  const recentJourneys = useMemo(() => {
-    const list = (passport?.recentJourneys?.length ? passport.recentJourneys : myJourneys)
-      .filter(j => !activeJourney || j.id !== activeJourney.id);
-    return list.slice(0, 6);
-  }, [passport, myJourneys, activeJourney]);
-
-  // Past journeys (Travel Memories)
-  const memories = useMemo(() => {
-    return myJourneys
-      .filter(j => journeyStatus(j) === 'completed')
-      .sort((a, b) => new Date(b.endDate || b.updatedAt || 0) - new Date(a.endDate || a.updatedAt || 0))
-      .slice(0, 5);
-  }, [myJourneys]);
-
-  // Achievements — earned + a couple of "next up" locked ones for aspirational feel
-  const achievements = useMemo(() => {
-    const earned = ACHIEVEMENT_LIBRARY.filter(a => a.gate(stats)).map(a => ({ ...a, earned: true }));
-    const locked = ACHIEVEMENT_LIBRARY.filter(a => !a.gate(stats)).slice(0, Math.max(0, 6 - earned.length))
-      .map(a => ({ ...a, earned: false }));
-    return [...earned, ...locked].slice(0, 8);
-  }, [stats]);
-
-  const firstName = user?.name?.split(' ')[0] || 'Traveler';
-  const heroName = user?.name || 'Fellow traveler';
-  const bio = user?.bio || (user ? 'Chasing valleys, chinar & new stories.' : 'Sign in to start your Kashmir story.');
-  const avatar = user?.avatar;
-
-  // Rotating hero index — crossfades every 7s (starts on globe → then landscapes)
-  const [heroIdx, setHeroIdx] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setHeroIdx(i => (i + 1) % HERO_SLIDES.length), 7000);
-    return () => clearInterval(t);
+        const r = await fetch('/api/circle/journeys?limit=60', { cache: 'no-store' });
+        const j = await r.json();
+        if (j?.ok) setTrips(j.journeys || []);
+      } catch { /* handled by empty state */ }
+      finally { setLoading(false); }
+    })();
   }, []);
 
+  const featured  = useMemo(() => trips.slice(0, 6), [trips]);
+  const recent    = useMemo(() => [...trips].sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt)).slice(0, 8), [trips]);
+  const byTheme   = useMemo(() => {
+    const g = {};
+    for (const t of trips) {
+      const k = t.theme || 'weekend_escape';
+      (g[k] = g[k] || []).push(t);
+    }
+    return g;
+  }, [trips]);
+
+  const filtered = q ? trips.filter((t) =>
+    (t.name || '').toLowerCase().includes(q.toLowerCase()) ||
+    (t.destination?.name || '').toLowerCase().includes(q.toLowerCase()) ||
+    (t.destination?.district || '').toLowerCase().includes(q.toLowerCase())
+  ) : null;
+
   return (
-    <div className="relative">
-      {/* ─────────────────────────── HERO ─────────────────────────── */}
+    <>
+      {/* ================= HERO ================= */}
       <section className="relative overflow-hidden">
-        <div className="relative w-full h-[52vh] min-h-[380px] max-h-[520px] md:h-screen md:min-h-[560px] md:max-h-[900px]">
-          {/* Rotating Kashmir backgrounds — full viewport crossfade */}
-          {HERO_SLIDES.map((slide, i) => (
-            <div
-              key={slide.id}
-              className="absolute inset-0 transition-opacity ease-in-out"
-              style={{
-                opacity: i === heroIdx ? 1 : 0,
-                transitionDuration: '1400ms',
-                zIndex: i === heroIdx ? 1 : 0,
-              }}
-              aria-hidden={i !== heroIdx}
-            >
-              <Image
-                src={slide.src}
-                alt={slide.label}
-                fill
-                priority={i === 0}
-                sizes="100vw"
-                className="object-cover"
-                unoptimized
-              />
+        <div className="absolute inset-0">
+          <Image src={HERO_IMG} alt="Kashmir" fill priority sizes="100vw" className="object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-emerald-950/50 via-emerald-950/25 to-white" />
+        </div>
+        <div className="relative container py-16 md:py-24 lg:py-28">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur border border-white/60 text-emerald-900 text-[11px] uppercase tracking-[0.22em] font-bold shadow-md">
+              <Sparkles className="size-3.5 text-amber-500" /> Community Trips
             </div>
-          ))}
-
-          {/* Subtle overlays — keep imagery vibrant, only shade bottom for text legibility */}
-          <div className="absolute inset-0 z-[2] pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(6,8,15,0.28) 0%, transparent 14%, transparent 55%, rgba(6,8,15,0.55) 88%, rgba(6,8,15,0.85) 100%)' }} />
-          <div className="absolute inset-0 z-[2] pointer-events-none" aria-hidden>
-            <AuroraBg />
-          </div>
-
-          {/* Hero content */}
-          <div className="relative z-10 h-full e-container flex flex-col justify-end pb-8 md:pb-[240px]">
-            <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full text-[10px] md:text-[11px] uppercase tracking-[0.22em] font-semibold backdrop-blur-md border" style={{ background: 'rgba(6,8,15,0.35)', borderColor: 'rgba(255,255,255,0.22)', color: '#fff' }}>
-              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" /> Your Kashmir · Live
-            </div>
-            <h1 className="display font-bold mt-3 md:mt-4 text-[clamp(1.7rem,7vw,4.8rem)] leading-[1.05] tracking-tight text-white max-w-3xl" style={{ textShadow: '0 2px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.6)' }}>
-              {user ? <>Welcome back,<br /><span className="e-grad-text">{firstName}</span>.</> : <>Your <span className="e-grad-text">Travel World.</span></>}
+            <h1 className="mt-5 font-display text-white text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.05] tracking-tight drop-shadow-[0_3px_20px_rgba(0,0,0,0.35)]">
+              Travel Better. <span className="text-amber-300">Travel Together.</span>
             </h1>
-            <p className="mt-2 md:mt-4 text-sm md:text-lg max-w-xl leading-snug md:leading-relaxed text-white/95 hidden sm:block" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.55)' }}>
-              {user ? 'Continue where you left off, plan the next chapter, and relive every valley you\'ve walked.' : 'A cinematic pass through Kashmir — sign in to build your personal travel dashboard.'}
+            <p className="mt-5 text-white/95 text-base md:text-xl max-w-xl leading-relaxed drop-shadow">
+              Plan your own adventure or join someone else’s journey.
             </p>
-
-            {/* Rotating caption + dots */}
-            <div className="mt-3 md:mt-6 flex items-center gap-3 text-[11px] font-medium">
-              <span className="uppercase tracking-[0.22em] text-white/90 text-[10px] md:text-[11px]" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.55)' }}>
-                <MapPin className="inline size-3 mr-1" /> {HERO_SLIDES[heroIdx].label}
-              </span>
-              <div className="flex items-center gap-1.5">
-                {HERO_SLIDES.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setHeroIdx(i)}
-                    aria-label={`Show ${HERO_SLIDES[i].label}`}
-                    className="transition-all rounded-full"
-                    style={{
-                      width: i === heroIdx ? 20 : 6,
-                      height: 6,
-                      background: i === heroIdx ? '#fff' : 'rgba(255,255,255,0.45)',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ─────────────── Profile Card (overlaps hero) ─────────────── */}
-        <div className="relative -mt-14 sm:-mt-24 md:-mt-44 e-container z-20 pb-2">
-          <div className="e-glass rounded-3xl p-4 md:p-7 border shadow-2xl" style={{ borderColor: 'var(--e-line-strong)' }}>
-            <div className="flex flex-col md:flex-row md:items-center gap-5 md:gap-7">
-              {/* Avatar */}
-              <div className="shrink-0">
-                {avatar ? (
-                  <Image
-                    src={avatar}
-                    alt={heroName}
-                    width={96}
-                    height={96}
-                    className="rounded-full ring-4 ring-white/20 shadow-xl object-cover"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="size-24 rounded-full grid place-items-center text-3xl font-bold text-[#06080f] shadow-xl ring-4 ring-white/20" style={{ background: 'linear-gradient(135deg, #6ee7b7 0%, #a78bfa 60%, #f0abfc 100%)' }}>
-                    {(heroName || '?')[0]}
-                  </div>
-                )}
-              </div>
-
-              {/* Name + bio + stats */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl md:text-2xl font-bold truncate" style={{ color: 'var(--e-text)' }}>{heroName}</h2>
-                  {user?.emailVerified && <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-400/15 text-emerald-300 border border-emerald-300/25">Verified</span>}
-                </div>
-                <p className="text-sm mt-1 line-clamp-2" style={{ color: 'var(--e-text-muted)' }}>{bio}</p>
-
-                {/* Stats */}
-                <div className="mt-4 grid grid-cols-3 gap-2 md:gap-4 max-w-lg">
-                  <StatTile value={stats.places}      label="Places Explored" icon={MapPin} loading={loading && !!user} />
-                  <StatTile value={stats.journeys}    label="Journeys"        icon={Route}  loading={loading && !!user} />
-                  <StatTile value={stats.experiences} label="Experiences"     icon={Sparkles} loading={loading && !!user} />
-                </div>
-              </div>
-            </div>
-
-            {/* CTAs */}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link
-                href={user ? '/explore/journey' : '/?auth=1'}
-                className="inline-flex items-center justify-center gap-2 px-6 md:px-7 py-3.5 rounded-full text-sm md:text-[15px] font-semibold text-white shadow-lg hover:shadow-emerald-500/30 transition-all hover:-translate-y-0.5"
-                style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 60%, #047857 100%)' }}
-              >
-                <Plus className="size-4" /> Create a Journey
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link href="/explore/journey" className="group inline-flex items-center gap-2 px-6 md:px-7 h-12 rounded-full bg-emerald2 hover:bg-emerald2-deep text-white font-semibold shadow-xl shadow-emerald2/30 hover:-translate-y-0.5 transition">
+                <Plus className="size-4" /> Create a Trip
+                <ArrowRight className="size-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition" />
               </Link>
-              <Link
-                href="/explore/wander"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full text-sm md:text-[15px] font-semibold e-btn-ghost"
-              >
-                <Compass className="size-4" /> Explore Kashmir <ArrowRight className="size-4" />
-              </Link>
+              <a href="#discover" className="inline-flex items-center gap-2 px-6 md:px-7 h-12 rounded-full bg-white/95 hover:bg-white text-emerald-900 font-semibold border border-white/60 backdrop-blur shadow-lg hover:-translate-y-0.5 transition">
+                <Search className="size-4" /> Join a Trip
+              </a>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-white/85 text-xs md:text-sm">
+              <span className="inline-flex items-center gap-1.5"><Users className="size-4 text-amber-300" /> Meet like-minded travellers</span>
+              <span className="inline-flex items-center gap-1.5"><Wallet className="size-4 text-amber-300" /> Split shared expenses</span>
+              <span className="inline-flex items-center gap-1.5"><Sparkles className="size-4 text-amber-300" /> Book via Safar Curated</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ────────────────── CONTINUE YOUR JOURNEY ────────────────── */}
-      <section className="relative e-container mt-4 md:mt-10 mb-8 md:mb-10">
-        <SectionHeader
-          chip={<><Clock className="size-3 text-emerald-300" /> Continue your journey</>}
-          title={activeJourney ? 'Resume where you left off' : 'Your next chapter starts here'}
-        />
-        {activeJourney ? (
-          <ResumeCard journey={activeJourney} />
-        ) : (
-          <div className="e-glass rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center gap-5">
-            <div className="size-16 md:size-20 rounded-2xl grid place-items-center shrink-0" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(167,139,250,0.15))' }}>
-              <Route className="size-8 md:size-10 text-emerald-300" strokeWidth={1.6} />
-            </div>
-            <div className="flex-1 text-center md:text-left">
-              <div className="font-semibold text-lg" style={{ color: 'var(--e-text)' }}>You haven&apos;t created your first journey yet.</div>
-              <p className="text-sm mt-1" style={{ color: 'var(--e-text-muted)' }}>Plan a trek, a shikara weekend, or a photo trail — your future self will thank you.</p>
-            </div>
-            <Link href={user ? '/explore/journey' : '/?auth=1'} className="e-btn-primary rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2 shrink-0">
-              <Plus className="size-4" /> Start your first journey
-            </Link>
-          </div>
-        )}
-      </section>
-
-      {/* ────────────────────── RECENT JOURNEYS ─────────────────── */}
-      {recentJourneys.length > 0 && (
-        <section className="relative e-container mb-10">
-          <SectionHeader
-            chip={<><Route className="size-3 text-sky-300" /> Recent journeys</>}
-            title="Your travel timeline"
-            action={<Link href="/explore/journey" className="text-sm inline-flex items-center gap-1 transition hover:opacity-80" style={{ color: 'var(--e-text-muted)' }}>See all <ArrowRight className="size-3.5" /></Link>}
+      {/* ================= SEARCH BAR ================= */}
+      <div id="discover" className="container -mt-8 md:-mt-10 relative z-10">
+        <div className="bg-white rounded-2xl shadow-xl border p-2 md:p-3 flex items-center gap-2">
+          <Search className="size-4 md:size-5 ml-2 text-muted-foreground" />
+          <input
+            value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Search trips by destination, name or district…"
+            className="flex-1 h-10 md:h-11 bg-transparent outline-none text-sm text-charcoal placeholder:text-muted-foreground"
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recentJourneys.map(j => <JourneyCard key={j.id} j={j} />)}
-          </div>
+          <Link href="/explore/journey" className="hidden sm:inline-flex items-center gap-1.5 px-4 h-10 rounded-full bg-emerald2 hover:bg-emerald2-deep text-white text-sm font-semibold transition">
+            <Plus className="size-4" /> New Trip
+          </Link>
+        </div>
+      </div>
+
+      {/* ================= SEARCH RESULTS ================= */}
+      {q && (
+        <section className="container mt-8">
+          <h2 className="font-display text-xl font-bold text-charcoal mb-4">Search results</h2>
+          {filtered.length === 0 ? (
+            <div className="text-muted-foreground text-sm">No trips match “{q}” yet. Try a different keyword or <Link href="/explore/journey" className="text-emerald2 font-semibold hover:underline">start a new one</Link>.</div>
+          ) : (
+            <TripGrid trips={filtered} />
+          )}
         </section>
       )}
 
-      {/* ────────────────────── ACHIEVEMENTS ───────────────────── */}
-      <section className="relative e-container mb-10">
-        <SectionHeader
-          chip={<><Trophy className="size-3 text-amber-300" /> Achievements</>}
-          title="Badges you're building"
-          action={<Link href="/explore/passport" className="text-sm inline-flex items-center gap-1 transition hover:opacity-80" style={{ color: 'var(--e-text-muted)' }}>View passport <ArrowRight className="size-3.5" /></Link>}
-        />
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
-          {achievements.map(a => (
-            <div key={a.id} className={`e-glass rounded-2xl p-4 flex items-center gap-3 ${a.earned ? '' : 'opacity-55'}`}>
-              <div className={`size-11 rounded-xl grid place-items-center text-lg shrink-0 ${a.earned ? '' : 'grayscale'}`} style={{ background: a.earned ? 'linear-gradient(135deg, #fbbf24, #f59e0b)' : 'rgba(255,255,255,0.06)' }}>
-                <span>{a.emoji}</span>
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold truncate" style={{ color: 'var(--e-text)' }}>{a.title}</div>
-                <div className="text-[10px] uppercase tracking-[0.18em] mt-0.5" style={{ color: a.earned ? 'var(--e-text-dim)' : 'var(--e-text-dim)' }}>{a.earned ? 'Unlocked' : 'Locked'}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ────────────────── TRAVEL MEMORIES (Timeline) ─────────────────── */}
-      {memories.length > 0 && (
-        <section className="relative e-container mb-10">
-          <SectionHeader
-            chip={<><Camera className="size-3 text-fuchsia-300" /> Travel memories</>}
-            title="Relive your past journeys"
-          />
-          <div className="e-glass rounded-3xl p-5 md:p-6">
-            <ol className="relative border-l border-white/15 ml-2 space-y-6">
-              {memories.map((j) => (
-                <li key={j.id} className="pl-6 relative">
-                  <span className="absolute -left-[9px] top-1.5 size-4 rounded-full ring-4 ring-[rgba(6,8,15,0.75)]" style={{ background: 'linear-gradient(135deg, #6ee7b7, #a78bfa)' }} />
-                  <Link href={`/explore/j/${j.slug || j.id}`} className="group flex flex-col md:flex-row md:items-center gap-3 md:gap-5">
-                    {j.coverImage && (
-                      <div className="relative w-full md:w-32 h-24 rounded-xl overflow-hidden shrink-0">
-                        <Image src={j.coverImage} alt={j.name || j.title || 'Memory'} fill sizes="128px" className="object-cover group-hover:scale-105 transition" unoptimized />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>
-                        {fmtDateRange(j.startDate, j.endDate)} · {j.destination?.name || 'Kashmir'}
-                      </div>
-                      <div className="font-semibold mt-1 group-hover:e-grad-text transition" style={{ color: 'var(--e-text)' }}>{j.name || j.title}</div>
-                      {j.description && <div className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--e-text-muted)' }}>{j.description}</div>}
-                    </div>
-                    <ChevronRight className="size-4 shrink-0" style={{ color: 'var(--e-text-dim)' }} />
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
+      {/* ================= FEATURED TRIPS ================= */}
+      {!q && (
+        <TripShelf title="Featured Trips" subtitle="Curated adventures picked by the community" trips={featured} loading={loading} icon={Star} viewAllHref="/explore/home?filter=featured" />
       )}
 
-      {/* ────────────────────── SAVED PLACES ───────────────────── */}
-      <section className="relative e-container mb-16 pb-24 md:pb-16">
-        <SectionHeader
-          chip={<><Bookmark className="size-3 text-rose-300" /> Saved places</>}
-          title="Your wishlist"
-          action={<Link href="/explore/journey?tab=saved" className="text-sm inline-flex items-center gap-1 transition hover:opacity-80" style={{ color: 'var(--e-text-muted)' }}>All saved <ArrowRight className="size-3.5" /></Link>}
-        />
-        {saved.length === 0 ? (
-          <div className="e-glass rounded-3xl p-6 md:p-8 flex flex-col md:flex-row items-center gap-5">
-            <div className="size-14 rounded-2xl grid place-items-center shrink-0" style={{ background: 'rgba(244,63,94,0.12)' }}>
-              <Heart className="size-6 text-rose-300" strokeWidth={1.6} />
-            </div>
-            <div className="flex-1 text-center md:text-left">
-              <div className="font-semibold" style={{ color: 'var(--e-text)' }}>No saved places yet</div>
-              <p className="text-sm mt-1" style={{ color: 'var(--e-text-muted)' }}>Tap the bookmark on any journey or experience to save it for later.</p>
-            </div>
-            <Link href="/explore/wander" className="e-btn-ghost rounded-full px-5 py-2.5 text-sm inline-flex items-center gap-2 shrink-0">
-              <Compass className="size-4" /> Discover places
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {saved.slice(0, 8).map(j => (
-              <Link key={j.id} href={`/explore/j/${j.slug || j.id}`} className="e-glass rounded-2xl overflow-hidden hover:-translate-y-0.5 transition group">
-                {j.coverImage ? (
-                  <div className="relative w-full aspect-[4/3]">
-                    <Image src={j.coverImage} alt={j.name || j.title} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover group-hover:scale-105 transition" unoptimized />
-                  </div>
-                ) : (
-                  <div className="w-full aspect-[4/3] grid place-items-center" style={{ background: 'linear-gradient(135deg, rgba(110,231,183,0.15), rgba(240,171,252,0.15))' }}>
-                    <MapPin className="size-8" style={{ color: 'var(--e-text-dim)' }} />
-                  </div>
-                )}
-                <div className="p-3">
-                  <div className="text-[10px] uppercase tracking-[0.22em] truncate" style={{ color: 'var(--e-text-dim)' }}>{j.destination?.name || 'Kashmir'}</div>
-                  <div className="font-semibold text-sm mt-0.5 line-clamp-2" style={{ color: 'var(--e-text)' }}>{j.name || j.title}</div>
+      {/* ================= RECENTLY PUBLISHED ================= */}
+      {!q && (
+        <TripShelf title="Recently Published" subtitle="Fresh journeys inviting new members" trips={recent} loading={loading} icon={Sparkles} />
+      )}
+
+      {/* ================= POPULAR DESTINATIONS ================= */}
+      {!q && (
+        <section className="container py-10 md:py-14">
+          <SectionHeader icon={MapPin} title="Popular Destinations" subtitle="Where the community is heading" />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 mt-6">
+            {POPULAR_DESTINATIONS.map((d) => (
+              <Link key={d.name} href={`/explore/home?dest=${encodeURIComponent(d.name)}`}
+                onClick={(e) => { e.preventDefault(); setQ(d.name); if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                className="group relative aspect-[4/5] rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition">
+                <Image src={d.img} alt={d.name} fill sizes="(max-width:768px) 50vw, 16vw" className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/80 via-emerald-950/10 to-transparent" />
+                <div className="absolute bottom-3 left-3 right-3">
+                  <div className="text-white font-semibold text-sm md:text-base drop-shadow">{d.name}</div>
                 </div>
               </Link>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* ================= THEMED SHELVES ================= */}
+      {!q && SHELVES.map(({ key, title, icon }) => {
+        const list = byTheme[key] || [];
+        if (list.length === 0 && !loading) return null;
+        return <TripShelf key={key} title={title} trips={list.slice(0, 8)} loading={loading} icon={icon} />;
+      })}
+
+      {/* ================= EMPTY STATE ================= */}
+      {!loading && trips.length === 0 && !q && (
+        <section className="container py-16">
+          <div className="bg-emerald-50/60 border border-emerald-100 rounded-3xl p-10 text-center max-w-2xl mx-auto">
+            <div className="mx-auto size-16 rounded-2xl bg-emerald2 grid place-items-center text-white shadow-lg"><Plus className="size-8" /></div>
+            <h3 className="font-display text-2xl md:text-3xl font-bold text-charcoal mt-5">Be the first to plan a trip.</h3>
+            <p className="text-muted-foreground mt-2 max-w-md mx-auto">No community trips have been published yet. Create one and invite fellow travellers to join.</p>
+            <Link href="/explore/journey" className="mt-6 inline-flex items-center gap-2 px-6 h-12 rounded-full bg-emerald2 hover:bg-emerald2-deep text-white font-semibold shadow-lg">
+              <Plus className="size-4" /> Create a Trip
+            </Link>
+          </div>
+        </section>
+      )}
+
+      <div className="pb-16" />
+    </>
+  );
+}
+
+// ---------- Reusable sub-components ----------
+function SectionHeader({ icon: Icon, title, subtitle, viewAllHref }) {
+  return (
+    <div className="flex items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h2 className="font-display text-2xl md:text-3xl font-bold text-charcoal tracking-tight flex items-center gap-2">
+          {Icon && <span className="inline-grid place-items-center size-8 rounded-xl bg-emerald-50 text-emerald2"><Icon className="size-4" /></span>}
+          {title}
+        </h2>
+        {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+      </div>
+      {viewAllHref && (
+        <Link href={viewAllHref} className="hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-emerald2 hover:underline">
+          View all <ArrowRight className="size-4" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function TripShelf({ title, subtitle, trips, loading, icon, viewAllHref }) {
+  return (
+    <section className="container py-8 md:py-12">
+      <SectionHeader icon={icon} title={title} subtitle={subtitle} viewAllHref={viewAllHref} />
+      <div className="mt-5">
+        {loading ? <TripGridSkeleton /> : (trips.length === 0 ? (
+          <div className="text-sm text-muted-foreground bg-secondary/40 border border-emerald-100 rounded-2xl p-6 text-center">Nothing here yet — be the first to publish one.</div>
+        ) : <TripGrid trips={trips} />)}
+      </div>
+    </section>
+  );
+}
+
+function TripGrid({ trips }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
+      {trips.map((t) => <TripCard key={t.id} trip={t} />)}
+    </div>
+  );
+}
+
+function TripCard({ trip }) {
+  const seats = Math.max(0, (trip.maxMembers || 6) - (trip.membersCount || 0));
+  const perPerson = trip.estimate?.perPerson || (trip.budget && trip.maxMembers ? Math.round(trip.budget / trip.maxMembers) : null);
+  const cover = trip.cover || 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=800';
+  const start = trip.startDate ? new Date(trip.startDate) : null;
+  const end = trip.endDate ? new Date(trip.endDate) : null;
+  const dateLabel = start ? `${start.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}${end ? ' – ' + end.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : ''}` : 'Flexible dates';
+  return (
+    <Link href={`/explore/j/${trip.slug || trip.id}`} className="group block bg-white rounded-2xl border overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+      <div className="relative aspect-[16/10] overflow-hidden bg-secondary/40">
+        <Image src={cover} alt={trip.name} fill sizes="(max-width:768px) 100vw, 25vw" className="object-cover group-hover:scale-105 transition-transform duration-500" />
+        {(trip.services || []).length > 0 && (
+          <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider shadow">
+            <Sparkles className="size-3" /> Safar Curated
+          </div>
         )}
-      </section>
-    </div>
-  );
-}
-
-// ─────────────────────────── Sub-components ───────────────────────────
-
-function StatTile({ value, label, icon: Icon, loading }) {
-  return (
-    <div className="rounded-2xl px-3 py-3 md:px-4 md:py-3.5 text-center md:text-left" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--e-line)' }}>
-      <div className="flex items-center gap-1.5 justify-center md:justify-start">
-        <Icon className="size-3.5 opacity-70" style={{ color: 'var(--e-text-dim)' }} />
-        <span className="text-[9px] uppercase tracking-[0.22em]" style={{ color: 'var(--e-text-dim)' }}>{label}</span>
-      </div>
-      <div className="font-bold text-2xl md:text-3xl mt-1 e-grad-text tabular-nums">
-        {loading ? <Loader2 className="size-5 inline animate-spin" style={{ color: 'var(--e-text-dim)' }} /> : value}
-      </div>
-    </div>
-  );
-}
-
-function SectionHeader({ chip, title, action }) {
-  return (
-    <div className="flex items-end justify-between mb-5 gap-3 flex-wrap">
-      <div>
-        <div className="e-chip">{chip}</div>
-        <h2 className="display text-2xl md:text-3xl font-bold mt-3" style={{ color: 'var(--e-text)' }}>{title}</h2>
-      </div>
-      {action}
-    </div>
-  );
-}
-
-function ResumeCard({ journey }) {
-  const s = statusChip(journey._status || journeyStatus(journey));
-  return (
-    <Link href={`/explore/j/${journey.slug || journey.id}`} className="e-glass rounded-3xl overflow-hidden flex flex-col md:flex-row group hover:-translate-y-0.5 transition">
-      {journey.coverImage ? (
-        <div className="relative w-full md:w-64 lg:w-80 aspect-video md:aspect-auto md:h-auto shrink-0">
-          <Image src={journey.coverImage} alt={journey.name || journey.title} fill sizes="(min-width:1024px) 320px, 100vw" className="object-cover group-hover:scale-105 transition" unoptimized />
-          <div className="absolute inset-0 md:hidden" style={{ background: 'linear-gradient(180deg, transparent 40%, rgba(6,8,15,0.65))' }} />
-        </div>
-      ) : (
-        <div className="w-full md:w-64 lg:w-80 aspect-video md:aspect-auto md:h-auto shrink-0 grid place-items-center" style={{ background: 'linear-gradient(135deg, rgba(110,231,183,0.15), rgba(240,171,252,0.15))' }}>
-          <Route className="size-12" style={{ color: 'var(--e-text-dim)' }} />
-        </div>
-      )}
-      <div className="flex-1 p-5 md:p-6 flex flex-col justify-center">
-        <div className={`inline-flex w-max items-center gap-1.5 text-[11px] font-semibold ${s.text}`}>
-          <span className={`size-1.5 rounded-full ${s.dot} animate-pulse`} /> {s.label}
-        </div>
-        <div className="font-bold text-xl md:text-2xl mt-2" style={{ color: 'var(--e-text)' }}>{journey.name || journey.title}</div>
-        <div className="text-sm mt-1" style={{ color: 'var(--e-text-muted)' }}>
-          <MapPin className="inline size-3.5 mr-1 opacity-70" />{journey.destination?.name || 'Kashmir'} · {fmtDateRange(journey.startDate, journey.endDate)}
-        </div>
-        <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold e-grad-text">
-          Resume journey <ArrowRight className="size-4" />
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function JourneyCard({ j }) {
-  const s = statusChip(journeyStatus(j));
-  return (
-    <Link href={`/explore/j/${j.slug || j.id}`} className="e-glass rounded-2xl overflow-hidden group hover:-translate-y-0.5 transition flex flex-col">
-      {j.coverImage ? (
-        <div className="relative w-full aspect-[16/10]">
-          <Image src={j.coverImage} alt={j.name || j.title} fill sizes="(min-width:1024px) 33vw, 100vw" className="object-cover group-hover:scale-105 transition" unoptimized />
-          <div className={`absolute top-3 left-3 inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full backdrop-blur-md ${s.text}`} style={{ background: 'rgba(6,8,15,0.55)' }}>
-            <span className={`size-1.5 rounded-full ${s.dot}`} /> {s.label}
+        {seats > 0 && (
+          <div className="absolute top-3 right-3 px-2 py-1 rounded-full bg-white/95 text-emerald-900 text-[10px] font-bold uppercase tracking-wider shadow">
+            {seats} seat{seats !== 1 ? 's' : ''} left
           </div>
-        </div>
-      ) : (
-        <div className="w-full aspect-[16/10] grid place-items-center relative" style={{ background: 'linear-gradient(135deg, rgba(110,231,183,0.15), rgba(240,171,252,0.15))' }}>
-          <Route className="size-10" style={{ color: 'var(--e-text-dim)' }} />
-          <div className={`absolute top-3 left-3 inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full ${s.text}`} style={{ background: 'rgba(6,8,15,0.55)' }}>
-            <span className={`size-1.5 rounded-full ${s.dot}`} /> {s.label}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
       <div className="p-4">
-        <div className="text-[10px] uppercase tracking-[0.22em] truncate" style={{ color: 'var(--e-text-dim)' }}>{j.destination?.name || 'Kashmir'} · {j.theme || 'Journey'}</div>
-        <div className="font-semibold mt-1 line-clamp-2" style={{ color: 'var(--e-text)' }}>{j.name || j.title}</div>
-        <div className="text-xs mt-2" style={{ color: 'var(--e-text-muted)' }}>{fmtDateRange(j.startDate, j.endDate)}</div>
+        <div className="text-[10px] uppercase tracking-wider font-bold text-emerald2 truncate">
+          {trip.destination?.name || '—'}{trip.destination?.district ? ` · ${trip.destination.district}` : ''}
+        </div>
+        <h3 className="font-display font-bold text-charcoal text-base md:text-[17px] mt-1 line-clamp-2 min-h-[46px]">{trip.name}</h3>
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1"><Calendar className="size-3.5" /> {dateLabel}</span>
+          <span className="inline-flex items-center gap-1"><Users className="size-3.5" /> {trip.maxMembers || 6}</span>
+        </div>
+        <div className="mt-3 pt-3 border-t flex items-center justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Per person</div>
+            <div className="font-bold text-charcoal">{perPerson ? `₹${perPerson.toLocaleString('en-IN')}` : 'Free'}</div>
+          </div>
+          <div className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-full bg-emerald-50 text-emerald2 border border-emerald-100 shrink-0">
+            {(trip.theme || '').replace(/_/g,' ') || 'Trip'}
+          </div>
+        </div>
       </div>
     </Link>
+  );
+}
+
+function TripGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
+      {[...Array(4)].map((_, i) => (
+        <div key={i} className="bg-white rounded-2xl border overflow-hidden animate-pulse">
+          <div className="aspect-[16/10] bg-secondary" />
+          <div className="p-4 space-y-2">
+            <div className="h-3 w-24 bg-secondary rounded" />
+            <div className="h-4 w-full bg-secondary rounded" />
+            <div className="h-4 w-2/3 bg-secondary rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
