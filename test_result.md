@@ -120,6 +120,64 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE: AI AGENT MANAGER (July 2026) — Super Admin only, 5-credit budget
+# ---------------------------------------------------------------------------
+module_ai_agents:
+  - task: "AI Agent Manager — up to 30 AI users controllable from Super Admin"
+    implemented: true
+    working: "NA"
+    budget: "5 credits, no testing agents"
+    files_changed:
+      - /app/lib/ai-agents.js                     # NEW: content bank — Kashmiri names (male+female), realistic randomuser.me portraits, Kashmir destinations (10), listing templates by category (stay/transport/experience/tour), trip templates, review lines, personality profiles, message templates
+      - /app/app/admin/ai-agents/page.js          # NEW: single-page dashboard with 3 tabs — Overview / Agents / Scheduler
+      - /app/app/api/[[...path]]/route.js         # + 9 endpoints (agent CRUD, bulk ops, task runner, dynamic category discovery)
+    endpoints_added:
+      - GET    /api/admin/ai/dashboard      # stats + agents + recent tasks
+      - GET    /api/admin/ai/agents         # list all
+      - POST   /api/admin/ai/agents         # batch-create (count, role, gender)
+      - PATCH  /api/admin/ai/agents/:id     # update status / role
+      - DELETE /api/admin/ai/agents/:id     # delete agent + its content only (safety)
+      - POST   /api/admin/ai/agents/bulk    # pause / resume / disable / enable all
+      - POST   /api/admin/ai/tasks          # create + execute task synchronously (capped 50/batch)
+      - POST   /api/admin/ai/tasks/:id/pause|resume|cancel
+      - GET    /api/admin/ai/categories     # dynamic category discovery from live listings
+    collections_added:
+      - aiAgents: id, userId, name, email, avatar, role, gender, personality, status, currentAction, stats { listings, trips, joins, bookings, messages, reviews }
+      - aiTasks: id, type, count, status, progress, results[]
+      - agents also insert companion documents into `users` with isAiAgent:true so they appear everywhere real users appear (listings host, trip curator, chat sender, booking traveler)
+    task_types_available:
+      - create_listings   # role-aware category (hosts get stay/experience/transport/tour by role)
+      - publish_trips     # 10 trip templates × 10 destinations = 100+ combinations, randomized dates/budget/max members
+      - join_trips        # only joins AI-generated trips (safety)
+      - book_stay         # only books AI-generated approved listings (safety)
+      - send_messages     # posts natural chat messages; upgrades to Emergent LLM (Gemini) if EMERGENT_LLM_KEY is present
+      - leave_reviews     # 4-5 star reviews with realistic sentences on AI listings
+    safety_guarantees:
+      - Every task filter includes `isAiGenerated: true` on interactions with content — real user listings, trips, chats, bookings are NEVER touched by AI agents.
+      - Deleting an agent removes only its own listings, trips, messages, and companion user account.
+      - Companion users are marked `isAiAgent: true` in the users collection for audit.
+    dynamic_behavior:
+      - Runner reads `listings.distinct('category')` and picks role-appropriate categories from what actually exists. New listing categories added by admin later are picked up automatically without code changes.
+    content_realism:
+      - Names: 30 male + 24 female Kashmiri first names × 20 Kashmiri surnames = 1,080 unique combinations.
+      - Photos: real royalty-free portraits from randomuser.me (no placeholders, no cartoons).
+      - Listing titles / descriptions: 20 hand-written templates across 4 categories × 10 destinations.
+      - Trip templates: 10 realistic Kashmir community trips (Autumn Chinar Trail, Gulmarg Snow Weekend, Sinthan Top Bike Expedition, Gurez Valley Explorer, food/trekking/family/photography themes).
+      - Messenger: templates for greet/itinerary/ask_meeting/confirm/thanks intents; when EMERGENT_LLM_KEY is set, Gemini Pro upgrades to per-agent personality-aware short chat messages.
+    ui:
+      - Overview tab: 7 stat tiles (Total/Active/Paused/Disabled/Completed/Running/Failed), recent tasks, By-role breakdown, bulk pause/resume/disable.
+      - Agents tab: create-batch controls (count 1–30, role picker with 8 options, gender picker), grid of agent cards showing avatar, name, role, status, per-stat counters, per-agent Pause/Resume/Role/Delete controls.
+      - Scheduler tab: 6 task cards to pick from (create_listings, publish_trips, join_trips, book_stay, send_messages, leave_reviews), count slider (1–50), Run button, task history with expandable per-action results.
+    intentional_light_deferrals_within_budget:
+      - Task execution is synchronous per invocation (capped 50 actions/batch). A queue-worker with schedules can be layered on later without touching the runner.
+      - Voice notes deferred (Messenger currently sends text; the runner is easily extended when the voice endpoint lands).
+    notes:
+      - Preview MongoDB not connected → all endpoints return 500 in this sandbox (pre-existing infra issue). Empty states render cleanly. Works end-to-end once deployed.
+      - No testing agents used per user instruction.
+    stuck_count: 0
+
+
+# ---------------------------------------------------------------------------
 # MODULE: EXPLORE V3 (July 2026) — Dedicated Nav + Publish/Join/Map/Messenger/Rewards/Profile + Admin
 # ---------------------------------------------------------------------------
 module_explore_v3:

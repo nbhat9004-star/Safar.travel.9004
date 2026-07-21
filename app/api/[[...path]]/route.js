@@ -11203,7 +11203,7 @@ Return ONLY valid JSON, no markdown.`;
     }
 
     // ============================================================
-    // EXPLORE V3 — Settings (hero, promotions, rewards config)
+    // EXPLORE V3 \u2014 Settings (hero, promotions, rewards config)
     // Single-document store: exploreSettings { id: 'default', ... }
     // ============================================================
     const EXPLORE_DEFAULT_SETTINGS = {
@@ -13549,6 +13549,309 @@ Return ONLY valid JSON, no markdown.`;
     if (!doc) return err('Not found', 404);
     return ok({ application: doc });
   }
+
+  // ============================================================
+  // AI AGENT MANAGER — Super Admin only (up to 30 agents)
+  // ============================================================
+  if (path === '/admin/ai/dashboard' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const agentsCol = await getCollection('aiAgents');
+    const tasksCol = await getCollection('aiTasks');
+    const [agents, tasks] = await Promise.all([
+      agentsCol.find({}, { projection: { _id: 0 } }).toArray(),
+      tasksCol.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(50).toArray(),
+    ]);
+    const stats = {
+      total: agents.length,
+      active: agents.filter((a) => a.status === 'active').length,
+      paused: agents.filter((a) => a.status === 'paused').length,
+      disabled: agents.filter((a) => a.status === 'disabled').length,
+      completedTasks: tasks.filter((t) => t.status === 'done').length,
+      runningTasks: tasks.filter((t) => t.status === 'running' || t.status === 'pending').length,
+      failedTasks: tasks.filter((t) => t.status === 'failed').length,
+      byRole: agents.reduce((acc, a) => ({ ...acc, [a.role]: (acc[a.role] || 0) + 1 }), {}),
+    };
+    return ok({ stats, agents, tasks });
+  }
+
+  if (path === '/admin/ai/agents' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const agentsCol = await getCollection('aiAgents');
+    const agents = await agentsCol.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+    return ok({ agents });
+  }
+
+  if (path === '/admin/ai/agents' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const ai = await import('@/lib/ai-agents.js');
+    const b = await readBody(request);
+    const count = Math.max(1, Math.min(30, Number(b.count) || 1));
+    const role = String(b.role || 'traveller');
+    const genderPref = b.gender;
+    const agentsCol = await getCollection('aiAgents');
+    const usersCol = await getCollection('users');
+    const existing = await agentsCol.countDocuments({});
+    const remainingCapacity = Math.max(0, 30 - existing);
+    if (remainingCapacity === 0) return err('Agent cap reached (max 30). Delete agents to add more.');
+    const toCreate = Math.min(count, remainingCapacity);
+    const usedNames = new Set((await agentsCol.find({}, { projection: { name: 1 } }).toArray()).map((a) => (a.name || '').toLowerCase()));
+    const created = [];
+    const now = new Date();
+    for (let i = 0; i < toCreate; i++) {
+      const gender = genderPref || (Math.random() < 0.5 ? 'male' : 'female');
+      const identity = ai.generateAgentIdentity(gender, usedNames);
+      usedNames.add(identity.name.toLowerCase());
+      const userId = uuid();
+      const userRole = ['accommodation_host', 'experience_host', 'vehicle_host', 'tour_guide'].includes(role) ? 'host' : 'traveler';
+      const userDoc = {
+        id: userId, name: identity.name, email: identity.email, emailVerified: true,
+        role: userRole, avatar: identity.avatar, passwordHash: null,
+        isAiAgent: true, createdAt: now,
+      };
+      try { await usersCol.insertOne(userDoc); } catch {}
+      const agentDoc = {
+        id: uuid(), userId,
+        name: identity.name, email: identity.email, avatar: identity.avatar,
+        role, gender, personality: identity.personality,
+        status: 'active', currentAction: 'idle',
+        stats: { listings: 0, trips: 0, joins: 0, bookings: 0, messages: 0, reviews: 0 },
+        createdAt: now, updatedAt: now,
+      };
+      await agentsCol.insertOne(agentDoc);
+      const { _id, ...rest } = agentDoc;
+      created.push(rest);
+    }
+    return ok({ created, count: created.length });
+  }
+
+  if (path.startsWith('/admin/ai/agents/') && method === 'PATCH') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const id = path.split('/')[4];
+    const b = await readBody(request);
+    const upd = { updatedAt: new Date() };
+    if (b.status && ['active', 'paused', 'disabled'].includes(b.status)) upd.status = b.status;
+    if (b.role) upd.role = String(b.role);
+    const agentsCol = await getCollection('aiAgents');
+    await agentsCol.updateOne({ id }, { $set: upd });
+    const doc = await agentsCol.findOne({ id }, { projection: { _id: 0 } });
+    if (!doc) return err('Not found', 404);
+    return ok({ agent: doc });
+  }
+
+  if (path.startsWith('/admin/ai/agents/') && method === 'DELETE') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const id = path.split('/')[4];
+    const agentsCol = await getCollection('aiAgents');
+    const agent = await agentsCol.findOne({ id });
+    if (!agent) return err('Not found', 404);
+    await agentsCol.deleteOne({ id });
+    // SAFETY: only remove content authored by this AI user — never real users.
+    try {
+      const listingsCol = await getCollection('listings');
+      await listingsCol.deleteMany({ hostId: agent.userId });
+      const journeysCol = await getCollection('journeys');
+      await journeysCol.deleteMany({ curatorId: agent.userId });
+      const chatCol = await getCollection('circleChat');
+      await chatCol.deleteMany({ userId: agent.userId });
+      const usersCol = await getCollection('users');
+      await usersCol.deleteOne({ id: agent.userId, isAiAgent: true });
+    } catch {}
+    return ok({ deleted: id });
+  }
+
+  if (path === '/admin/ai/agents/bulk' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const b = await readBody(request);
+    const map = { pause: 'paused', resume: 'active', disable: 'disabled', enable: 'active' };
+    if (!map[b.action]) return err('Invalid action');
+    const agentsCol = await getCollection('aiAgents');
+    const r = await agentsCol.updateMany(b.filter || {}, { $set: { status: map[b.action], updatedAt: new Date() } });
+    return ok({ updated: r.modifiedCount });
+  }
+
+  // POST /admin/ai/tasks — create + execute (synchronous, capped at 50 actions)
+  if (path === '/admin/ai/tasks' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const ai = await import('@/lib/ai-agents.js');
+    const b = await readBody(request);
+    const type = String(b.type || '');
+    const count = Math.max(1, Math.min(50, Number(b.count) || 1));
+    const agentsCol = await getCollection('aiAgents');
+    const activeAgents = await agentsCol.find({ status: 'active' }, { projection: { _id: 0 } }).toArray();
+    if (activeAgents.length === 0) return err('No active AI agents. Create or resume some first.');
+    const taskId = uuid();
+    const task = { id: taskId, type, count, status: 'running', progress: 0, results: [], createdAt: new Date(), updatedAt: new Date() };
+    const tasksCol = await getCollection('aiTasks');
+    await tasksCol.insertOne(task);
+    const listingsCol = await getCollection('listings');
+    const journeysCol = await getCollection('journeys');
+    const chatCol = await getCollection('circleChat');
+    const membersCol = await getCollection('circleMembers');
+    const now = new Date();
+    const runOnce = async (agent) => {
+      try {
+        if (type === 'create_listings') {
+          const roleCatMap = { accommodation_host: 'stay', experience_host: 'experience', vehicle_host: 'transport', tour_guide: 'tour' };
+          const preferred = roleCatMap[agent.role] || ai.pick(['stay', 'transport', 'experience', 'tour']);
+          const tpls = ai.LISTING_TEMPLATES[preferred] || [];
+          const tpl = ai.pick(tpls);
+          const dest = ai.pick(ai.DESTINATIONS);
+          const price = ai.randomInt(tpl.min, tpl.max);
+          const doc = {
+            id: uuid(), title: `${tpl.title} — ${dest.name}`,
+            description: tpl.desc + ` Located near ${dest.name}, ${dest.district}.`,
+            category: preferred, subcategory: tpl.sub, location: `${dest.name}, Kashmir`,
+            price, images: [
+              'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=1200',
+              'https://images.pexels.com/photos/25786565/pexels-photo-25786565.jpeg?auto=compress&cs=tinysrgb&w=1200',
+              'https://images.pexels.com/photos/18453079/pexels-photo-18453079.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            ],
+            hostId: agent.userId, hostName: agent.name, hostAvatar: agent.avatar,
+            superhost: false, amenities: [], services: [], duration: null, badge: null,
+            rating: 0, reviews: 0, status: 'approved', instantBook: Math.random() < 0.6,
+            createdAt: now, updatedAt: now, isAiGenerated: true,
+          };
+          await listingsCol.insertOne(doc);
+          await agentsCol.updateOne({ id: agent.id }, { $inc: { 'stats.listings': 1 }, $set: { currentAction: 'created a listing', updatedAt: now } });
+          return { agent: agent.name, action: 'listing', title: doc.title };
+        }
+        if (type === 'publish_trips') {
+          const tpl = ai.pick(ai.TRIP_TEMPLATES);
+          const dest = ai.pick(ai.DESTINATIONS);
+          const start = ai.randomFuture(7, 45);
+          const end = new Date(start); end.setDate(end.getDate() + ai.randomInt(2, 6));
+          const doc = {
+            id: uuid(), slug: (tpl.name + '-' + Math.random().toString(36).slice(2, 6)).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-'),
+            curatorId: agent.userId, curatorName: agent.name, curatorAvatar: agent.avatar, curatorRole: 'traveler',
+            name: tpl.name, description: tpl.desc,
+            cover: 'https://images.pexels.com/photos/27108526/pexels-photo-27108526.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            photos: [], theme: tpl.theme, destination: dest,
+            startDate: start, endDate: end,
+            maxMembers: ai.randomInt(4, 12), budget: ai.randomInt(8000, 45000),
+            difficulty: 'moderate', services: [], visibility: 'public', publishedAt: now,
+            viewsCount: 0, likesCount: 0, createdAt: now, updatedAt: now, isAiGenerated: true,
+          };
+          await journeysCol.insertOne(doc);
+          await agentsCol.updateOne({ id: agent.id }, { $inc: { 'stats.trips': 1 }, $set: { currentAction: 'published a trip', updatedAt: now } });
+          return { agent: agent.name, action: 'trip', title: doc.name };
+        }
+        if (type === 'join_trips') {
+          const trip = (await journeysCol.aggregate([
+            { $match: { isAiGenerated: true, visibility: 'public', curatorId: { $ne: agent.userId } } },
+            { $sample: { size: 1 } },
+          ]).toArray())[0];
+          if (!trip) return { agent: agent.name, action: 'join', skipped: 'no AI trips available' };
+          const existing = await membersCol.findOne({ journeyId: trip.id, userId: agent.userId });
+          if (existing) return { agent: agent.name, action: 'join', skipped: 'already member' };
+          await membersCol.insertOne({
+            id: uuid(), journeyId: trip.id, userId: agent.userId,
+            name: agent.name, avatar: agent.avatar,
+            status: Math.random() < 0.7 ? 'accepted' : 'pending',
+            createdAt: now,
+          });
+          await agentsCol.updateOne({ id: agent.id }, { $inc: { 'stats.joins': 1 }, $set: { currentAction: 'joined a trip', updatedAt: now } });
+          return { agent: agent.name, action: 'join', title: trip.name };
+        }
+        if (type === 'book_stay') {
+          const listing = (await listingsCol.aggregate([
+            { $match: { isAiGenerated: true, status: 'approved', hostId: { $ne: agent.userId } } },
+            { $sample: { size: 1 } },
+          ]).toArray())[0];
+          if (!listing) return { agent: agent.name, action: 'book', skipped: 'no AI listings available' };
+          const bookingsCol = await getCollection('bookings');
+          const checkIn = ai.randomFuture(10, 40);
+          const nights = ai.randomInt(2, 5);
+          const checkOut = new Date(checkIn); checkOut.setDate(checkOut.getDate() + nights);
+          await bookingsCol.insertOne({
+            id: uuid(), listingId: listing.id, listingTitle: listing.title,
+            listingImage: (listing.images || [])[0],
+            hostId: listing.hostId, hostName: listing.hostName,
+            travelerId: agent.userId, travelerName: agent.name,
+            checkIn, checkOut, nights, guests: ai.randomInt(1, 4),
+            totalPrice: listing.price * nights,
+            status: 'confirmed', paymentStatus: 'paid',
+            createdAt: now, isAiGenerated: true,
+          });
+          await agentsCol.updateOne({ id: agent.id }, { $inc: { 'stats.bookings': 1 }, $set: { currentAction: 'booked a stay', updatedAt: now } });
+          return { agent: agent.name, action: 'book', title: listing.title };
+        }
+        if (type === 'send_messages') {
+          const trip = (await journeysCol.aggregate([{ $match: { isAiGenerated: true, visibility: 'public' } }, { $sample: { size: 1 } }]).toArray())[0];
+          if (!trip) return { agent: agent.name, action: 'msg', skipped: 'no AI trips' };
+          const intents = ['greet', 'itinerary', 'ask_meeting', 'confirm', 'thanks'];
+          const intent = ai.pick(intents);
+          let text = ai.interpolate(ai.pick(ai.MESSAGE_TEMPLATES[intent] || ['Hello!']), { name: agent.name.split(' ')[0], trip: trip.name });
+          if (process.env.EMERGENT_LLM_KEY) {
+            try {
+              const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + process.env.EMERGENT_LLM_KEY, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: `You are ${agent.name}, a Kashmiri traveller with a ${agent.personality} tone. Write ONE short chat message (max 25 words) about the trip "${trip.name}" (${intent}).` }] }] }),
+              });
+              const j = await r.json();
+              const t = j?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (t) text = t.trim().slice(0, 400);
+            } catch {}
+          }
+          await chatCol.insertOne({
+            id: uuid(), tripId: trip.id,
+            userId: agent.userId, userName: agent.name, userAvatar: agent.avatar,
+            text, attachment: null, createdAt: now, isAiGenerated: true,
+          });
+          await agentsCol.updateOne({ id: agent.id }, { $inc: { 'stats.messages': 1 }, $set: { currentAction: 'sent a message', updatedAt: now } });
+          return { agent: agent.name, action: 'msg', title: trip.name };
+        }
+        if (type === 'leave_reviews') {
+          const listing = (await listingsCol.aggregate([{ $match: { isAiGenerated: true, hostId: { $ne: agent.userId } } }, { $sample: { size: 1 } }]).toArray())[0];
+          if (!listing) return { agent: agent.name, action: 'review', skipped: 'no AI listings' };
+          const reviewsCol = await getCollection('reviews');
+          const rating = ai.randomInt(4, 5);
+          await reviewsCol.insertOne({
+            id: uuid(), listingId: listing.id,
+            userId: agent.userId, userName: agent.name, userAvatar: agent.avatar,
+            rating, text: ai.pick(ai.REVIEW_LINES),
+            createdAt: now, isAiGenerated: true,
+          });
+          await listingsCol.updateOne({ id: listing.id }, { $inc: { reviews: 1 } });
+          await agentsCol.updateOne({ id: agent.id }, { $inc: { 'stats.reviews': 1 }, $set: { currentAction: 'left a review', updatedAt: now } });
+          return { agent: agent.name, action: 'review', rating, title: listing.title };
+        }
+        throw new Error(`Unknown task type: ${type}`);
+      } catch (e) {
+        return { agent: agent.name, action: type, error: e.message };
+      }
+    };
+    const results = [];
+    for (let i = 0; i < count; i++) {
+      const agent = activeAgents[i % activeAgents.length];
+      // eslint-disable-next-line no-await-in-loop
+      const r = await runOnce(agent);
+      results.push(r);
+    }
+    const done = { ...task, status: 'done', progress: count, results, updatedAt: new Date() };
+    await tasksCol.updateOne({ id: taskId }, { $set: done });
+    return ok({ task: done });
+  }
+
+  if (path === '/admin/ai/categories' && method === 'GET') {
+    // Dynamic category discovery — the agent runner uses these to stay in sync
+    // with whatever categories the platform currently supports.
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, ['super_admin', 'admin']); if (!g.ok) return err(g.error, g.status);
+    const listingsCol = await getCollection('listings');
+    const [cats, subs] = await Promise.all([
+      listingsCol.distinct('category').catch(() => []),
+      listingsCol.distinct('subcategory').catch(() => []),
+    ]);
+    return ok({ categories: cats.filter(Boolean), subcategories: subs.filter(Boolean) });
+  }
+
 
   // Health
   if (path === '/health' || path === '/' || path === '') {
