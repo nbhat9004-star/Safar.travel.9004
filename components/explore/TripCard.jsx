@@ -73,12 +73,9 @@ export default function TripCard({ trip }) {
         </div>
 
         <div className="mt-3 flex items-center gap-2 mt-auto pt-1">
-          <Link href={`/explore/trip/${trip.id}`} className="flex-1 text-center rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 active:scale-[0.98] text-violet-700 text-[13px] font-semibold py-2 transition">Request to Join</Link>
-          <button className="size-9 grid place-items-center rounded-xl border border-slate-200 hover:bg-slate-50 active:scale-95 text-slate-600 transition" aria-label="Save">
+          <Link href={`/explore/trip/${trip.id}`} className="flex-1 text-center rounded-xl bg-violet-50 hover:bg-violet-100 active:scale-[0.98] text-violet-700 text-[13px] font-semibold py-2.5 transition">Request to Join</Link>
+          <button className="size-10 grid place-items-center rounded-xl bg-violet-50 hover:bg-violet-100 active:scale-95 text-violet-600 transition" aria-label="Save">
             <Bookmark className="size-4" />
-          </button>
-          <button className="size-9 grid place-items-center rounded-xl border border-slate-200 hover:bg-slate-50 active:scale-95 text-slate-600 transition" aria-label="Share">
-            <Share2 className="size-4" />
           </button>
         </div>
       </div>

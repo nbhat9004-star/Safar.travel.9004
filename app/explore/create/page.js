@@ -189,9 +189,9 @@ export default function App() {
   return (
     <TripShell>
       <div className="max-w-3xl mx-auto px-4 lg:px-8 pt-4 lg:pt-8">
-        <div className="flex items-center justify-between">
-          <button onClick={() => setMode(null)} className="size-10 grid place-items-center rounded-full bg-white border border-slate-200"><ArrowLeft className="size-4" /></button>
-          <h2 className="font-display font-bold text-lg">Create a Trip</h2>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setMode(null)} className="size-10 grid place-items-center rounded-full hover:bg-slate-100 active:scale-95 transition"><ArrowLeft className="size-5" /></button>
+          <h2 className="flex-1 text-center font-display font-bold text-[17px]">Create a Trip</h2>
           <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold ${modeMeta.cls}`}>
             <MetaIcon className="size-3" /> {modeMeta.label}
           </div>
@@ -266,10 +266,13 @@ export default function App() {
 
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Travel Dates</label>
-              <div className="mt-1.5 grid grid-cols-2 gap-2">
+              <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 h-11">
                   <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
                   <Calendar className="size-4 text-slate-400" />
+                </div>
+                <div className="size-8 grid place-items-center rounded-full bg-slate-100 text-slate-500">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </div>
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 h-11">
                   <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />

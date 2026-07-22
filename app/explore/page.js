@@ -9,12 +9,12 @@ import { TRIPS } from '@/lib/trips-data';
 import { fetchTrips } from '@/lib/circle-explore';
 
 const CAT_TABS = [
-  { id: 'all', label: 'All Trips', icon: Compass },
-  { id: 'upcoming', label: 'Upcoming', icon: MapPinIcon },
-  { id: 'weekend', label: 'Weekend Trips', icon: HomeIcon },
-  { id: 'treks', label: 'Treks & Adventures', icon: Mountain },
-  { id: 'road', label: 'Road Trips', icon: Car },
-  { id: 'backpacking', label: 'Backpacking', icon: Backpack },
+  { id: 'all', label: 'All', longLabel: 'All Trips', icon: Compass },
+  { id: 'weekend', label: 'Weekend', longLabel: 'Weekend Trips', icon: HomeIcon },
+  { id: 'treks', label: 'Treks', longLabel: 'Treks & Adventures', icon: Mountain },
+  { id: 'road', label: 'Road Trip', longLabel: 'Road Trips', icon: Car },
+  { id: 'backpacking', label: 'Backpacking', longLabel: 'Backpacking', icon: Backpack },
+  { id: 'upcoming', label: 'Upcoming', longLabel: 'Upcoming', icon: MapPinIcon },
 ];
 
 const TYPE_ICONS = [
@@ -193,14 +193,22 @@ function ExplorePageInner() {
     <TripShell right={filterPanel}>
       {/* Mobile search + header */}
       <div className="lg:hidden px-4 pt-4">
-        <h1 className="font-display text-2xl font-bold">Explore Trips <span className="inline-block ml-1">{'\u2708\uFE0F'}</span></h1>
-        <p className="text-[13px] text-slate-500 mt-0.5">Discover amazing trips and join fellow travelers</p>
-        <div className="mt-4 flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 h-11">
-            <Search className="size-4 text-slate-400" />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search destinations, trips..." className="flex-1 bg-transparent outline-none text-[13px]" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h1 className="font-display text-[26px] leading-tight font-bold tracking-tight text-slate-900">Explore Trips</h1>
+            <p className="text-[13px] text-slate-500 mt-1 leading-snug">Discover amazing trips and<br className="sm:hidden"/> join fellow travelers</p>
           </div>
-          <button onClick={() => setShowFilters(true)} className="size-11 grid place-items-center rounded-xl border border-slate-200 bg-white"><SlidersHorizontal className="size-4 text-slate-600" /></button>
+          <svg viewBox="0 0 90 40" className="w-[90px] h-[40px] mt-1 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M2 30 Q 20 10, 45 25 T 82 15" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 3" fill="none"/>
+            <path d="M75 8 L 88 15 L 76 18 L 79 22 L 74 20 L 73 25 L 70 20 L 66 22 L 68 17 L 62 15 Z" fill="#8b5cf6"/>
+          </svg>
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-2 rounded-2xl bg-slate-100/70 border border-slate-100 px-3.5 h-12">
+            <Search className="size-4 text-slate-400" />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search destinations, trips..." className="flex-1 bg-transparent outline-none text-[14px] placeholder:text-slate-400" />
+          </div>
+          <button onClick={() => setShowFilters(true)} className="size-12 grid place-items-center rounded-2xl bg-slate-100/70 border border-slate-100 active:scale-95 transition"><SlidersHorizontal className="size-4 text-slate-600" /></button>
         </div>
       </div>
 
@@ -222,8 +230,8 @@ function ExplorePageInner() {
           <p className="text-[14px] text-slate-500 mt-1">Discover amazing trips and join fellow travelers</p>
         </div>
 
-        {/* Featured banner */}
-        <div className="mt-4 lg:mt-6 relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-500 via-purple-600 to-fuchsia-600 h-[180px] lg:h-[220px]">
+        {/* Featured banner — desktop only per mobile reference */}
+        <div className="hidden lg:block mt-4 lg:mt-6 relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-500 via-purple-600 to-fuchsia-600 h-[220px]">
           <Image src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1600&q=80" alt="banner" fill className="object-cover mix-blend-overlay opacity-60" unoptimized />
           <div className="relative z-10 h-full p-6 lg:p-8 flex flex-col justify-center max-w-md text-white">
             <h2 className="font-display text-[22px] lg:text-[26px] font-bold leading-tight">Travel Together<br/>Create Memories</h2>
@@ -249,7 +257,10 @@ function ExplorePageInner() {
                   flex flex-col items-center justify-center gap-1 px-4 py-2.5 min-w-[76px] lg:flex-row lg:min-w-0 lg:h-10 lg:py-0 lg:gap-2 lg:px-3.5`}
               >
                 <Icon className={`size-5 lg:size-4 ${active ? '' : 'text-slate-500'}`} strokeWidth={active ? 2.4 : 2} />
-                <span className="text-[11.5px] lg:text-[13px] font-semibold whitespace-nowrap tracking-tight">{c.label}</span>
+                <span className="text-[11.5px] lg:text-[13px] font-semibold whitespace-nowrap tracking-tight">
+                  <span className="lg:hidden">{c.label}</span>
+                  <span className="hidden lg:inline">{c.longLabel}</span>
+                </span>
               </button>
             );
           })}

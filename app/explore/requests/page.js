@@ -65,21 +65,37 @@ function RequestsInner() {
     <TripShell>
       <div className="max-w-3xl mx-auto px-4 lg:px-8 pt-4 lg:pt-8">
         <div className="lg:hidden flex items-center gap-3">
-          <Link href="/explore" className="size-10 grid place-items-center rounded-full bg-white border border-slate-200"><ArrowLeft className="size-4" /></Link>
-          <h1 className="font-display text-xl font-bold">Join Requests</h1>
+          <Link href="/explore" className="size-10 grid place-items-center rounded-full hover:bg-slate-100 active:scale-95 transition"><ArrowLeft className="size-5" /></Link>
+          <h1 className="flex-1 text-center font-display font-bold text-[17px]">Join Requests</h1>
+          <div className="size-10" />
         </div>
         <div className="hidden lg:block">
           <h1 className="font-display text-3xl font-bold">Join Requests</h1>
           <p className="text-[14px] text-slate-500 mt-1">Manage requests, chats and notifications</p>
         </div>
 
-        <div className="mt-5 flex items-center gap-2 overflow-x-auto scrollbar-none">
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl px-4 h-10 text-[13px] font-semibold transition ${tab === t.id ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-              {t.label}
-              {t.id === 'received' && received.length > 0 ? <span className={`text-[10px] font-bold size-5 grid place-items-center rounded-full ${tab === t.id ? 'bg-white/25 text-white' : 'bg-white text-violet-700'}`}>{received.length}</span> : null}
-            </button>
-          ))}
+        {/* Segmented pill tabs (Received / Sent) per mobile ref */}
+        <div className="mt-5 lg:mt-6 rounded-2xl bg-slate-100/70 p-1 grid grid-cols-2 max-w-md mx-auto lg:mx-0 lg:max-w-none lg:flex lg:gap-2 lg:bg-transparent lg:p-0">
+          {['received','sent'].map(id => {
+            const active = tab === id;
+            const label = id === 'received' ? 'Received' : 'Sent';
+            const count = id === 'received' ? received.length : null;
+            return (
+              <button key={id} onClick={() => setTab(id)} className={`inline-flex items-center justify-center gap-1.5 h-10 rounded-xl text-[13.5px] font-semibold transition-all lg:rounded-xl lg:px-4 lg:h-10 ${active ? 'bg-violet-600 text-white shadow-lg shadow-violet-200' : 'text-slate-600 lg:bg-slate-100'}`}>
+                {label}
+                {count ? <span className={`text-[10px] font-bold size-5 grid place-items-center rounded-full ${active ? 'bg-rose-500 text-white' : 'bg-white text-violet-700'}`}>{count}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+        {/* Secondary tabs for chats/notifications on desktop */}
+        <div className="mt-3 hidden lg:flex items-center gap-2">
+          {['notifications','chats'].map(id => {
+            const active = tab === id;
+            return (
+              <button key={id} onClick={() => setTab(id)} className={`rounded-xl px-4 h-10 text-[13px] font-semibold transition ${active ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{id === 'notifications' ? 'Notifications' : 'Chats'}</button>
+            );
+          })}
         </div>
 
         {tab === 'received' && (
