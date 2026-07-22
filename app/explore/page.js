@@ -234,15 +234,22 @@ function ExplorePageInner() {
           </div>
         </div>
 
-        {/* Category pills */}
-        <div className="mt-5 flex items-center gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 lg:mx-0 lg:px-0">
+        {/* Category pills — vertical icon+label stack on mobile (ref), horizontal chips on desktop */}
+        <div className="mt-5 flex items-stretch gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 lg:mx-0 lg:px-0 snap-x snap-mandatory">
           {CAT_TABS.map(c => {
             const Icon = c.icon;
             const active = tab === c.id;
             return (
-              <button key={c.id} onClick={() => setTab(c.id)} className={`shrink-0 inline-flex items-center gap-2 rounded-xl border px-3.5 h-10 text-[13px] font-semibold transition ${active ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                <Icon className="size-4" />
-                {c.label}
+              <button
+                key={c.id}
+                onClick={() => setTab(c.id)}
+                className={`shrink-0 snap-start rounded-2xl border transition-all duration-200 active:scale-95 lg:active:scale-100 ${active
+                  ? 'bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-200'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'} 
+                  flex flex-col items-center justify-center gap-1 px-4 py-2.5 min-w-[76px] lg:flex-row lg:min-w-0 lg:h-10 lg:py-0 lg:gap-2 lg:px-3.5`}
+              >
+                <Icon className={`size-5 lg:size-4 ${active ? '' : 'text-slate-500'}`} strokeWidth={active ? 2.4 : 2} />
+                <span className="text-[11.5px] lg:text-[13px] font-semibold whitespace-nowrap tracking-tight">{c.label}</span>
               </button>
             );
           })}
