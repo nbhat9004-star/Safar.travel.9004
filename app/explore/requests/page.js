@@ -1,0 +1,160 @@
+'use client';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { ArrowLeft, MessageCircle, Loader2, Bell, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import TripShell from '@/components/explore/TripShell';
+import { REQUESTS_RECEIVED, REQUESTS_SENT } from '@/lib/trips-data';
+
+const TABS = [
+  { id: 'received', label: 'Received', count: REQUESTS_RECEIVED.length },
+  { id: 'sent', label: 'Sent', count: REQUESTS_SENT.length },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'chats', label: 'Chats' },
+];
+
+function RequestsInner() {
+  const sp = useSearchParams();
+  const initial = sp.get('tab') || 'received';
+  const [tab, setTab] = useState(initial);
+  const [actioned, setActioned] = useState({});
+
+  const act = (id, action) => setActioned((prev) => ({ ...prev, [id]: action }));
+
+  return (
+    <TripShell>
+      <div className="max-w-3xl mx-auto px-4 lg:px-8 pt-4 lg:pt-8">
+        <div className="lg:hidden flex items-center gap-3">
+          <Link href="/explore" className="size-10 grid place-items-center rounded-full bg-white border border-slate-200"><ArrowLeft className="size-4" /></Link>
+          <h1 className="font-display text-xl font-bold">Join Requests</h1>
+        </div>
+        <div className="hidden lg:block">
+          <h1 className="font-display text-3xl font-bold">Join Requests</h1>
+          <p className="text-[14px] text-slate-500 mt-1">Manage requests, chats and notifications</p>
+        </div>
+
+        <div className="mt-5 flex items-center gap-2 overflow-x-auto scrollbar-none">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl px-4 h-10 text-[13px] font-semibold transition ${tab === t.id ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              {t.label}
+              {t.count ? <span className={`text-[10px] font-bold size-5 grid place-items-center rounded-full ${tab === t.id ? 'bg-white/25 text-white' : 'bg-white text-violet-700'}`}>{t.count}</span> : null}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'received' && (
+          <div className="mt-5 space-y-3">
+            {REQUESTS_RECEIVED.map(r => {
+              const status = actioned[r.id];
+              return (
+                <div key={r.id} className="rounded-2xl border border-slate-100 bg-white p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="relative shrink-0">
+                      <Image src={r.avatar} alt={r.name} width={44} height={44} className="rounded-full object-cover" unoptimized />
+                      <span className="absolute -top-1 -right-1 size-4 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">1</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="truncate">
+                          <div className="font-semibold text-[14px] text-slate-900 truncate">{r.name}</div>
+                          <div className="text-[11.5px] text-slate-500">{r.mutual} mutual {r.mutual === 1 ? 'friend' : 'friends'}</div>
+                        </div>
+                        <div className="text-[11px] text-slate-400 shrink-0">{r.when}</div>
+                      </div>
+                      <p className="mt-2 text-[13px] text-slate-700">{r.message}</p>
+                      {status ? (
+                        <div className={`mt-3 inline-flex items-center gap-1 text-[12px] font-semibold ${status === 'accept' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {status === 'accept' ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+                          {status === 'accept' ? 'Accepted' : 'Declined'}
+                        </div>
+                      ) : (
+                        <div className="mt-3 flex items-center gap-2">
+                          <button onClick={() => act(r.id, 'decline')} className="flex-1 rounded-xl border border-slate-200 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">Decline</button>
+                          <button className="size-9 grid place-items-center rounded-xl border border-slate-200"><MessageCircle className="size-4 text-slate-600" /></button>
+                          <button onClick={() => act(r.id, 'accept')} className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white py-2 text-[13px] font-semibold">Accept</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === 'sent' && (
+          <div className="mt-5 space-y-3">
+            {REQUESTS_SENT.map(r => (
+              <div key={r.id} className="rounded-2xl border border-slate-100 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <Image src={r.avatar} alt={r.name} width={44} height={44} className="rounded-lg object-cover" unoptimized />
+                  <div className="flex-1">
+                    <div className="font-semibold text-[14px] text-slate-900">{r.name}</div>
+                    <p className="mt-1 text-[12.5px] text-slate-500">{r.message}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      {r.status === 'accepted' ? (
+                        <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-emerald-700"><CheckCircle2 className="size-3.5" /> Accepted</span>
+                      ) : r.status === 'pending' ? (
+                        <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-amber-700"><Clock className="size-3.5" /> Pending</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-rose-700"><XCircle className="size-3.5" /> Rejected</span>
+                      )}
+                      <span className="text-[11px] text-slate-400 ml-auto">{r.when}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'notifications' && (
+          <div className="mt-5 space-y-2">
+            {[
+              { icon: Bell, tone: 'violet', title: 'New join request', body: 'Zeeshan Ali requested to join Kashmir Great Lakes Trek', when: '2h ago' },
+              { icon: CheckCircle2, tone: 'emerald', title: 'Request accepted', body: 'Your request for Goa Beach Trip was accepted', when: '1d ago' },
+              { icon: MessageCircle, tone: 'sky', title: 'New message', body: 'Danish sent a message in Ladakh Road Trip', when: '2d ago' },
+              { icon: Clock, tone: 'amber', title: 'Trip reminder', body: 'Weekend in Gulmarg starts in 3 days', when: '3d ago' },
+            ].map((n, i) => {
+              const Icon = n.icon;
+              return (
+                <div key={i} className="flex items-start gap-3 rounded-2xl border border-slate-100 bg-white p-4">
+                  <div className={`size-9 rounded-xl grid place-items-center bg-${n.tone}-100 text-${n.tone}-700 shrink-0`}><Icon className="size-4" /></div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-[13.5px] text-slate-900">{n.title}</div>
+                    <div className="text-[12.5px] text-slate-500">{n.body}</div>
+                  </div>
+                  <div className="text-[11px] text-slate-400">{n.when}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === 'chats' && (
+          <div className="mt-5 space-y-2">
+            {['Kashmir Great Lakes Trek','Ladakh Road Trip','Weekend in Gulmarg'].map((chat, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5">
+                <div className="size-10 rounded-xl bg-violet-100 text-violet-700 grid place-items-center font-semibold">{chat[0]}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-[14px] text-slate-900 truncate">{chat}</div>
+                  <div className="text-[12px] text-slate-500 truncate">{'Group chat \u00B7 8 members'}</div>
+                </div>
+                <span className="text-[10px] font-bold size-5 grid place-items-center rounded-full bg-violet-600 text-white">{i + 1}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </TripShell>
+  );
+}
+
+export default function App() {
+  return (
+    <Suspense fallback={<div className="min-h-screen grid place-items-center"><Loader2 className="size-6 animate-spin text-violet-600" /></div>}>
+      <RequestsInner />
+    </Suspense>
+  );
+}
