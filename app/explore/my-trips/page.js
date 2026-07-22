@@ -1,10 +1,11 @@
 'use client';
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import TripShell from '@/components/explore/TripShell';
 import TripCard from '@/components/explore/TripCard';
 import { TRIPS } from '@/lib/trips-data';
+import { fetchMyTrips } from '@/lib/circle-explore';
 
 const TABS = [
   { id: 'hosting', label: 'Hosting' },
@@ -19,8 +20,23 @@ function MyTripsInner() {
   const sp = useSearchParams();
   const initial = sp.get('tab') || 'hosting';
   const [tab, setTab] = useState(initial);
+  const [hosting, setHosting] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const list = tab === 'hosting' ? TRIPS.slice(0, 2)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const list = await fetchMyTrips();
+        if (alive) setHosting(list);
+      } catch { if (alive) setHosting([]); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const list = tab === 'hosting' ? hosting
+    : tab === 'drafts' ? hosting.filter(t => t.raw?.visibility === 'draft')
     : tab === 'joined' ? TRIPS.slice(2, 4)
     : tab === 'saved' ? TRIPS.slice(4, 6)
     : [];
@@ -39,7 +55,9 @@ function MyTripsInner() {
           ))}
         </div>
 
-        {list.length > 0 ? (
+        {loading && (tab === 'hosting' || tab === 'drafts') ? (
+          <div className="mt-8 py-10 grid place-items-center"><Loader2 className="size-6 animate-spin text-violet-600" /></div>
+        ) : list.length > 0 ? (
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
             {list.map(t => <TripCard key={t.id} trip={t} />)}
           </div>

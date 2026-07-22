@@ -2,9 +2,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Home, Car, Sun, Backpack, Camera, ShieldCheck, Sparkles, CheckCircle2, Plus, Star, BadgeCheck, Info, Calendar, MapPin, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, Home, Car, Sun, Backpack, Camera, ShieldCheck, Sparkles, CheckCircle2, Plus, Star, BadgeCheck, UserCheck, Award, MapPin, Calendar, Loader2 } from 'lucide-react';
 import TripShell from '@/components/explore/TripShell';
 import { TRIP_ADVANTAGES, VERIFIED_SERVICES } from '@/lib/trips-data';
+import { createTrip } from '@/lib/circle-explore';
+import { toast } from 'sonner';
 
 const STEPS = [
   { id: 1, label: 'Details' },
@@ -14,27 +17,85 @@ const STEPS = [
 ];
 
 const TYPES = [
-  { id: 'trek', label: 'Trek', icon: Home },
-  { id: 'road', label: 'Road Trip', icon: Car },
-  { id: 'weekend', label: 'Weekend', icon: Sun },
+  { id: 'adventure', label: 'Trek', icon: Home },
+  { id: 'road_trip', label: 'Road Trip', icon: Car },
+  { id: 'weekend_escape', label: 'Weekend', icon: Sun },
   { id: 'backpacking', label: 'Backpacking', icon: Backpack },
 ];
 
 export default function App() {
-  const [mode, setMode] = useState(null); // null | 'self' | 'safar'
+  const router = useRouter();
+  const [mode, setMode] = useState(null); // null | 'self' | 'safar' | 'local'
   const [step, setStep] = useState(1);
-  const [type, setType] = useState('trek');
+  const [publishing, setPublishing] = useState(false);
+
+  // Form state
+  const [title, setTitle] = useState('');
+  const [destination, setDestination] = useState('');
+  const [theme, setTheme] = useState('adventure');
+  const [description, setDescription] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [maxMembers, setMaxMembers] = useState(8);
+  const [minMembers, setMinMembers] = useState(2);
+  const [difficulty, setDifficulty] = useState('moderate');
+  const [budget, setBudget] = useState('');
+  const [genderPref, setGenderPref] = useState('');
+  const [languages, setLanguages] = useState('');
+  const [rules, setRules] = useState('');
+  const [included, setIncluded] = useState('');
+  const [packingList, setPackingList] = useState('');
   const [addedServices, setAddedServices] = useState([]);
 
   const toggleService = (id) => {
     setAddedServices((prev) => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
+  const handlePublish = async () => {
+    if (!title || title.trim().length < 3) { toast.error('Trip title must be at least 3 characters'); setStep(1); return; }
+    setPublishing(true);
+    try {
+      const fullDescription = [
+        description,
+        rules ? `\n\nRules:\n${rules}` : '',
+        included ? `\n\nWhat\u2019s included:\n${included}` : '',
+        packingList ? `\n\nPacking list:\n${packingList}` : '',
+      ].join('');
+      const services = mode === 'safar' ? addedServices.map(id => {
+        const s = VERIFIED_SERVICES.find(x => x.id === id);
+        return { listingId: id, category: s?.id, title: s?.label, image: s?.img, price: s?.price || 0 };
+      }) : [];
+      const payload = {
+        name: title.trim(),
+        description: fullDescription.trim(),
+        theme,
+        hostMode: mode,
+        destination: { name: destination.trim(), country: 'India' },
+        startDate: startDate || null,
+        endDate: endDate || null,
+        maxMembers: Number(maxMembers) || 6,
+        difficulty,
+        budget: Number(budget) || null,
+        genderPreference: genderPref || null,
+        languages: languages ? languages.split(',').map(s => s.trim()).filter(Boolean).slice(0, 8) : [],
+        services,
+        visibility: 'public',
+      };
+      const journey = await createTrip(payload);
+      toast.success('Trip published!');
+      router.push(`/explore/trip/${journey.id}`);
+    } catch (e) {
+      toast.error(e.message || 'Could not publish trip. Please sign in and try again.');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   // === MODE PICKER (Step 0) ===
   if (!mode) {
     return (
       <TripShell>
-        <div className="max-w-3xl mx-auto px-4 lg:px-8 pt-4 lg:pt-8">
+        <div className="max-w-5xl mx-auto px-4 lg:px-8 pt-4 lg:pt-8">
           <div className="flex items-center gap-3">
             <Link href="/explore" className="size-10 grid place-items-center rounded-full bg-white border border-slate-200"><ArrowLeft className="size-4" /></Link>
             <div>
@@ -43,9 +104,23 @@ export default function App() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {/* Self Hosted */}
+            <button onClick={() => setMode('self')} className="relative text-left rounded-3xl border-2 border-violet-200 bg-white p-5 lg:p-6 hover:shadow-xl transition group">
+              <div className="size-12 rounded-2xl bg-violet-600 text-white grid place-items-center shadow-lg shadow-violet-200">
+                <Home className="size-6" />
+              </div>
+              <h3 className="mt-4 font-display font-bold text-lg text-slate-900">Self Hosted Trip</h3>
+              <p className="mt-1 text-[13px] text-slate-600 leading-relaxed">Plan everything yourself \u2014 organize your own accommodations, transport, activities and itinerary.</p>
+              <div className="mt-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-violet-100 text-violet-800">Self Hosted</div>
+              <p className="mt-3 text-[12px] text-slate-500">You are responsible for the complete trip and all arrangements.</p>
+              <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-900 group-hover:bg-black text-white px-4 py-2 text-[13px] font-semibold">
+                Continue Self-Hosted <span>{'\u2192'}</span>
+              </div>
+            </button>
+
             {/* Safar Assisted (Recommended) */}
-            <button onClick={() => setMode('safar')} className="relative text-left rounded-3xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 lg:p-6 hover:shadow-xl transition group order-1 lg:order-2">
+            <button onClick={() => setMode('safar')} className="relative text-left rounded-3xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 lg:p-6 hover:shadow-xl transition group">
               <div className="absolute top-4 right-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[10px] font-bold">
                 <Sparkles className="size-3" /> RECOMMENDED
               </div>
@@ -53,7 +128,7 @@ export default function App() {
                 <ShieldCheck className="size-6" />
               </div>
               <h3 className="mt-4 font-display font-bold text-lg text-emerald-900">Safar Assisted Trip</h3>
-              <p className="mt-1 text-[13px] text-emerald-900/80 leading-relaxed">Build your trip using verified accommodations, guides, transport providers, rental services and experiences on Safar Curated for a more organized experience and greater confidence in arrangements.</p>
+              <p className="mt-1 text-[13px] text-emerald-900/80 leading-relaxed">Build your trip using verified accommodations, guides, transport providers, rental services and experiences on Safar Curated for a more organized experience.</p>
               <div className="mt-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-800">
                 <BadgeCheck className="size-3.5" /> Verified by Safar
               </div>
@@ -67,17 +142,26 @@ export default function App() {
               </div>
             </button>
 
-            {/* Self Hosted */}
-            <button onClick={() => setMode('self')} className="relative text-left rounded-3xl border-2 border-violet-200 bg-white p-5 lg:p-6 hover:shadow-xl transition group order-2 lg:order-1">
-              <div className="size-12 rounded-2xl bg-violet-600 text-white grid place-items-center shadow-lg shadow-violet-200">
-                <Home className="size-6" />
+            {/* Hosted by Local Expert */}
+            <button onClick={() => setMode('local')} className="relative text-left rounded-3xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 p-5 lg:p-6 hover:shadow-xl transition group">
+              <div className="absolute top-4 right-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                <Award className="size-3" /> LOCAL CURATED
               </div>
-              <h3 className="mt-4 font-display font-bold text-lg text-slate-900">Self Hosted Trip</h3>
-              <p className="mt-1 text-[13px] text-slate-600 leading-relaxed">{"Plan everything yourself \u2014 organize your own accommodations, transport, activities and itinerary."}</p>
-              <div className="mt-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-violet-100 text-violet-800">Self Hosted</div>
-              <p className="mt-3 text-[12px] text-slate-500">You are responsible for the complete trip and all arrangements.</p>
-              <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-900 group-hover:bg-black text-white px-4 py-2 text-[13px] font-semibold">
-                Continue Self-Hosted <span>{'\u2192'}</span>
+              <div className="size-12 rounded-2xl bg-amber-500 text-white grid place-items-center shadow-lg shadow-amber-200">
+                <UserCheck className="size-6" />
+              </div>
+              <h3 className="mt-4 font-display font-bold text-lg text-amber-900">Hosted by Local Expert</h3>
+              <p className="mt-1 text-[13px] text-amber-900/80 leading-relaxed">Verified local organizers create complete trips \u2014 travelers simply request to join. Great for authentic, guided experiences with someone from the region.</p>
+              <div className="mt-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-900">
+                <BadgeCheck className="size-3.5" /> Hosted by Local Expert
+              </div>
+              <div className="mt-4 space-y-1.5">
+                {['Verified Local Organizer','Complete Curated Itinerary','Authentic Regional Experience','Trusted Community Host'].map(a => (
+                  <div key={a} className="flex items-center gap-1.5 text-[12px] text-amber-900"><CheckCircle2 className="size-3.5 text-amber-600" />{a}</div>
+                ))}
+              </div>
+              <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-amber-600 group-hover:bg-amber-700 text-white px-4 py-2 text-[13px] font-semibold">
+                Continue as Local Host <span>{'\u2192'}</span>
               </div>
             </button>
           </div>
@@ -87,7 +171,7 @@ export default function App() {
             <div className="size-10 rounded-xl bg-emerald-500 text-white grid place-items-center shrink-0"><ShieldCheck className="size-5" /></div>
             <div>
               <div className="font-display font-bold text-[15px] text-emerald-900">Travel with Confidence</div>
-              <p className="mt-0.5 text-[13px] text-emerald-900/80">Trips created using verified Safar partners are easier to organize and help travelers identify arrangements made through trusted providers on the platform.</p>
+              <p className="mt-0.5 text-[13px] text-emerald-900/80">Trips created using verified Safar partners or local experts are easier to organize and help travelers identify arrangements made through trusted providers on the platform.</p>
             </div>
           </div>
         </div>
@@ -95,17 +179,21 @@ export default function App() {
     );
   }
 
-  // === WIZARD ===
+  const modeMeta = mode === 'safar'
+    ? { label: 'Verified by Safar', cls: 'bg-emerald-100 text-emerald-800', icon: BadgeCheck }
+    : mode === 'local'
+    ? { label: 'Hosted by Local Expert', cls: 'bg-amber-100 text-amber-900', icon: UserCheck }
+    : { label: 'Self Hosted', cls: 'bg-violet-100 text-violet-800', icon: Home };
+  const MetaIcon = modeMeta.icon;
+
   return (
     <TripShell>
       <div className="max-w-3xl mx-auto px-4 lg:px-8 pt-4 lg:pt-8">
-        {/* Top bar */}
         <div className="flex items-center justify-between">
           <button onClick={() => setMode(null)} className="size-10 grid place-items-center rounded-full bg-white border border-slate-200"><ArrowLeft className="size-4" /></button>
           <h2 className="font-display font-bold text-lg">Create a Trip</h2>
-          <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold ${mode === 'safar' ? 'bg-emerald-100 text-emerald-800' : 'bg-violet-100 text-violet-800'}`}>
-            {mode === 'safar' ? <BadgeCheck className="size-3" /> : null}
-            {mode === 'safar' ? 'Verified by Safar' : 'Self Hosted'}
+          <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold ${modeMeta.cls}`}>
+            <MetaIcon className="size-3" /> {modeMeta.label}
           </div>
         </div>
 
@@ -147,12 +235,15 @@ export default function App() {
               </div>
             </div>
 
-            <Field label="Trip Title" placeholder="e.g. Kashmir Adventure Trip" />
+            <div>
+              <label className="text-[12px] font-semibold text-slate-700">Trip Title</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Kashmir Adventure Trip" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px] outline-none focus:border-violet-400" />
+            </div>
 
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Destination</label>
               <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 h-11">
-                <input placeholder="Where are you going?" className="flex-1 bg-transparent outline-none text-[13px]" />
+                <input value={destination} onChange={e => setDestination(e.target.value)} placeholder="Where are you going?" className="flex-1 bg-transparent outline-none text-[13px]" />
                 <MapPin className="size-4 text-slate-400" />
               </div>
             </div>
@@ -162,9 +253,9 @@ export default function App() {
               <div className="mt-2 grid grid-cols-4 gap-2">
                 {TYPES.map(t => {
                   const Icon = t.icon;
-                  const active = type === t.id;
+                  const active = theme === t.id;
                   return (
-                    <button key={t.id} onClick={() => setType(t.id)} className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-[11px] font-semibold transition ${active ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    <button key={t.id} onClick={() => setTheme(t.id)} className={`flex flex-col items-center gap-1 rounded-xl border py-2.5 text-[11px] font-semibold transition ${active ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                       <Icon className="size-4" />
                       {t.label}
                     </button>
@@ -174,24 +265,14 @@ export default function App() {
             </div>
 
             <div>
-              <label className="text-[12px] font-semibold text-slate-700">Duration</label>
-              <select className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px]">
-                <option>Select duration</option>
-                <option>1–3 days</option>
-                <option>4–7 days</option>
-                <option>8+ days</option>
-              </select>
-            </div>
-
-            <div>
               <label className="text-[12px] font-semibold text-slate-700">Travel Dates</label>
               <div className="mt-1.5 grid grid-cols-2 gap-2">
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 h-11">
-                  <input type="date" className="flex-1 bg-transparent outline-none text-[13px]" />
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
                   <Calendar className="size-4 text-slate-400" />
                 </div>
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 h-11">
-                  <input type="date" className="flex-1 bg-transparent outline-none text-[13px]" />
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 bg-transparent outline-none text-[13px]" />
                   <Calendar className="size-4 text-slate-400" />
                 </div>
               </div>
@@ -200,24 +281,28 @@ export default function App() {
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Group Size</label>
               <div className="mt-1.5 grid grid-cols-2 gap-2">
-                <select className="rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px]"><option>Min</option><option>2</option><option>4</option></select>
-                <select className="rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px]"><option>Max</option><option>10</option><option>15</option></select>
+                <input type="number" value={minMembers} onChange={e => setMinMembers(e.target.value)} placeholder="Min" className="rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px]" />
+                <input type="number" value={maxMembers} onChange={e => setMaxMembers(e.target.value)} placeholder="Max" className="rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px]" />
               </div>
             </div>
 
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Trip Description</label>
-              <textarea rows={4} placeholder="Describe your trip, places to visit, activities, what's included, etc." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[13px] outline-none focus:border-violet-400 resize-none" />
-              <div className="text-right text-[11px] text-slate-400 mt-1">0/500</div>
+              <textarea rows={4} value={description} onChange={e => setDescription(e.target.value)} maxLength={500} placeholder="Describe your trip, places to visit, activities, what's included, etc." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[13px] outline-none focus:border-violet-400 resize-none" />
+              <div className="text-right text-[11px] text-slate-400 mt-1">{description.length}/500</div>
             </div>
           </div>
         )}
 
-        {/* Step 2: Itinerary — for Safar mode show verified services builder */}
+        {/* Step 2: Itinerary */}
         {step === 2 && (
           <div className="mt-6">
-            <h3 className="font-display font-bold text-[17px]">{mode === 'safar' ? 'Add Verified Services' : 'Build Your Itinerary'}</h3>
-            <p className="text-[12.5px] text-slate-500 mt-1">{mode === 'safar' ? 'Create your trip using trusted and verified Safar partners to simplify planning and give travelers greater confidence in the arrangements.' : 'Add day-by-day plans, activities and notes.'}</p>
+            <h3 className="font-display font-bold text-[17px]">{mode === 'safar' ? 'Add Verified Services' : mode === 'local' ? 'Curate Your Local Itinerary' : 'Build Your Itinerary'}</h3>
+            <p className="text-[12.5px] text-slate-500 mt-1">
+              {mode === 'safar' ? 'Create your trip using trusted and verified Safar partners to simplify planning and give travelers greater confidence in the arrangements.' :
+                mode === 'local' ? 'Add day-by-day plans that showcase your local expertise. Travelers will trust your curation.' :
+                'Add day-by-day plans, activities and notes.'}
+            </p>
 
             {mode === 'safar' ? (
               <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -257,19 +342,25 @@ export default function App() {
                     <input placeholder="e.g. Arrival, local sightseeing..." className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 h-10 text-[13px] outline-none focus:border-violet-400" />
                   </div>
                 ))}
-                <button className="w-full rounded-2xl border border-dashed border-slate-300 py-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">
-                  + Add Day
-                </button>
+                <button className="w-full rounded-2xl border border-dashed border-slate-300 py-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">+ Add Day</button>
               </div>
             )}
 
-            {/* Trust banner in wizard for safar mode */}
             {mode === 'safar' && (
               <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3.5 flex items-start gap-3">
                 <ShieldCheck className="size-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-semibold text-[13px] text-emerald-900">Travel with Confidence</div>
                   <p className="text-[12px] text-emerald-900/80 mt-0.5">Trips created using verified Safar partners are easier to organize and help travelers identify arrangements made through trusted providers on the platform.</p>
+                </div>
+              </div>
+            )}
+            {mode === 'local' && (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/60 p-3.5 flex items-start gap-3">
+                <UserCheck className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-[13px] text-amber-900">Hosted by a Local Expert</div>
+                  <p className="text-[12px] text-amber-900/80 mt-0.5">Verified local organizers craft the complete experience. Travelers simply request to join and enjoy an authentic regional trip.</p>
                 </div>
               </div>
             )}
@@ -280,27 +371,39 @@ export default function App() {
         {step === 3 && (
           <div className="mt-6 space-y-5">
             <h3 className="font-display font-bold text-[17px]">Trip Settings</h3>
-            <Field label="Budget per traveler" placeholder="\u20b9 e.g. 8000" />
+            <div>
+              <label className="text-[12px] font-semibold text-slate-700">Budget per traveler (\u20b9)</label>
+              <input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="e.g. 8000" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px] outline-none focus:border-violet-400" />
+            </div>
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Difficulty</label>
-              <div className="mt-1.5 grid grid-cols-3 gap-2">
-                {['Easy','Moderate','Challenging'].map(l => (
-                  <button key={l} className="rounded-xl border border-slate-200 bg-white py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">{l}</button>
+              <div className="mt-1.5 grid grid-cols-4 gap-2">
+                {['easy','moderate','challenging','expert'].map(l => (
+                  <button key={l} onClick={() => setDifficulty(l)} className={`rounded-xl border py-2 text-[12px] font-semibold capitalize transition ${difficulty === l ? 'border-violet-500 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>{l}</button>
                 ))}
               </div>
             </div>
-            <Field label="Rules" textarea placeholder="e.g. No smoking, be respectful, punctuality..." />
-            <Field label="What's Included" textarea placeholder="e.g. Accommodation, meals, transport..." />
-            <Field label="Packing List" textarea placeholder="e.g. Trekking shoes, warm layers, water bottle..." />
+            <div>
+              <label className="text-[12px] font-semibold text-slate-700">Rules</label>
+              <textarea rows={2} value={rules} onChange={e => setRules(e.target.value)} placeholder="e.g. No smoking, be respectful, punctuality..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[13px] outline-none focus:border-violet-400 resize-none" />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold text-slate-700">What's Included</label>
+              <textarea rows={2} value={included} onChange={e => setIncluded(e.target.value)} placeholder="e.g. Accommodation, meals, transport..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[13px] outline-none focus:border-violet-400 resize-none" />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold text-slate-700">Packing List</label>
+              <textarea rows={2} value={packingList} onChange={e => setPackingList(e.target.value)} placeholder="e.g. Trekking shoes, warm layers, water bottle..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[13px] outline-none focus:border-violet-400 resize-none" />
+            </div>
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Gender Preference</label>
-              <select className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px]">
-                <option>Anyone</option><option>Male only</option><option>Female only</option>
+              <select value={genderPref} onChange={e => setGenderPref(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px]">
+                <option value="">Anyone</option><option value="male">Male only</option><option value="female">Female only</option>
               </select>
             </div>
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Language</label>
-              <input placeholder="e.g. English, Hindi, Urdu" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px] outline-none focus:border-violet-400" />
+              <input value={languages} onChange={e => setLanguages(e.target.value)} placeholder="e.g. English, Hindi, Urdu" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px] outline-none focus:border-violet-400" />
             </div>
           </div>
         )}
@@ -312,14 +415,18 @@ export default function App() {
             <p className="text-[12.5px] text-slate-500 mt-1">Review before publishing</p>
             <div className="mt-4 rounded-2xl border border-slate-100 bg-white p-4">
               <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ${mode === 'safar' ? 'bg-emerald-500 text-white' : 'bg-violet-600 text-white'}`}>
-                  {mode === 'safar' ? <><BadgeCheck className="size-3" /> Verified by Safar</> : 'Self Hosted'}
+                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ${mode === 'safar' ? 'bg-emerald-500 text-white' : mode === 'local' ? 'bg-amber-500 text-white' : 'bg-violet-600 text-white'}`}>
+                  <MetaIcon className="size-3" /> {modeMeta.label}
                 </span>
-                <span className="text-[12px] text-slate-500">Draft</span>
+                <span className="text-[12px] text-slate-500">Ready to publish</span>
               </div>
               <div className="mt-3 aspect-[16/9] rounded-xl bg-slate-100 grid place-items-center text-slate-400 text-[13px]">Cover photo preview</div>
-              <h4 className="mt-3 font-display font-bold text-lg">Untitled Trip</h4>
-              <p className="text-[13px] text-slate-500">Add a description in Step 1</p>
+              <h4 className="mt-3 font-display font-bold text-lg">{title || 'Untitled Trip'}</h4>
+              <div className="text-[13px] text-slate-500 flex items-center gap-3 mt-0.5">
+                <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" /> {destination || 'Destination TBD'}</span>
+                {startDate && endDate && <span className="inline-flex items-center gap-1"><Calendar className="size-3.5" /> {startDate} \u2192 {endDate}</span>}
+              </div>
+              <p className="mt-2 text-[13px] text-slate-600 whitespace-pre-line">{description || 'Add a description in Step 1'}</p>
               {mode === 'safar' && addedServices.length > 0 && (
                 <div className="mt-3">
                   <div className="text-[12px] font-semibold text-slate-700">Verified services added</div>
@@ -335,36 +442,24 @@ export default function App() {
           </div>
         )}
 
-        {/* Sticky footer */}
         <div className="mt-8 h-20" />
         <div className="fixed bottom-16 lg:bottom-6 inset-x-0 z-20 px-4 lg:pl-72 lg:pr-8">
           <div className="max-w-3xl mx-auto bg-white/95 backdrop-blur border border-slate-200 rounded-2xl px-4 py-3 shadow-xl flex items-center gap-3">
             {step > 1 ? (
-              <button onClick={() => setStep(step - 1)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-[14px] font-semibold text-slate-700 hover:bg-slate-50">Back</button>
+              <button onClick={() => setStep(step - 1)} disabled={publishing} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-[14px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Back</button>
             ) : (
               <button onClick={() => setMode(null)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-[14px] font-semibold text-slate-700 hover:bg-slate-50">Change Mode</button>
             )}
             {step < 4 ? (
               <button onClick={() => setStep(step + 1)} className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white py-2.5 text-[14px] font-semibold">Next</button>
             ) : (
-              <button className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 text-[14px] font-semibold">Publish Trip</button>
+              <button onClick={handlePublish} disabled={publishing} className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 text-[14px] font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-70">
+                {publishing && <Loader2 className="size-4 animate-spin" />} Publish Trip
+              </button>
             )}
           </div>
         </div>
       </div>
     </TripShell>
-  );
-}
-
-function Field({ label, placeholder, textarea = false }) {
-  return (
-    <div>
-      <label className="text-[12px] font-semibold text-slate-700">{label}</label>
-      {textarea ? (
-        <textarea rows={3} placeholder={placeholder} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[13px] outline-none focus:border-violet-400 resize-none" />
-      ) : (
-        <input placeholder={placeholder} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[13px] outline-none focus:border-violet-400" />
-      )}
-    </div>
   );
 }

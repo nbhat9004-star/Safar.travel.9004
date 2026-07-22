@@ -1,26 +1,65 @@
 'use client';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, MessageCircle, Loader2, Bell, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import TripShell from '@/components/explore/TripShell';
-import { REQUESTS_RECEIVED, REQUESTS_SENT } from '@/lib/trips-data';
+import { REQUESTS_SENT } from '@/lib/trips-data';
+import { fetchReceivedRequests, decideRequest } from '@/lib/circle-explore';
+import { toast } from 'sonner';
 
 const TABS = [
-  { id: 'received', label: 'Received', count: REQUESTS_RECEIVED.length },
-  { id: 'sent', label: 'Sent', count: REQUESTS_SENT.length },
+  { id: 'received', label: 'Received' },
+  { id: 'sent', label: 'Sent' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'chats', label: 'Chats' },
 ];
+
+function timeAgo(d) {
+  if (!d) return '';
+  const t = new Date(d).getTime();
+  const diff = Date.now() - t;
+  const days = Math.floor(diff / 86400000);
+  if (days > 0) return `${days}d ago`;
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs > 0) return `${hrs}h ago`;
+  const mins = Math.floor(diff / 60000);
+  return `${Math.max(1, mins)}m ago`;
+}
 
 function RequestsInner() {
   const sp = useSearchParams();
   const initial = sp.get('tab') || 'received';
   const [tab, setTab] = useState(initial);
+  const [received, setReceived] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [actioned, setActioned] = useState({});
+  const [pending, setPending] = useState({});
 
-  const act = (id, action) => setActioned((prev) => ({ ...prev, [id]: action }));
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await fetchReceivedRequests();
+      setReceived(list);
+    } catch { setReceived([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { if (tab === 'received') load(); }, [tab, load]);
+
+  const act = async (r, action) => {
+    setPending((p) => ({ ...p, [r.id]: action }));
+    try {
+      await decideRequest(r.journeyId, r.id, action);
+      setActioned((prev) => ({ ...prev, [r.id]: action }));
+      toast.success(action === 'accept' ? 'Traveler accepted' : 'Request declined');
+    } catch (e) {
+      toast.error(e.message || 'Could not update request');
+    } finally {
+      setPending((p) => { const n = { ...p }; delete n[r.id]; return n; });
+    }
+  };
 
   return (
     <TripShell>
@@ -38,31 +77,38 @@ function RequestsInner() {
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl px-4 h-10 text-[13px] font-semibold transition ${tab === t.id ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
               {t.label}
-              {t.count ? <span className={`text-[10px] font-bold size-5 grid place-items-center rounded-full ${tab === t.id ? 'bg-white/25 text-white' : 'bg-white text-violet-700'}`}>{t.count}</span> : null}
+              {t.id === 'received' && received.length > 0 ? <span className={`text-[10px] font-bold size-5 grid place-items-center rounded-full ${tab === t.id ? 'bg-white/25 text-white' : 'bg-white text-violet-700'}`}>{received.length}</span> : null}
             </button>
           ))}
         </div>
 
         {tab === 'received' && (
           <div className="mt-5 space-y-3">
-            {REQUESTS_RECEIVED.map(r => {
+            {loading && <div className="py-10 grid place-items-center"><Loader2 className="size-5 animate-spin text-violet-600" /></div>}
+            {!loading && received.length === 0 && (
+              <div className="text-center py-14 bg-white rounded-2xl border border-slate-100">
+                <div className="font-display font-bold text-slate-900">No pending requests</div>
+                <p className="text-[13px] text-slate-500 mt-1">When travelers request to join your trips, they\u2019ll show up here.</p>
+              </div>
+            )}
+            {!loading && received.map(r => {
               const status = actioned[r.id];
+              const busy = pending[r.id];
               return (
                 <div key={r.id} className="rounded-2xl border border-slate-100 bg-white p-4">
                   <div className="flex items-start gap-3">
                     <div className="relative shrink-0">
-                      <Image src={r.avatar} alt={r.name} width={44} height={44} className="rounded-full object-cover" unoptimized />
-                      <span className="absolute -top-1 -right-1 size-4 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">1</span>
+                      <Image src={r.userAvatar || `https://i.pravatar.cc/60?u=${encodeURIComponent(r.userId || r.id)}`} alt={r.userName} width={44} height={44} className="rounded-full object-cover" unoptimized />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <div className="truncate">
-                          <div className="font-semibold text-[14px] text-slate-900 truncate">{r.name}</div>
-                          <div className="text-[11.5px] text-slate-500">{r.mutual} mutual {r.mutual === 1 ? 'friend' : 'friends'}</div>
+                          <div className="font-semibold text-[14px] text-slate-900 truncate">{r.userName}</div>
+                          <div className="text-[11.5px] text-slate-500">wants to join <span className="font-semibold text-slate-700">{r.journeyName || 'your trip'}</span> \u00b7 {r.seats || 1} seat{(r.seats || 1) > 1 ? 's' : ''}</div>
                         </div>
-                        <div className="text-[11px] text-slate-400 shrink-0">{r.when}</div>
+                        <div className="text-[11px] text-slate-400 shrink-0">{timeAgo(r.createdAt)}</div>
                       </div>
-                      <p className="mt-2 text-[13px] text-slate-700">{r.message}</p>
+                      {r.message && <p className="mt-2 text-[13px] text-slate-700">{r.message}</p>}
                       {status ? (
                         <div className={`mt-3 inline-flex items-center gap-1 text-[12px] font-semibold ${status === 'accept' ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {status === 'accept' ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
@@ -70,9 +116,9 @@ function RequestsInner() {
                         </div>
                       ) : (
                         <div className="mt-3 flex items-center gap-2">
-                          <button onClick={() => act(r.id, 'decline')} className="flex-1 rounded-xl border border-slate-200 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">Decline</button>
+                          <button onClick={() => act(r, 'decline')} disabled={!!busy} className="flex-1 rounded-xl border border-slate-200 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{busy === 'decline' ? '\u2026' : 'Decline'}</button>
                           <button className="size-9 grid place-items-center rounded-xl border border-slate-200"><MessageCircle className="size-4 text-slate-600" /></button>
-                          <button onClick={() => act(r.id, 'accept')} className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white py-2 text-[13px] font-semibold">Accept</button>
+                          <button onClick={() => act(r, 'accept')} disabled={!!busy} className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 text-white py-2 text-[13px] font-semibold disabled:opacity-70">{busy === 'accept' ? '\u2026' : 'Accept'}</button>
                         </div>
                       )}
                     </div>
@@ -112,10 +158,10 @@ function RequestsInner() {
         {tab === 'notifications' && (
           <div className="mt-5 space-y-2">
             {[
-              { icon: Bell, tone: 'violet', title: 'New join request', body: 'Zeeshan Ali requested to join Kashmir Great Lakes Trek', when: '2h ago' },
-              { icon: CheckCircle2, tone: 'emerald', title: 'Request accepted', body: 'Your request for Goa Beach Trip was accepted', when: '1d ago' },
-              { icon: MessageCircle, tone: 'sky', title: 'New message', body: 'Danish sent a message in Ladakh Road Trip', when: '2d ago' },
-              { icon: Clock, tone: 'amber', title: 'Trip reminder', body: 'Weekend in Gulmarg starts in 3 days', when: '3d ago' },
+              { icon: Bell, tone: 'violet', title: 'New join request', body: 'A traveler requested to join one of your trips', when: 'Recently' },
+              { icon: CheckCircle2, tone: 'emerald', title: 'Request accepted', body: 'Your request was accepted by the host', when: '1d ago' },
+              { icon: MessageCircle, tone: 'sky', title: 'New message', body: 'You have a new message in a trip chat', when: '2d ago' },
+              { icon: Clock, tone: 'amber', title: 'Trip reminder', body: 'An upcoming trip starts soon', when: '3d ago' },
             ].map((n, i) => {
               const Icon = n.icon;
               return (
@@ -141,7 +187,6 @@ function RequestsInner() {
                   <div className="font-semibold text-[14px] text-slate-900 truncate">{chat}</div>
                   <div className="text-[12px] text-slate-500 truncate">{'Group chat \u00B7 8 members'}</div>
                 </div>
-                <span className="text-[10px] font-bold size-5 grid place-items-center rounded-full bg-violet-600 text-white">{i + 1}</span>
               </div>
             ))}
           </div>

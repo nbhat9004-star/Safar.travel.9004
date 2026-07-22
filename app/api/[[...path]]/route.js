@@ -11163,6 +11163,7 @@ Return ONLY valid JSON, no markdown.`;
           addedAt: now,
         })),
         estimate,
+        hostMode: ['self','safar','local'].includes(b.hostMode) ? b.hostMode : 'self',
         visibility: b.visibility && CIRCLE_VISIBILITY.includes(b.visibility) ? b.visibility : 'draft',
         scheduledFor: b.scheduledFor ? new Date(b.scheduledFor) : null,
         publishedAt: b.visibility === 'public' ? now : null,

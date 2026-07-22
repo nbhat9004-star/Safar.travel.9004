@@ -1,11 +1,12 @@
 'use client';
-import { useMemo, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Search, SlidersHorizontal, Plus, X, Compass, Home as HomeIcon, Mountain, Car, Backpack, MapPin as MapPinIcon, Filter, Loader2, ChevronDown, ShieldCheck, Info } from 'lucide-react';
+import { Search, SlidersHorizontal, Plus, X, Compass, Home as HomeIcon, Mountain, Car, Backpack, MapPin as MapPinIcon, Filter, Loader2, ChevronDown } from 'lucide-react';
 import TripShell from '@/components/explore/TripShell';
 import TripCard from '@/components/explore/TripCard';
-import { TRIPS, TRIP_CATEGORIES } from '@/lib/trips-data';
+import { TRIPS } from '@/lib/trips-data';
+import { fetchTrips } from '@/lib/circle-explore';
 
 const CAT_TABS = [
   { id: 'all', label: 'All Trips', icon: Compass },
@@ -33,17 +34,36 @@ function ExplorePageInner() {
   const [groupSize, setGroupSize] = useState('any');
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [freeOnly, setFreeOnly] = useState(false);
+  const [remoteTrips, setRemoteTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetchTrips({ typeSlug: tab === 'all' || tab === 'upcoming' ? null : tab })
+      .then(list => { if (alive) setRemoteTrips(list); })
+      .catch(() => { if (alive) setRemoteTrips([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [tab]);
+
+  // Merge remote + demo trips so the discovery feed is never empty on a fresh DB.
+  const merged = useMemo(() => {
+    const remoteIds = new Set(remoteTrips.map(t => t.id));
+    const demos = TRIPS.filter(t => !remoteIds.has(t.id));
+    return [...remoteTrips, ...demos];
+  }, [remoteTrips]);
 
   const filtered = useMemo(() => {
-    let arr = [...TRIPS];
-    if (q) arr = arr.filter(t => (t.title + t.destination).toLowerCase().includes(q.toLowerCase()));
-    if (tab !== 'all') arr = arr.filter(t => t.typeSlug === tab);
+    let arr = [...merged];
+    if (q) arr = arr.filter(t => (t.title + ' ' + t.destination).toLowerCase().includes(q.toLowerCase()));
+    if (tab !== 'all' && tab !== 'upcoming') arr = arr.filter(t => t.typeSlug === tab);
     if (tripType !== 'all') arr = arr.filter(t => t.typeSlug === tripType);
-    if (verifiedOnly) arr = arr.filter(t => t.mode === 'safar');
+    if (verifiedOnly) arr = arr.filter(t => t.mode === 'safar' || t.mode === 'local');
     if (freeOnly) arr = arr.filter(t => t.free);
     if (sort === 'Popular') arr.sort((a,b) => b.joined - a.joined);
     return arr;
-  }, [q, tab, tripType, verifiedOnly, freeOnly, sort]);
+  }, [merged, q, tab, tripType, verifiedOnly, freeOnly, sort]);
 
   const filterPanel = (
     <div>
@@ -148,7 +168,6 @@ function ExplorePageInner() {
               <div className="text-[13px] font-semibold">Join Requests</div>
               <div className="text-[11px] text-slate-500">View and respond to requests</div>
             </div>
-            <span className="ml-auto text-[10px] font-bold size-5 grid place-items-center rounded-full bg-rose-500 text-white">3</span>
           </Link>
         </div>
       </div>
@@ -194,15 +213,6 @@ function ExplorePageInner() {
         <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 h-11 text-[13px] text-slate-700 font-medium">
           <MapPinIcon className="size-4 text-violet-600" /> Srinagar, J&amp;K
         </div>
-        <button className="size-11 grid place-items-center rounded-full border border-slate-200 bg-white relative">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-5 text-slate-600"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-          <span className="absolute top-2 right-2 size-2 rounded-full bg-violet-600" />
-        </button>
-        <button className="flex items-center gap-2 rounded-full border border-slate-200 bg-white pl-1 pr-3 h-11">
-          <Image src="https://i.pravatar.cc/64?img=13" alt="you" width={32} height={32} className="rounded-full" unoptimized />
-          <span className="text-[13px] font-medium text-slate-800">Shahnawaz</span>
-          <ChevronDown className="size-4 text-slate-400" />
-        </button>
       </div>
 
       <div className="px-4 lg:px-8 pt-4 lg:pt-6">
@@ -242,11 +252,7 @@ function ExplorePageInner() {
         <div className="mt-6 flex items-center justify-between">
           <h3 className="font-display text-lg font-bold text-slate-900">Popular Trips</h3>
           <div className="hidden lg:flex items-center gap-2 text-[13px] text-slate-500">
-            Sort by:
-            <select value={sort} onChange={e => setSort(e.target.value)} className="font-semibold text-slate-800 bg-transparent outline-none cursor-pointer">
-              <option>Latest</option>
-              <option>Popular</option>
-            </select>
+            {loading ? <span className="inline-flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> loading</span> : <>Sort by: <select value={sort} onChange={e => setSort(e.target.value)} className="font-semibold text-slate-800 bg-transparent outline-none cursor-pointer"><option>Latest</option><option>Popular</option></select></>}
           </div>
         </div>
 
@@ -268,7 +274,6 @@ function ExplorePageInner() {
         </div>
       </div>
 
-      {/* Mobile filter sheet */}
       {showFilters && (
         <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setShowFilters(false)}>
           <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto bg-white rounded-t-3xl p-5" onClick={e => e.stopPropagation()}>
