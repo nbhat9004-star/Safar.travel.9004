@@ -1,10 +1,12 @@
-import ExploreShell2 from '@/components/explore/ExploreShell2';
+import { redirect } from 'next/navigation';
 
+// The legacy `(social)` Explore experience has been superseded by the premium
+// Travel Buddy UI at `/explore`. Every route inside this group now forwards
+// to the new page so no old layout can render anywhere.
 export const metadata = {
   title: 'Explore — Safar Curated',
-  description: 'Publish and join community trips, chat with fellow travellers and unlock rewards — the Safar Explore experience.',
 };
 
-export default function ExploreLayout({ children }) {
-  return <ExploreShell2>{children}</ExploreShell2>;
+export default function LegacyExploreGroupLayout() {
+  redirect('/explore');
 }
