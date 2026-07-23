@@ -11487,6 +11487,115 @@ Return ONLY valid JSON, no markdown.`;
     }
 
     // -------- My journeys (Studio) --------
+    // ============================================================
+    // Phase-4 community endpoints (rewards, highlights, notifications,
+    // leaderboard). Compact scaffolding — returns empty arrays when no
+    // data exists so the frontend adapter's graceful fallback keeps UI
+    // populated. Full CRUD + admin management is Phase-5 work.
+    // ============================================================
+    if (path === '/circle/notifications' && method === 'GET') {
+      try {
+        const me = await getUserFromCookie(request);
+        if (!me) return jsonError('unauthorized', 401);
+        const items = await db.collection('notifications')
+          .find({ userId: me.id }).sort({ createdAt: -1 }).limit(50).toArray().catch(() => []);
+        const unread = items.filter(n => !n.readAt).length;
+        return NextResponse.json({ ok: true, items, unread });
+      } catch { return NextResponse.json({ ok: true, items: [], unread: 0 }); }
+    }
+    if (path?.startsWith('/circle/notifications/') && path.endsWith('/read') && method === 'POST') {
+      try {
+        const me = await getUserFromCookie(request);
+        if (!me) return jsonError('unauthorized', 401);
+        const id = path.split('/')[3];
+        await db.collection('notifications').updateOne({ id, userId: me.id }, { $set: { readAt: new Date() } });
+      } catch {}
+      return NextResponse.json({ ok: true });
+    }
+    if (path === '/circle/rewards' && method === 'GET') {
+      try {
+        const me = await getUserFromCookie(request);
+        if (!me) return NextResponse.json({ ok: true, cards: [], unlocked: 0 });
+        const cards = await db.collection('reward_cards').find({ enabled: { $ne: false } }).limit(9).toArray().catch(() => []);
+        const progress = await db.collection('reward_progress').findOne({ userId: me.id }).catch(() => null);
+        const unlockedIds = new Set(progress?.unlockedCardIds || []);
+        return NextResponse.json({
+          ok: true,
+          cards: cards.map(c => ({ id: c.id, reward: c.name, icon: c.icon, image: c.image, unlocked: unlockedIds.has(c.id) })),
+          unlocked: unlockedIds.size,
+        });
+      } catch { return NextResponse.json({ ok: true, cards: [], unlocked: 0 }); }
+    }
+    if (path === '/circle/highlights' && method === 'GET') {
+      try {
+        const tab = (searchParams.get('tab') || 'latest').toLowerCase();
+        const sort = tab === 'popular' ? { likes: -1 } : { createdAt: -1 };
+        const items = await db.collection('circle_highlights')
+          .find({ status: { $in: ['approved', 'featured', null, undefined] } })
+          .sort(sort).limit(30).toArray().catch(() => []);
+        return NextResponse.json({ ok: true, items });
+      } catch { return NextResponse.json({ ok: true, items: [] }); }
+    }
+    if (path === '/circle/highlights' && method === 'POST') {
+      try {
+        const me = await getUserFromCookie(request);
+        if (!me) return jsonError('unauthorized', 401);
+        const b = await request.json().catch(() => ({}));
+        if (!b.image) return jsonError('image required', 400);
+        const doc = {
+          id: crypto.randomUUID(),
+          userId: me.id, userName: me.name || 'User', userAvatar: me.avatar || '',
+          image: String(b.image).slice(0, 500),
+          tripId: b.tripId || null, location: (b.location || '').slice(0, 100),
+          likes: 0, likedBy: [], status: 'approved',
+          createdAt: new Date(),
+        };
+        await db.collection('circle_highlights').insertOne(doc);
+        return NextResponse.json({ ok: true, highlight: doc });
+      } catch (e) { return jsonError(e.message, 500); }
+    }
+    if (path?.startsWith('/circle/highlights/') && path.endsWith('/like') && method === 'POST') {
+      try {
+        const me = await getUserFromCookie(request);
+        if (!me) return jsonError('unauthorized', 401);
+        const id = path.split('/')[3];
+        const h = await db.collection('circle_highlights').findOne({ id });
+        if (!h) return jsonError('not found', 404);
+        const liked = (h.likedBy || []).includes(me.id);
+        await db.collection('circle_highlights').updateOne(
+          { id },
+          liked ? { $pull: { likedBy: me.id }, $inc: { likes: -1 } }
+                : { $addToSet: { likedBy: me.id }, $inc: { likes: 1 } }
+        );
+        return NextResponse.json({ ok: true, liked: !liked });
+      } catch (e) { return jsonError(e.message, 500); }
+    }
+    if (path === '/circle/leaderboard' && method === 'GET') {
+      try {
+        // Aggregate top users from highlights (likes) + journeys (hosted count).
+        const hostedCounts = await db.collection('circle_journeys')
+          .aggregate([{ $group: { _id: '$curatorId', hosted: { $sum: 1 }, name: { $first: '$curatorName' }, avatar: { $first: '$curatorAvatar' } } }])
+          .toArray().catch(() => []);
+        const likeCounts = await db.collection('circle_highlights')
+          .aggregate([{ $group: { _id: '$userId', likes: { $sum: '$likes' }, name: { $first: '$userName' }, avatar: { $first: '$userAvatar' } } }])
+          .toArray().catch(() => []);
+        const map = new Map();
+        for (const h of hostedCounts) if (h._id) map.set(h._id, { id: h._id, name: h.name, avatar: h.avatar, hosted: h.hosted, likes: 0, trips: h.hosted });
+        for (const l of likeCounts) {
+          if (!l._id) continue;
+          const cur = map.get(l._id) || { id: l._id, name: l.name, avatar: l.avatar, hosted: 0, trips: 0, likes: 0 };
+          cur.likes = l.likes || 0;
+          map.set(l._id, cur);
+        }
+        const ranked = [...map.values()]
+          .map(u => ({ ...u, badge: u.likes >= 4000 ? 'legendary' : u.likes >= 2500 ? 'platinum' : u.likes >= 1200 ? 'gold' : u.likes >= 500 ? 'silver' : 'bronze' }))
+          .sort((a, b) => (b.likes + b.hosted * 100) - (a.likes + a.hosted * 100))
+          .slice(0, 20);
+        return NextResponse.json({ ok: true, users: ranked });
+      } catch { return NextResponse.json({ ok: true, users: [] }); }
+    }
+
+
     if (path === '/circle/journeys/mine' && method === 'GET') {
       if (!me) return err('Sign in required', 401);
       const status = url.searchParams.get('visibility');

@@ -1,12 +1,13 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Heart, MapPin, Home, Crown, TrendingUp } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { BADGES } from '@/lib/explore-v2-data';
+import { fetchLeaderboard } from '@/lib/explore-api';
 
-const LEADERBOARD = [
+const FALLBACK_LB = [
   { id: 'u1', name: 'Amaan Wani', avatar: 'https://i.pravatar.cc/240?img=12', badge: 'legendary', trips: 24, likes: 5820, hosted: 18, city: 'Srinagar' },
   { id: 'u2', name: 'Zoya Rehman', avatar: 'https://i.pravatar.cc/240?img=25', badge: 'platinum', trips: 21, likes: 4310, hosted: 12, city: 'Anantnag' },
   { id: 'u3', name: 'Faisal Bhat', avatar: 'https://i.pravatar.cc/240?img=33', badge: 'platinum', trips: 19, likes: 3980, hosted: 10, city: 'Sonamarg' },
@@ -18,10 +19,21 @@ const LEADERBOARD = [
   { id: 'u9', name: 'Sara Malik', avatar: 'https://i.pravatar.cc/240?img=45', badge: 'bronze', trips: 5, likes: 620, hosted: 1, city: 'Bandipora' },
 ];
 
-const PODIUM_ORDER = [1, 0, 2]; // silver, gold, bronze visual arrangement
+const PODIUM_ORDER = [1, 0, 2];
 
 export default function Leaderboard() {
   const [range, setRange] = useState('month');
+  const [users, setUsers] = useState(FALLBACK_LB);
+
+  useEffect(() => {
+    let alive = true;
+    fetchLeaderboard()
+      .then(list => { if (alive && list.length > 0) setUsers(list.map(u => ({ ...u, avatar: u.avatar || `https://i.pravatar.cc/240?u=${u.id}`, city: u.city || 'India' }))); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [range]);
+
+  const LEADERBOARD = users;
 
   return (
     <Shell>

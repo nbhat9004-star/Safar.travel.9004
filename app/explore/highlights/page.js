@@ -1,14 +1,39 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, Heart } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { HIGHLIGHTS, BADGES } from '@/lib/explore-v2-data';
+import { fetchHighlights, likeHighlight } from '@/lib/explore-api';
 
 export default function Highlights() {
   const [liked, setLiked] = useState({});
-  const toggle = (id) => setLiked(p => ({ ...p, [id]: !p[id] }));
+  const [tab, setTab] = useState('latest');
+  const [items, setItems] = useState(HIGHLIGHTS);
+
+  useEffect(() => {
+    let alive = true;
+    fetchHighlights(tab)
+      .then(list => {
+        if (!alive) return;
+        if (list.length > 0) {
+          setItems(list.map(h => ({
+            id: h.id, img: h.image, user: h.userName || 'Traveler',
+            avatar: h.userAvatar || `https://i.pravatar.cc/60?u=${h.userId}`,
+            trip: h.location || 'Community trip', likes: h.likes || 0,
+            badge: h.likes >= 400 ? 'gold' : h.likes >= 200 ? 'silver' : 'bronze',
+          })));
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [tab]);
+
+  const toggle = (id) => {
+    setLiked(p => ({ ...p, [id]: !p[id] }));
+    likeHighlight(id).catch(() => {});
+  };
 
   return (
     <Shell>
@@ -24,7 +49,7 @@ export default function Highlights() {
 
       <main className="max-w-4xl mx-auto px-4 md:px-8 py-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
-          {HIGHLIGHTS.map((h, i) => {
+          {items.map((h, i) => {
             const isLiked = liked[h.id];
             const count = h.likes + (isLiked ? 1 : 0);
             const badge = BADGES[h.badge];

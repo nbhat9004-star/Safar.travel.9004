@@ -1,8 +1,10 @@
 'use client';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Trophy, Lock, ChevronRight, Sparkles, Gift, Check } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { REWARD_CARDS } from '@/lib/explore-v2-data';
+import { fetchRewards } from '@/lib/explore-api';
 
 const RECENT = [
   { id: 'r1', name: 'Free Camping Tent', icon: '\u26FA', at: 'Kashmir Great Lakes \u00B7 May 2026' },
@@ -11,8 +13,18 @@ const RECENT = [
 ];
 
 export default function Rewards() {
-  const unlocked = REWARD_CARDS.filter(r => r.unlocked);
-  const locked = REWARD_CARDS.filter(r => !r.unlocked);
+  const [cards, setCards] = useState(REWARD_CARDS);
+
+  useEffect(() => {
+    let alive = true;
+    fetchRewards()
+      .then(({ cards: remote }) => { if (alive && remote.length > 0) setCards(remote); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const unlocked = cards.filter(r => r.unlocked);
+  const locked = cards.filter(r => !r.unlocked);
   const progress = Math.round((unlocked.length / 9) * 100);
   const remaining = 9 - unlocked.length;
 
