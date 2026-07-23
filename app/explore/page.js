@@ -185,6 +185,79 @@ export default function ExploreHome() {
           </div>
         </div>
       </section>
+      {/* ============================================================ */}
+      {/* Inspirational Footer — cinematic closing scene (Kashmir)     */}
+      {/* ============================================================ */}
+      <section className="relative w-full min-h-[80vh] md:min-h-[90vh] overflow-hidden mt-8 md:mt-14 rounded-t-[32px] md:rounded-t-[48px]">
+        <Image
+          src={HERO_IMAGES[1]}
+          alt="Kashmir panorama"
+          fill
+          className="object-cover object-center"
+          sizes="100vw"
+          unoptimized
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-950/30" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/70 via-transparent to-transparent" />
+
+        {/* Top-left branding */}
+        <div className="absolute top-6 left-4 md:top-8 md:left-10 z-10 flex items-center gap-2.5">
+          <div className="size-10 md:size-11 rounded-2xl bg-white/15 backdrop-blur-xl border border-white/25 grid place-items-center text-white shadow-lg">
+            <Compass className="size-5" strokeWidth={2.2} />
+          </div>
+          <div className="leading-tight text-white">
+            <div className="font-display font-bold text-[16px] md:text-[18px] tracking-tight drop-shadow">Safar Curated</div>
+            <div className="text-[10.5px] md:text-[11px] text-white/70 -mt-0.5 tracking-widest uppercase">Explore Together</div>
+          </div>
+        </div>
+
+        {/* Center content */}
+        <div className="relative z-10 h-full min-h-[80vh] md:min-h-[90vh] flex items-center">
+          <div className="w-full max-w-6xl mx-auto px-5 md:px-10 py-20 md:py-28">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-white/12 backdrop-blur-xl border border-white/20 px-3 py-1.5 text-white text-[11px] md:text-[12px] font-semibold">
+                <Sparkles className="size-3.5" /> Your next adventure awaits
+              </div>
+              <h2 className="mt-5 md:mt-6 font-display font-bold text-white tracking-tight leading-[1.05] text-[36px] sm:text-[44px] md:text-[64px] lg:text-[76px] drop-shadow-2xl">
+                Every Journey<br/>Begins With<br/><span className="bg-gradient-to-r from-violet-300 to-fuchsia-200 bg-clip-text text-transparent">One Step.</span>
+              </h2>
+              <p className="mt-5 md:mt-7 text-white/85 text-[14.5px] md:text-[18px] leading-relaxed max-w-2xl">
+                Discover hidden valleys, pristine lakes, breathtaking glaciers, and unforgettable adventures with the Safar Curated community.
+              </p>
+              <p className="mt-2 text-white/60 text-[13px] md:text-[15px] italic">Travel together. Create memories. Explore responsibly.</p>
+
+              {/* CTAs */}
+              <div className="mt-7 md:mt-9 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <Link href="/explore/feed" className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-600 hover:from-violet-600 hover:to-fuchsia-700 text-white px-7 md:px-8 py-4 md:py-4 text-[14px] md:text-[15px] font-semibold shadow-2xl shadow-violet-500/40 hover:scale-[1.02] active:scale-95 transition">
+                  Explore Trips <ArrowRight className="size-4" />
+                </Link>
+                <Link href="/explore/create" className="inline-flex items-center justify-center gap-2 rounded-full bg-white/12 backdrop-blur-xl border border-white/25 hover:bg-white/20 text-white px-7 md:px-8 py-4 text-[14px] md:text-[15px] font-semibold active:scale-95 transition">
+                  Create a Trip
+                </Link>
+              </div>
+
+              {/* Trust stats */}
+              <div className="mt-8 md:mt-12 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3 max-w-3xl">
+                {[
+                  { icon: '\u{1F465}', v: '5,000+', l: 'Travelers' },
+                  { icon: '\u{1F3D4}\uFE0F', v: '1,200+', l: 'Trips Created' },
+                  { icon: '\u2B50', v: '4.9', l: 'Community Rating' },
+                  { icon: '\u2714\uFE0F', v: 'Verified', l: 'Local Hosts' },
+                ].map((s, i) => (
+                  <div key={i} className="rounded-2xl bg-white/10 backdrop-blur-xl border border-white/15 p-3 md:p-4 hover:bg-white/15 transition">
+                    <div className="text-[18px] md:text-[22px]">{s.icon}</div>
+                    <div className="mt-1 font-display font-bold text-white text-[16px] md:text-[19px] tracking-tight">{s.v}</div>
+                    <div className="text-[10.5px] md:text-[11.5px] text-white/70">{s.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom fade for bottom-nav clearance */}
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950 to-transparent pointer-events-none" />
+      </section>
     </Shell>
   );
 }
