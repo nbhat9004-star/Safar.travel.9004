@@ -1,16 +1,58 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Sparkles, CheckCircle2, ShieldCheck, Home, Lock, Globe, Link2, QrCode, Trophy } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, ArrowRight, Sparkles, CheckCircle2, ShieldCheck, Home, Lock, Globe, Link2, QrCode, Trophy, Loader2 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { VERIFIED_SERVICES } from '@/lib/explore-v2-data';
+import { createTrip } from '@/lib/explore-api';
+import { toast } from 'sonner';
+
+const THEME_MAP = { self: 'adventure', safar: 'adventure' };
 
 export default function CreateTrip() {
+  const router = useRouter();
   const [mode, setMode] = useState(null);
   const [privacy, setPrivacy] = useState('public');
   const [addedSvc, setAddedSvc] = useState([]);
+  const [publishing, setPublishing] = useState(false);
+  const [title, setTitle] = useState('');
+  const [destination, setDestination] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [description, setDescription] = useState('');
 
   const toggleSvc = (id) => setAddedSvc(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  const handlePublish = async () => {
+    if (!title.trim() || title.trim().length < 3) { toast.error('Trip title must be at least 3 characters'); return; }
+    setPublishing(true);
+    try {
+      const services = mode === 'safar' ? addedSvc.map(id => {
+        const s = VERIFIED_SERVICES.find(x => x.id === id);
+        return { listingId: id, category: s?.id, title: s?.label, price: 0 };
+      }) : [];
+      const payload = {
+        name: title.trim(),
+        description: description.trim(),
+        theme: THEME_MAP[mode] || 'adventure',
+        hostMode: mode,
+        destination: { name: destination.trim() || 'Kashmir', country: 'India' },
+        startDate: startDate || null,
+        endDate: endDate || null,
+        maxMembers: 8,
+        services,
+        visibility: privacy,
+      };
+      const journey = await createTrip(payload);
+      toast.success('Trip published successfully!');
+      router.push(`/explore/trip/${journey.id}`);
+    } catch (e) {
+      toast.error(e.message || 'Could not publish. Please sign in and try again.');
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   return (
     <Shell hideNav={!!mode}>
@@ -76,28 +118,29 @@ export default function CreateTrip() {
 
           <h2 className="mt-3 font-display font-bold text-[22px] md:text-[26px] tracking-tight text-slate-900">Trip Details</h2>
 
+          {/* Detail fields */}
           <div className="mt-4 space-y-4">
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Trip Title</label>
-              <input placeholder="e.g. Kashmir Great Lakes" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px] outline-none focus:border-violet-400" />
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Kashmir Great Lakes" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px] outline-none focus:border-violet-400" />
             </div>
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Destination</label>
-              <input placeholder="Where are you going?" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px] outline-none focus:border-violet-400" />
+              <input value={destination} onChange={e => setDestination(e.target.value)} placeholder="Where are you going?" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px] outline-none focus:border-violet-400" />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[12px] font-semibold text-slate-700">Start Date</label>
-                <input type="date" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px]" />
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px]" />
               </div>
               <div>
                 <label className="text-[12px] font-semibold text-slate-700">End Date</label>
-                <input type="date" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px]" />
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px]" />
               </div>
             </div>
             <div>
               <label className="text-[12px] font-semibold text-slate-700">Description</label>
-              <textarea rows={4} placeholder="Describe your trip..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[14px] outline-none focus:border-violet-400 resize-none" />
+              <textarea rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe your trip..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[14px] outline-none focus:border-violet-400 resize-none" />
             </div>
           </div>
 
@@ -159,7 +202,9 @@ export default function CreateTrip() {
           {/* Publish CTA */}
           <div className="fixed bottom-24 md:bottom-8 inset-x-0 px-4 md:px-8 z-30">
             <div className="max-w-3xl mx-auto">
-              <button className="w-full rounded-2xl bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white font-semibold py-3.5 shadow-2xl shadow-violet-400/30 transition">Publish Trip</button>
+              <button onClick={handlePublish} disabled={publishing} className="w-full rounded-2xl bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white font-semibold py-3.5 shadow-2xl shadow-violet-400/30 transition disabled:opacity-70 inline-flex items-center justify-center gap-2">
+                {publishing && <Loader2 className="size-4 animate-spin" />} Publish Trip
+              </button>
             </div>
           </div>
         </main>

@@ -1,10 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MapPin, Calendar, Users, MoreHorizontal, MessageCircle, Bookmark, Share2, Bell } from 'lucide-react';
+import { MapPin, Calendar, Users, MoreHorizontal, MessageCircle, Bookmark, Share2, Bell, Loader2 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { MORE_TRIPS } from '@/lib/explore-v2-data';
+import { fetchMyTrips } from '@/lib/explore-api';
 
 const TABS = [
   { id: 'upcoming', label: 'Upcoming' },
@@ -31,7 +32,33 @@ const STATUS_STYLE = {
 
 export default function MyTrips() {
   const [tab, setTab] = useState('upcoming');
-  const list = MY_TRIPS.filter(t => tab === 'upcoming' ? ['upcoming','hosting','joined'].includes(t.status) : t.status === tab);
+  const [hosted, setHosted] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetchMyTrips()
+      .then(list => {
+        if (!alive) return;
+        // Tag remote trips with a status derived from dates/visibility
+        const now = Date.now();
+        setHosted(list.map(t => {
+          const start = t.raw?.startDate ? new Date(t.raw.startDate).getTime() : null;
+          const end = t.raw?.endDate ? new Date(t.raw.endDate).getTime() : null;
+          const status = t.raw?.visibility === 'draft' ? 'saved'
+            : end && end < now ? 'completed'
+            : start && start > now ? 'upcoming'
+            : 'hosting';
+          return { ...t, status, countdown: status === 'upcoming' && start ? `in ${Math.max(1, Math.round((start - now) / 86400000))} days` : status };
+        }));
+      })
+      .catch(() => setHosted([]))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const merged = [...hosted, ...MY_TRIPS.filter(t => !hosted.find(h => h.id === t.id))];
+  const list = merged.filter(t => tab === 'upcoming' ? ['upcoming','hosting','joined'].includes(t.status) : t.status === tab);
 
   return (
     <Shell>

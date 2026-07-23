@@ -1,13 +1,53 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
-import { CheckCircle2, XCircle, Clock, MessageCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, MessageCircle, Loader2 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { REQUESTS_RECEIVED, REQUESTS_SENT } from '@/lib/explore-v2-data';
+import { fetchReceivedRequests, decideRequest } from '@/lib/explore-api';
+import { toast } from 'sonner';
 
 export default function Requests() {
   const [tab, setTab] = useState('received');
   const [actioned, setActioned] = useState({});
+  const [pending, setPending] = useState({});
+  const [received, setReceived] = useState(REQUESTS_RECEIVED);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const list = await fetchReceivedRequests();
+      if (list.length > 0) {
+        setReceived(list.map(r => ({
+          id: r.id,
+          journeyId: r.journeyId,
+          name: r.userName || 'Traveler',
+          avatar: r.userAvatar || `https://i.pravatar.cc/80?u=${encodeURIComponent(r.userId || r.id)}`,
+          mutual: r.mutual || 0,
+          when: r.when || 'recently',
+          message: r.message || `Wants to join${r.journeyName ? ' ' + r.journeyName : ''}`,
+          trip: r.journeyName || 'your trip',
+        })));
+      }
+    } catch { /* keep mock */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { if (tab === 'received') load(); }, [tab, load]);
+
+  const act = async (r, action) => {
+    setPending(p => ({ ...p, [r.id]: action }));
+    try {
+      if (r.journeyId) await decideRequest(r.journeyId, r.id, action);
+      setActioned(p => ({ ...p, [r.id]: action }));
+      toast.success(action === 'accept' ? 'Traveler accepted' : 'Request declined');
+    } catch (e) {
+      toast.error(e.message || 'Could not update request');
+    } finally {
+      setPending(p => { const n = { ...p }; delete n[r.id]; return n; });
+    }
+  };
 
   return (
     <Shell>
@@ -17,7 +57,7 @@ export default function Requests() {
           <div className="mt-3 rounded-2xl bg-slate-100/70 p-1 grid grid-cols-2 max-w-sm mx-auto md:mx-0">
             {['received','sent'].map(id => {
               const active = tab === id;
-              const count = id === 'received' ? REQUESTS_RECEIVED.length : REQUESTS_SENT.length;
+              const count = id === 'received' ? received.length : REQUESTS_SENT.length;
               return (
                 <button key={id} onClick={() => setTab(id)} className={`inline-flex items-center justify-center gap-1.5 h-10 rounded-xl text-[13.5px] font-semibold transition-all ${active ? 'bg-violet-600 text-white shadow-lg shadow-violet-200' : 'text-slate-600'}`}>
                   {id === 'received' ? 'Received' : 'Sent'}
@@ -32,8 +72,10 @@ export default function Requests() {
       <main className="max-w-3xl mx-auto px-4 md:px-8 py-5">
         {tab === 'received' && (
           <div className="space-y-3">
-            {REQUESTS_RECEIVED.map(r => {
+            {loading && <div className="py-10 grid place-items-center"><Loader2 className="size-5 animate-spin text-violet-600" /></div>}
+            {!loading && received.map(r => {
               const status = actioned[r.id];
+              const busy = pending[r.id];
               return (
                 <div key={r.id} className="rounded-2xl bg-white border border-slate-100 p-4">
                   <div className="flex items-start gap-3">
@@ -54,8 +96,8 @@ export default function Requests() {
                         </div>
                       ) : (
                         <div className="mt-3 grid grid-cols-2 gap-2">
-                          <button onClick={() => setActioned(p => ({ ...p, [r.id]: 'decline' }))} className="rounded-xl border border-slate-200 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition">Decline</button>
-                          <button onClick={() => setActioned(p => ({ ...p, [r.id]: 'accept' }))} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white py-2 text-[13px] font-semibold active:scale-[0.98] transition">Accept</button>
+                          <button onClick={() => act(r, 'decline')} disabled={!!busy} className="rounded-xl border border-slate-200 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition disabled:opacity-50">{busy === 'decline' ? '\u2026' : 'Decline'}</button>
+                          <button onClick={() => act(r, 'accept')} disabled={!!busy} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white py-2 text-[13px] font-semibold active:scale-[0.98] transition disabled:opacity-70">{busy === 'accept' ? '\u2026' : 'Accept'}</button>
                         </div>
                       )}
                     </div>

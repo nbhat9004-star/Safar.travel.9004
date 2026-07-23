@@ -1,19 +1,35 @@
 'use client';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Search, SlidersHorizontal, Loader2 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import TripCard from '@/components/explore-v2/TripCard';
 import { MORE_TRIPS, CATEGORIES } from '@/lib/explore-v2-data';
+import { fetchTrips } from '@/lib/explore-api';
 
 function FeedInner() {
   const sp = useSearchParams();
   const initial = sp.get('cat') || 'all';
   const [cat, setCat] = useState(initial);
   const [q, setQ] = useState('');
+  const [remote, setRemote] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const trips = MORE_TRIPS.filter(t => (!q || (t.title + ' ' + t.location).toLowerCase().includes(q.toLowerCase())));
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetchTrips({ categorySlug: cat === 'all' ? null : cat, limit: 30 })
+      .then(list => { if (alive) setRemote(list); })
+      .catch(() => { if (alive) setRemote([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [cat]);
+
+  // Merge: prefer live data, top-up with mock so a fresh DB still shows content.
+  const remoteIds = new Set(remote.map(t => t.id));
+  const merged = [...remote, ...MORE_TRIPS.filter(t => !remoteIds.has(t.id))];
+  const trips = merged.filter(t => (!q || (t.title + ' ' + t.location).toLowerCase().includes(q.toLowerCase())));
 
   return (
     <Shell>

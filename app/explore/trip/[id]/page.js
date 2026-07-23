@@ -1,15 +1,39 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Share2, Bookmark, MapPin, Calendar, BadgeCheck, ShieldCheck, ChevronDown, MessageCircle, Users } from 'lucide-react';
+import { ArrowLeft, Share2, Bookmark, MapPin, Calendar, BadgeCheck, ShieldCheck, ChevronDown, MessageCircle, Users, Loader2 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { MORE_TRIPS, FEATURED_TRIPS } from '@/lib/explore-v2-data';
+import { fetchTrip, requestToJoin } from '@/lib/explore-api';
+import { toast } from 'sonner';
 
 export default function TripDetail({ params }) {
   const { id } = params;
-  const trip = [...MORE_TRIPS, ...FEATURED_TRIPS].find(t => t.id === id) || MORE_TRIPS[0];
+  const [trip, setTrip] = useState(() => [...MORE_TRIPS, ...FEATURED_TRIPS].find(t => t.id === id) || MORE_TRIPS[0]);
   const [openDay, setOpenDay] = useState(1);
+  const [joining, setJoining] = useState(false);
+  const [joined, setJoined] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetchTrip(id).then(t => { if (alive && t) setTrip(t); }).catch(() => {});
+    return () => { alive = false; };
+  }, [id]);
+
+  const handleJoin = async () => {
+    if (!trip?.raw) { toast('Demo trip \u2014 sign in to enable Join'); return; }
+    setJoining(true);
+    try {
+      await requestToJoin(trip.id, { seats: 1, message: 'I\u2019d love to join!' });
+      setJoined(true);
+      toast.success('Request sent! The host will review shortly.');
+    } catch (e) {
+      toast.error(e.message || 'Could not send request. Please sign in and try again.');
+    } finally {
+      setJoining(false);
+    }
+  };
 
   const days = [
     { day: 1, title: 'Arrival in Sonamarg, trek to Nichnai' },
@@ -99,7 +123,13 @@ export default function TripDetail({ params }) {
       <div className="fixed bottom-24 md:bottom-8 inset-x-0 z-30 px-4 md:px-8">
         <div className="max-w-3xl mx-auto bg-white/95 backdrop-blur-xl border border-slate-200 rounded-2xl px-3 py-3 shadow-2xl flex items-center gap-2">
           <Link href="/explore/chat/demo" className="size-11 grid place-items-center rounded-xl border border-slate-200 hover:bg-slate-50"><MessageCircle className="size-4" /></Link>
-          <button className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white font-semibold py-3 text-[14px] transition">Request to Join</button>
+          {joined ? (
+            <div className="flex-1 rounded-xl bg-emerald-50 text-emerald-700 font-semibold py-3 text-[14px] text-center inline-flex items-center justify-center gap-2"><BadgeCheck className="size-4" /> Request Sent</div>
+          ) : (
+            <button onClick={handleJoin} disabled={joining} className="flex-1 rounded-xl bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white font-semibold py-3 text-[14px] transition inline-flex items-center justify-center gap-2 disabled:opacity-70">
+              {joining && <Loader2 className="size-4 animate-spin" />} Request to Join
+            </button>
+          )}
         </div>
       </div>
     </Shell>

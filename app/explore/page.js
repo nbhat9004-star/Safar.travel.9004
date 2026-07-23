@@ -1,15 +1,25 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Bell, MapPin, Compass, Lock, Sparkles, Heart, Trophy } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { HERO_IMAGES, FEATURED_TRIPS, CATEGORIES, REWARD_CARDS, HIGHLIGHTS, BADGES } from '@/lib/explore-v2-data';
+import { fetchTrips } from '@/lib/explore-api';
 
 export default function ExploreHome() {
   const [heroIdx] = useState(0);
+  const [featured, setFeatured] = useState(FEATURED_TRIPS);
   const unlockedCount = REWARD_CARDS.filter(r => r.unlocked).length;
   const progress = Math.round((unlockedCount / 9) * 100);
+
+  useEffect(() => {
+    let alive = true;
+    fetchTrips({ limit: 4 })
+      .then(list => { if (alive && list.length > 0) setFeatured(list.slice(0, 4)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   return (
     <Shell>
@@ -69,7 +79,7 @@ export default function ExploreHome() {
           </div>
 
           <div className="mt-5 md:mt-8 grid grid-cols-2 gap-3 md:gap-5">
-            {FEATURED_TRIPS.map((t) => (
+            {featured.map((t) => (
               <Link key={t.id} href={`/explore/trip/${t.id}`} className="group relative rounded-2xl md:rounded-3xl overflow-hidden aspect-[3/4] md:aspect-[4/5] bg-slate-200 active:scale-[0.98] transition">
                 <Image src={t.cover} alt={t.title} fill className="object-cover group-hover:scale-[1.05] transition-transform duration-500" sizes="(max-width: 768px) 50vw, 300px" unoptimized />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/25 to-transparent" />
