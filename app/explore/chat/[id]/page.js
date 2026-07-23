@@ -42,7 +42,7 @@ export default function Chat() {
                   <div key={m.id} className="rounded-2xl border border-violet-200 bg-violet-50 p-3 flex items-start gap-2">
                     <Megaphone className="size-4 text-violet-600 mt-0.5 shrink-0" />
                     <div>
-                      <div className="font-semibold text-[12px] text-violet-900">Trip Announcement \u00B7 {m.name}</div>
+                      <div className="font-semibold text-[12px] text-violet-900">Trip Announcement {'\u00B7'} {m.name}</div>
                       <div className="text-[13px] text-slate-700 mt-0.5">{m.text}</div>
                     </div>
                   </div>
