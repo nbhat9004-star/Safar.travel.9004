@@ -140,6 +140,8 @@ export default function MarketplaceCategoryPage() {
 
   // Search state
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [draftQuery, setDraftQuery] = useState('');
 
   // Toolbar state
   const [sort, setSort] = useState('recommended');
@@ -290,7 +292,21 @@ export default function MarketplaceCategoryPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-emerald-950 via-emerald-950/85 to-emerald-950/10" aria-hidden />
           <div className="absolute inset-0 bg-gradient-to-b from-emerald-950/40 via-transparent to-emerald-950/20" aria-hidden />
 
-          <div className="container relative z-10 pt-3 md:pt-4 pb-6 md:pb-9">
+          {/* Floating search button — replaces the old oversized search bar.
+              Positioned top-right inside the hero. Opens a search modal. */}
+          <button
+            type="button"
+            onClick={() => { setDraftQuery(query); setSearchOpen(true); }}
+            aria-label={`Search ${category.title.toLowerCase()}`}
+            className="absolute top-4 md:top-6 right-4 md:right-6 z-20 grid place-items-center size-14 md:size-14 rounded-full bg-white shadow-[0_10px_28px_-8px_rgba(15,20,25,0.35)] ring-1 ring-black/5 hover:scale-105 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 transition"
+          >
+            <Search className="size-5 md:size-[22px] text-emerald-800" strokeWidth={2.4} />
+            {query && (
+              <span className="absolute -top-0.5 -right-0.5 grid place-items-center size-3.5 rounded-full bg-emerald-700 ring-2 ring-white" aria-hidden />
+            )}
+          </button>
+
+          <div className="container relative z-10 pt-3 md:pt-4 pb-6 md:pb-9 pr-20 md:pr-24">
             {/* Breadcrumb */}
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12.5px] md:text-[13px] text-white/80">
               <Link href="/" className="hover:text-white transition">Home</Link>
@@ -309,33 +325,6 @@ export default function MarketplaceCategoryPage() {
             <p className="mt-2 md:mt-2 text-white/85 text-[13px] md:text-[15px] max-w-xl leading-relaxed">
               Discover and book verified {category.title.toLowerCase()} for a comfortable stay in Kashmir.
             </p>
-          </div>
-
-          {/* Simple, elegant search bar — sits just below the hero */}
-          <div className="container relative -mt-6 md:-mt-7 z-20">
-            <div className="mx-auto w-full max-w-[720px] lg:max-w-[820px]">
-              <div className="flex items-center gap-3 bg-white rounded-full ring-1 ring-slate-100 shadow-[0_14px_36px_-14px_rgba(15,25,20,0.28)] px-5 md:px-6 h-[54px] md:h-[56px] focus-within:ring-2 focus-within:ring-emerald-500/30 transition">
-                <Search className="size-5 text-slate-400 shrink-0" strokeWidth={2.2} />
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                  placeholder="Search hotels, homestays, villas..."
-                  className="flex-1 min-w-0 bg-transparent outline-none text-[14px] md:text-[15px] text-slate-900 placeholder:text-slate-400"
-                  aria-label={`Search ${category.title}`}
-                />
-                {query && (
-                  <button
-                    type="button"
-                    onClick={() => setQuery('')}
-                    aria-label="Clear search"
-                    className="shrink-0 grid place-items-center size-7 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition"
-                  >
-                    <X className="size-4" strokeWidth={2.2} />
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
         </section>
 
@@ -497,12 +486,33 @@ export default function MarketplaceCategoryPage() {
         </div>
       )}
 
+      {/* Search modal — opens from floating hero search icon */}
+      {searchOpen && (
+        <SearchModal
+          category={category}
+          listings={compositeListings}
+          value={draftQuery}
+          onChange={setDraftQuery}
+          onSubmit={(val) => {
+            setQuery(val);
+            setPage(1);
+            setSearchOpen(false);
+          }}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+
       {/* Local styles */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
         .no-scrollbar-mp::-webkit-scrollbar { display: none; }
         .no-scrollbar-mp { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes popIn {
+          0% { opacity: 0; transform: translate(-50%, -8px) scale(0.98); }
+          100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+        }
         input[type="range"].mp-range { -webkit-appearance: none; background: transparent; }
         input[type="range"].mp-range::-webkit-slider-runnable-track {
           height: 4px; background: #e2e8f0; border-radius: 999px;
@@ -531,6 +541,138 @@ export default function MarketplaceCategoryPage() {
 }
 
 // =============================== SUB-COMPONENTS ==============================
+
+function SearchModal({ category, listings = [], value, onChange, onSubmit, onClose }) {
+  // Auto-focus input on open + close with Escape.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const t = setTimeout(() => {
+      const el = document.getElementById('safar-search-modal-input');
+      if (el) el.focus();
+    }, 50);
+    return () => { document.removeEventListener('keydown', onKey); clearTimeout(t); };
+  }, [onClose]);
+
+  const q = (value || '').trim().toLowerCase();
+  const suggestions = useMemo(() => {
+    if (!q) return listings.slice(0, 6);
+    return listings
+      .filter((l) =>
+        (l.title || '').toLowerCase().includes(q) ||
+        (l.location || '').toLowerCase().includes(q) ||
+        (l.city || '').toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [q, listings]);
+
+  const submit = (e) => {
+    if (e) e.preventDefault();
+    onSubmit(value);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="true" aria-label={`Search ${category?.title || 'listings'}`}>
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm animate-[fadeIn_.18s_ease-out]"
+        onClick={onClose}
+      />
+      {/* Panel */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-16 md:top-24 w-[calc(100vw-24px)] max-w-[640px] bg-white rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.35)] ring-1 ring-slate-100 overflow-hidden animate-[popIn_.22s_cubic-bezier(.22,1,.36,1)]">
+        <form onSubmit={submit} className="flex items-center gap-2 px-4 md:px-5 py-3.5 md:py-4 border-b border-slate-100">
+          <Search className="size-5 md:size-[22px] text-emerald-800 shrink-0" strokeWidth={2.4} />
+          <input
+            id="safar-search-modal-input"
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={`Search ${category?.title?.toLowerCase() || 'listings'} by name, location or keyword`}
+            className="flex-1 min-w-0 bg-transparent outline-none text-[15px] md:text-[16px] text-slate-900 placeholder:text-slate-400"
+            aria-label="Search input"
+          />
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange('')}
+              aria-label="Clear"
+              className="shrink-0 grid place-items-center size-8 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition"
+            >
+              <X className="size-4" strokeWidth={2.2} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 hidden sm:inline-flex ml-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+            aria-label="Close search"
+          >
+            Cancel
+          </button>
+        </form>
+
+        {/* Suggestions */}
+        <div className="max-h-[60vh] overflow-y-auto">
+          {suggestions.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <div className="mx-auto grid place-items-center size-12 rounded-2xl bg-slate-50">
+                <Search className="size-5 text-slate-400" strokeWidth={2.2} />
+              </div>
+              <div className="mt-3 text-slate-800 font-semibold text-[14px]">No matches found</div>
+              <div className="mt-1 text-slate-500 text-[12.5px]">
+                Try a different name, location or keyword.
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="px-4 md:px-5 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                {q ? 'Suggestions' : 'Popular in Kashmir'}
+              </div>
+              <ul className="pb-2">
+                {suggestions.map((s, i) => (
+                  <li key={s.id || i}>
+                    <button
+                      type="button"
+                      onClick={() => onSubmit(s.title || value)}
+                      className="w-full flex items-center gap-3 px-4 md:px-5 py-2.5 md:py-3 hover:bg-slate-50 transition text-left"
+                    >
+                      <span className="grid place-items-center size-9 rounded-xl bg-emerald-50 shrink-0">
+                        <MapPin className="size-4 text-emerald-700" strokeWidth={2.2} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-slate-900 font-semibold text-[13.5px] md:text-[14px] truncate">
+                          {s.title}
+                        </span>
+                        <span className="block text-slate-500 text-[11.5px] md:text-[12.5px] truncate">
+                          {s.location || s.city}
+                        </span>
+                      </span>
+                      <ChevronRight className="size-4 text-slate-400 shrink-0" strokeWidth={2.2} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+
+        {/* Footer action (mobile-friendly) */}
+        <div className="px-4 md:px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
+          <span className="hidden md:inline text-[11.5px] text-slate-400">
+            Tip: press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold">Esc</kbd> to close
+          </span>
+          <button
+            type="button"
+            onClick={submit}
+            className="ml-auto inline-flex items-center gap-2 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[13.5px] md:text-[14px] px-5 py-2.5 shadow-sm shadow-emerald-900/25 transition"
+          >
+            <Search className="size-4" strokeWidth={2.4} />
+            Search
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function FiltersPanel({
   priceMin, setPriceMin,

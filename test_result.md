@@ -114,10 +114,100 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Marketplace category listing — UI polish pass: hero height reduced ~40%, tighter section spacing (chips → filters → results), category chips restyled to pill (active = emerald-filled, others = white/border), Filters + Sort by pill controls with equal heights, consolidated results header '128 X in Kashmir' (Kashmir in emerald), premium card hover lift, universal search placeholder. No backend/API/logic changes."
+    - "Marketplace category listing hero — replaced the oversized search bar with a premium floating circular Search button anchored top-right inside the hero. Clicking it opens a beautiful modal that searches listings by name / location / keyword (existing query state). Everything else on the page is untouched."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: MARKETPLACE LISTING — FLOATING SEARCH ICON (July 2026) — 1 credit
+# ---------------------------------------------------------------------------
+module_marketplace_listing_floating_search:
+  - task: "Replace oversized hero search bar with floating circular Search button + Search modal"
+    implemented: true
+    working: "NA"
+    file: "/app/app/marketplace/[slug]/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "1 credit, no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          UI-ONLY CHANGE (single file: /app/app/marketplace/[slug]/page.js).
+
+          REMOVED:
+            - Large white pill search bar that sat below the hero
+              (h-54–56px, rounded-full, max-w-720/820).
+
+          ADDED — Floating circular Search icon inside the hero:
+            - Position: absolute top-4/6 right-4/6 (comfortable padding from
+              top/right edges). Layered above hero image via z-20.
+            - Size: 56px on mobile, 56px on md+ (approx. 56–64px per spec).
+            - Shape: full circle, white background, ring-1 ring-black/5.
+            - Shadow: 0_10px_28px_-8px rgba(15,20,25,0.35) — soft premium drop.
+            - Icon: Lucide Search, emerald-800, strokeWidth 2.4 — visually
+              prominent on white.
+            - Hover: scale-105; active: scale-95; focus-visible ring emerald-500.
+            - Aria-label "Search <category>".
+            - Green dot indicator on the icon when a query is active (subtle).
+            - Hero container padded pr-20/24 so the title never overlaps the
+              button on any width.
+
+          ADDED — Beautiful Search Modal (SearchModal sub-component):
+            - Full-screen overlay with slate-950/55 backdrop + blur-sm.
+            - Centered white card (rounded-3xl, ring-1, deep shadow),
+              max-w 640px, 24px side gutters on mobile.
+            - Auto-focus input on open, Escape closes, click backdrop closes.
+            - Placeholder: "Search <category> by name, location or keyword".
+            - Live suggestions list built from the same in-memory listings
+              (real + demo fallback) — filters on title, location, city.
+            - Empty state with icon + friendly copy.
+            - "Popular in Kashmir" header when input is empty.
+            - Each suggestion row: emerald-50 map-pin square + title +
+              location + chevron; clicking a row applies that title as the
+              query and closes the modal.
+            - Footer: "Esc to close" tip (desktop only) + emerald primary
+              "Search" button that commits the query and closes the modal.
+            - Smooth fade-in / pop-in keyframe animations.
+            - Uses existing `query` state — filtering / grid unchanged.
+
+          UNCHANGED (per user constraint):
+            - Hero background image + dark gradient overlay.
+            - Breadcrumb Home › Marketplace › Stays › <Category>.
+            - Category title + description.
+            - Typography and colours.
+            - Category chips, Filters button, Sort dropdown.
+            - Results header (128 Homestays in Kashmir).
+            - Listing grid (2/3/4 columns), card layout, pagination.
+            - Navigation (Navbar + bottom nav).
+            - Booking flow, /api/listings fetch, /property/[id] links.
+            - Zero backend / API / route / DB changes. Zero new dependencies.
+
+          VERIFICATION:
+            - Lint: zero errors.
+            - Playwright screenshots at 390×844 (mobile) and 1440×900
+              (desktop) on /marketplace/homestays confirm:
+                * Circular Search icon renders top-right of the hero with the
+                  spacing, shape, and shadow from the reference.
+                * Hero background image is now the primary visual — no
+                  competing giant white search box.
+                * Clicking the icon opens the elegant modal centered near the
+                  top with the search input, "Popular in Kashmir" suggestion
+                  list, and green Search button.
+                * Existing chips, filters, sort, results header, grid remain
+                  visually identical.
+                * Bottom mobile navigation is not overlapped.
+
+          Files modified: 1 (marketplace/[slug]/page.js)
+          Files added:    0
+          New deps:       0
+          Backend impact: 0
+
+          NO TESTING AGENT invoked per user constraint.
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: MARKETPLACE LISTING — PREMIUM UI POLISH (July 2026) — 1 credit
