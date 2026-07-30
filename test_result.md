@@ -120,6 +120,100 @@ test_plan:
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE: MARKETPLACE HUB PAGE (July 2026) — 1 credit, no testing agent
+# ---------------------------------------------------------------------------
+module_marketplace_hub:
+  - task: "Fix Marketplace navigation — dedicated /marketplace hub page with 25 service category cards"
+    implemented: true
+    working: "NA"
+    file: "/app/app/marketplace/page.js, /app/components/safar/Navbar.jsx"
+    budget: "1 credit, no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          BUG: Clicking bottom-nav "Marketplace" redirected to /explore (browse
+          page). Users expected a hub of all Safar Curated services.
+
+          FIX (surgical, 2 files):
+            1) NEW /app/app/marketplace/page.js — premium marketplace hub:
+               * Hero band (emerald→teal gradient + Kashmir bg image), title,
+                 search input, live stats chips.
+               * Group filter pills: All / Stays / Tours & Guides / Experiences /
+                 Transport / Shopping.
+               * Responsive grid: 1 col mobile → 2 col tablet → 3-4 col desktop.
+               * 25 category cards — Hotels, Homestays, Houseboats, Villas,
+                 Guest Houses, Resorts, Apartments, Camping, Tour Packages,
+                 Tour Guides, Experiences, Activities, Car Rental, Bike Rental,
+                 Taxi Services, Airport Pickup, Airport Drop, Shikara Rides,
+                 Gondola Tickets, Trekking, Adventure Sports, Photography Tours,
+                 Local Food Experiences, Event Spaces, Travel Essentials.
+               * Each card: featured image, premium gradient icon badge,
+                 listings count pill, group tag, title, description, "Explore"
+                 CTA with animated arrow.
+               * Hover animations (lift + scale image + gradient overlay).
+               * Click animation (active:scale).
+               * Search filters cards by title/description/group.
+               * Bottom CTA band: Build My Trip / Ask AI Planner deep-links.
+               * Uses existing Navbar + Footer for brand consistency.
+
+            2) UPDATED /app/components/safar/Navbar.jsx (single-line edit,
+               BOTTOM_NAV_ITEMS): Marketplace href changed from `/explore`
+               to `/marketplace`. Match rule now p.startsWith('/marketplace').
+
+          NAVIGATION MAPPING (category → existing listings page):
+            Hotels          → /explore?cat=stay&sub=hotel
+            Homestays       → /explore?cat=stay&sub=homestay
+            Houseboats      → /explore?cat=stay&sub=houseboat
+            Villas          → /explore?cat=stay&sub=villa
+            Guest Houses    → /explore?cat=stay&sub=guesthouse
+            Resorts         → /explore?cat=stay&sub=resort
+            Apartments      → /explore?cat=stay&sub=apartment
+            Camping         → /explore?cat=stay&sub=camp
+            Tour Packages   → /explore?cat=tour
+            Tour Guides     → /explore?cat=tour&sub=guide
+            Experiences     → /explore?cat=experience
+            Activities      → /explore?cat=experience&sub=activity
+            Shikara Rides   → /explore?cat=experience&sub=shikara
+            Gondola Tickets → /explore?cat=experience&sub=gondola
+            Trekking        → /explore?cat=experience&sub=trekking
+            Adventure Sports→ /explore?cat=experience&sub=adventure
+            Photography     → /explore?cat=experience&sub=photography
+            Food            → /explore?cat=experience&sub=food
+            Event Spaces    → /explore?cat=experience&sub=events
+            Car Rental      → /explore?cat=transport&sub=car
+            Bike Rental     → /explore?cat=transport&sub=bike
+            Taxi            → /explore?cat=transport&sub=taxi
+            Airport Pickup  → /explore?cat=transport&sub=airport_pickup
+            Airport Drop    → /explore?cat=transport&sub=airport_drop
+            Travel Essentials→ /explore?cat=shopping
+
+          UNTOUCHED (per user constraint):
+            - /explore listings page (unchanged)
+            - /build-trip (unchanged)
+            - /ai-planner (unchanged)
+            - Booking flow (unchanged)
+            - Backend APIs (zero changes)
+            - No new routing libraries
+            - No new dependencies
+
+          VERIFICATION:
+            - Lint: ✅ zero errors
+            - Playwright desktop 1440×900: hero + grid render correctly
+            - Playwright mobile 390×844: responsive layout OK, bottom nav
+              "Marketplace" tab points to /marketplace
+            - Hotels card href verified as /explore?cat=stay&sub=hotel
+            - No testing agent used per user instruction.
+
+          Files modified: 1 (Navbar.jsx — single line)
+          Files added:    1 (marketplace/page.js)
+          New deps:       0
+          UI redesign:    none outside the new page
+    stuck_count: 0
+
+
+
+# ---------------------------------------------------------------------------
 # MODULE: AI AGENT MANAGER (July 2026) — Super Admin only, 5-credit budget
 # ---------------------------------------------------------------------------
 module_ai_agents:

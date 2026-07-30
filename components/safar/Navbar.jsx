@@ -302,7 +302,7 @@ export default function Navbar({ transparent = false }) {
   const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
   const BOTTOM_NAV_ITEMS = [
     { href: '/build-trip',   label: 'Build Trip',   icon: Sparkles, match: (p) => p.startsWith('/build-trip') },
-    { href: '/explore',      label: 'Marketplace',  icon: Store,    match: (p) => p === '/explore' || (p.startsWith('/explore') && !p.startsWith('/explore/')) },
+    { href: '/marketplace',  label: 'Marketplace',  icon: Store,    match: (p) => p.startsWith('/marketplace') },
     { href: '/ai-planner',   label: 'AI Planner',   icon: Wand2,    match: (p) => p.startsWith('/ai-planner') },
     { href: '/add-listing',  label: 'Become Host',  icon: Home,     match: (p) => p.startsWith('/add-listing') },
     { href: '/explore/home', label: 'Explore',      icon: Compass,  match: (p) => p.startsWith('/explore/') },
