@@ -114,10 +114,115 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Marketplace category listing page — simplified search area: removed Check-in / Check-out / Guests / large Search button; replaced with ONE elegant pill-shaped search bar (Search hotels... / Search homestays... etc placeholder based on category). Category chips moved up. Hero, breadcrumb, title, subtitle, chips, filters, sort, grid all preserved. No backend/API changes."
+    - "Marketplace category listing — UI polish pass: hero height reduced ~40%, tighter section spacing (chips → filters → results), category chips restyled to pill (active = emerald-filled, others = white/border), Filters + Sort by pill controls with equal heights, consolidated results header '128 X in Kashmir' (Kashmir in emerald), premium card hover lift, universal search placeholder. No backend/API/logic changes."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: MARKETPLACE LISTING — PREMIUM UI POLISH (July 2026) — 1 credit
+# ---------------------------------------------------------------------------
+module_marketplace_listing_ui_polish:
+  - task: "Category listing page premium polish — reduced hero, tighter spacing, restyled chips, consolidated results header"
+    implemented: true
+    working: "NA"
+    file: "/app/app/marketplace/[slug]/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "1 credit, no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          UI-ONLY POLISH (single file: /app/app/marketplace/[slug]/page.js)
+
+          HERO — reduced height ~40%:
+            - Vertical padding: pt-4/6 pb-12/16 → pt-3/4 pb-6/9.
+            - Title size: text-[34px]/44px/52px/56px → text-[26px]/32px/38px/42px
+              (still bold, still elegant; per user "do not increase text sizes",
+              downsizing is allowed and requested to feel less dominating).
+            - Title top margin mt-5/7 → mt-3/4. Subtitle mt-3/4 → mt-2/2 and
+              text-[14px]/16.5px → text-[13px]/15px (proportional to title).
+            - Kept: background image, dark gradient overlay, breadcrumb,
+              title copy, description copy.
+
+          SEARCH BAR — premium single input, immediately below hero:
+            - Height 54–56px, rounded-full, white bg, soft ring + shadow.
+            - Placeholder set to universal "Search hotels, homestays, villas..."
+              (was category-specific per-slug).
+            - Search icon left, clear (X) button appears when value present.
+            - Centered max-w 720 (md) / 820 (lg+); full-width on mobile with
+              container margins.
+
+          CATEGORY CHIPS — restyled per spec:
+            - Section top margin mt-6/8 → mt-4/5 (tighter).
+            - Pill shape: rounded-full (was rounded-2xl).
+            - Active state = SAFAR GREEN filled: bg-emerald-700 border-emerald-700
+              text-white with subtle shadow (was pale bg-emerald-50 outline).
+            - Inactive = white with slate-200 border, subtle hover.
+            - Smaller vertical padding (py-2/2.5) for a lighter feel.
+
+          FILTERS + SORT — compact pill controls:
+            - Section top mt-5/6 → mt-3/4.
+            - Both controls now h-10 md:h-11 and rounded-full (equal height,
+              equal shape) for elegant alignment.
+            - Both have shadow-sm for consistency.
+            - Sort label copy: "Sort: Recommended" → "Sort by: Recommended"
+              (per user's Filters row spec).
+            - Active-filter badge switched to emerald-700 for palette consistency.
+
+          RESULTS HEADER — consolidated to single line:
+            - Was: two-column "128 Hotels found" + "Showing results in Kashmir ▼".
+            - Now: h2 "128 <Category> in <span class=emerald-800>Kashmir</span>"
+              on one line, minimal top margin (mt-3/4), font-display extrabold.
+            - Removed the location-picker chevron affordance (not needed here —
+              location context is already in the breadcrumb and header).
+
+          LISTING GRID:
+            - Top margin tightened mt-4/5 → mt-3/4.
+            - Grid unchanged: 2 mobile / 3 tablet / 4 desktop.
+            - Card hover animation upgraded: translate-y-0.5 → -translate-y-1,
+              shadow deepened (0_14px → 0_20px_44px_-16px), ring-slate-200 on
+              hover. Smoother ease-out transition. Desktop feels premium.
+            - Card badges (Popular/Best Seller/New), wishlist, rating pill,
+              amenities row, "From ₹X / night" + "View Details" all preserved.
+
+          PRESERVED (zero-change zones):
+            - Existing Safar Navbar + bottom nav.
+            - /api/listings fetch, /property/[id] detail links.
+            - Filter/sort/pagination LOGIC (only visual styling touched).
+            - Wishlist behaviour (client-side toggle placeholder).
+            - Pagination, empty state, loading skeletons.
+            - Booking flow, auth, MongoDB, category taxonomy — all untouched.
+
+          VERIFICATION:
+            - Lint: zero errors.
+            - Playwright screenshots at 1440×900 (desktop), 820×1180 (tablet),
+              390×844 (mobile) on /marketplace/homestays confirm:
+                * Hero is short and elegant (fits in <260px on desktop above
+                  the search bar).
+                * Users immediately see the search bar, chips, filters,
+                  results header, and 2/3/4 cards in the first fold.
+                * Active "Homestays" chip renders as emerald-filled pill with
+                  white text.
+                * Filters and Sort by controls are the same height, pill-shaped,
+                  aligned across viewports.
+                * "128 Homestays in Kashmir" header renders with emerald
+                  "Kashmir".
+                * Card grid is 2/3/4 with premium hover lift on desktop.
+                * Bottom navigation on mobile is not overlapped.
+            - Preview MongoDB is not connected → /api/listings 500 (documented
+              pre-existing infra). Demo fallback still renders the design.
+
+          Files modified: 1 (marketplace/[slug]/page.js)
+          Files added:    0
+          New deps:       0
+          Backend impact: 0
+
+          NO TESTING AGENT invoked per user constraint.
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: MARKETPLACE LISTING — SIMPLIFIED SEARCH (July 2026) — 1 credit

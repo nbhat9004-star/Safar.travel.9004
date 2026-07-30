@@ -290,7 +290,7 @@ export default function MarketplaceCategoryPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-emerald-950 via-emerald-950/85 to-emerald-950/10" aria-hidden />
           <div className="absolute inset-0 bg-gradient-to-b from-emerald-950/40 via-transparent to-emerald-950/20" aria-hidden />
 
-          <div className="container relative z-10 pt-4 md:pt-6 pb-12 md:pb-16">
+          <div className="container relative z-10 pt-3 md:pt-4 pb-6 md:pb-9">
             {/* Breadcrumb */}
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12.5px] md:text-[13px] text-white/80">
               <Link href="/" className="hover:text-white transition">Home</Link>
@@ -302,25 +302,25 @@ export default function MarketplaceCategoryPage() {
               <span className="text-white font-semibold">{category.title}</span>
             </nav>
 
-            {/* Title */}
-            <h1 className="mt-5 md:mt-7 font-display font-extrabold text-white tracking-tight leading-[1.03] text-[34px] sm:text-[44px] md:text-[52px] lg:text-[56px]">
+            {/* Title — sized to feel elegant, not dominating */}
+            <h1 className="mt-3 md:mt-4 font-display font-extrabold text-white tracking-tight leading-[1.03] text-[26px] sm:text-[32px] md:text-[38px] lg:text-[42px]">
               {category.title} in Kashmir
             </h1>
-            <p className="mt-3 md:mt-4 text-white/85 text-[14px] md:text-[16.5px] max-w-xl leading-relaxed">
+            <p className="mt-2 md:mt-2 text-white/85 text-[13px] md:text-[15px] max-w-xl leading-relaxed">
               Discover and book verified {category.title.toLowerCase()} for a comfortable stay in Kashmir.
             </p>
           </div>
 
-          {/* Simple, elegant search bar — replaces the multi-field booking form */}
-          <div className="container relative -mt-7 md:-mt-8 z-20">
+          {/* Simple, elegant search bar — sits just below the hero */}
+          <div className="container relative -mt-6 md:-mt-7 z-20">
             <div className="mx-auto w-full max-w-[720px] lg:max-w-[820px]">
-              <div className="flex items-center gap-3 bg-white rounded-full ring-1 ring-slate-100 shadow-[0_14px_36px_-14px_rgba(15,25,20,0.28)] px-5 md:px-6 h-[52px] md:h-[56px] focus-within:ring-2 focus-within:ring-emerald-500/30 transition">
+              <div className="flex items-center gap-3 bg-white rounded-full ring-1 ring-slate-100 shadow-[0_14px_36px_-14px_rgba(15,25,20,0.28)] px-5 md:px-6 h-[54px] md:h-[56px] focus-within:ring-2 focus-within:ring-emerald-500/30 transition">
                 <Search className="size-5 text-slate-400 shrink-0" strokeWidth={2.2} />
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                  placeholder={`Search ${category.title.toLowerCase()}...`}
+                  placeholder="Search hotels, homestays, villas..."
                   className="flex-1 min-w-0 bg-transparent outline-none text-[14px] md:text-[15px] text-slate-900 placeholder:text-slate-400"
                   aria-label={`Search ${category.title}`}
                 />
@@ -340,7 +340,7 @@ export default function MarketplaceCategoryPage() {
         </section>
 
         {/* ============================ CATEGORY CHIPS ==================== */}
-        <section className="container mt-6 md:mt-8">
+        <section className="container mt-4 md:mt-5">
           <div className="flex items-center gap-2.5 md:gap-3 overflow-x-auto no-scrollbar-mp -mx-4 px-4 md:mx-0 md:px-0">
             {chips.map((c) => {
               const isActive = c.slug === category.slug;
@@ -349,13 +349,13 @@ export default function MarketplaceCategoryPage() {
                 <Link
                   key={c.slug}
                   href={`/marketplace/${c.slug}`}
-                  className={`shrink-0 inline-flex items-center gap-2 md:gap-2.5 px-4 md:px-5 py-2.5 md:py-3 rounded-2xl md:rounded-[14px] border transition text-[13px] md:text-[14px] font-semibold ${
+                  className={`shrink-0 inline-flex items-center gap-2 md:gap-2.5 px-4 md:px-5 py-2 md:py-2.5 rounded-full border transition text-[13px] md:text-[13.5px] font-semibold ${
                     isActive
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800 shadow-sm'
+                      ? 'bg-emerald-700 border-emerald-700 text-white shadow-sm shadow-emerald-900/20'
                       : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:text-slate-900'
                   }`}
                 >
-                  <Icon className="size-4 md:size-[18px]" strokeWidth={2.2} />
+                  <Icon className="size-4 md:size-[17px]" strokeWidth={2.2} />
                   {c.title}
                 </Link>
               );
@@ -363,9 +363,9 @@ export default function MarketplaceCategoryPage() {
             {showMoreChip && (
               <Link
                 href="/marketplace"
-                className="shrink-0 inline-flex items-center gap-2 md:gap-2.5 px-4 md:px-5 py-2.5 md:py-3 rounded-2xl md:rounded-[14px] border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900 transition text-[13px] md:text-[14px] font-semibold"
+                className="shrink-0 inline-flex items-center gap-2 md:gap-2.5 px-4 md:px-5 py-2 md:py-2.5 rounded-full border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900 transition text-[13px] md:text-[13.5px] font-semibold"
               >
-                <LayoutGrid className="size-4 md:size-[18px]" strokeWidth={2.2} />
+                <LayoutGrid className="size-4 md:size-[17px]" strokeWidth={2.2} />
                 More
               </Link>
             )}
@@ -373,16 +373,16 @@ export default function MarketplaceCategoryPage() {
         </section>
 
         {/* ============================ FILTER + SORT BAR ================== */}
-        <section className="container mt-5 md:mt-6">
+        <section className="container mt-3 md:mt-4">
           <div className="flex items-center justify-between gap-3">
             <button
               onClick={() => setMobileFiltersOpen(true)}
-              className="inline-flex items-center gap-2 md:gap-2.5 rounded-2xl md:rounded-[14px] bg-white border border-slate-200 hover:border-slate-300 text-slate-800 font-semibold text-[13.5px] md:text-[14px] px-4 md:px-5 py-2.5 md:py-3 transition"
+              className="inline-flex items-center gap-2 md:gap-2.5 h-10 md:h-11 rounded-full bg-white border border-slate-200 hover:border-slate-300 text-slate-800 font-semibold text-[13.5px] md:text-[14px] px-4 md:px-5 transition shadow-sm"
             >
-              <SlidersHorizontal className="size-4 md:size-[18px]" strokeWidth={2.2} />
+              <SlidersHorizontal className="size-4 md:size-[17px]" strokeWidth={2.2} />
               Filters
               {activeFilterCount > 0 && (
-                <span className="inline-grid place-items-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-emerald-800 text-white text-[11px] font-bold">
+                <span className="inline-grid place-items-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-emerald-700 text-white text-[11px] font-bold">
                   {activeFilterCount}
                 </span>
               )}
@@ -392,14 +392,14 @@ export default function MarketplaceCategoryPage() {
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value)}
-                className="appearance-none bg-white border border-slate-200 hover:border-slate-300 rounded-2xl md:rounded-[14px] pl-4 md:pl-5 pr-9 md:pr-10 py-2.5 md:py-3 text-[13.5px] md:text-[14px] font-semibold text-slate-800 cursor-pointer transition"
+                className="appearance-none h-10 md:h-11 bg-white border border-slate-200 hover:border-slate-300 rounded-full pl-4 md:pl-5 pr-9 md:pr-10 text-[13.5px] md:text-[14px] font-semibold text-slate-800 cursor-pointer transition shadow-sm"
                 aria-label="Sort listings"
               >
-                <option value="recommended">Sort: Recommended</option>
-                <option value="newest">Sort: Newest</option>
-                <option value="price_asc">Sort: Price ↑</option>
-                <option value="price_desc">Sort: Price ↓</option>
-                <option value="rating_desc">Sort: Highest Rated</option>
+                <option value="recommended">Sort by: Recommended</option>
+                <option value="newest">Sort by: Newest</option>
+                <option value="price_asc">Sort by: Price ↑</option>
+                <option value="price_desc">Sort by: Price ↓</option>
+                <option value="rating_desc">Sort by: Highest Rated</option>
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
             </div>
@@ -407,24 +407,14 @@ export default function MarketplaceCategoryPage() {
         </section>
 
         {/* ============================ RESULTS HEADER ==================== */}
-        <section className="container mt-4 md:mt-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[15px] md:text-[17px] font-semibold text-slate-800">
-              {foundCount} {category.title} found
-            </div>
-            <div className="text-[13px] md:text-[14px] text-slate-500 flex items-center gap-1.5">
-              <span className="hidden sm:inline">Showing results in</span>
-              <span className="sm:hidden">In</span>
-              <span className="inline-flex items-center gap-1 text-emerald-800 font-semibold">
-                Kashmir
-                <ChevronDown className="size-3.5" strokeWidth={2.4} />
-              </span>
-            </div>
-          </div>
+        <section className="container mt-3 md:mt-4">
+          <h2 className="font-display font-extrabold text-slate-900 text-[16px] md:text-[19px] tracking-tight">
+            {foundCount} {category.title} in <span className="text-emerald-800">Kashmir</span>
+          </h2>
         </section>
 
         {/* ============================ LISTING GRID ====================== */}
-        <section className="container mt-4 md:mt-5">
+        <section className="container mt-3 md:mt-4">
           {loading ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -640,7 +630,7 @@ function ListingCard({ listing, fallbackIndex = 0, category }) {
   const detailsHref = listing._demo ? '#' : `/property/${listing.id}`;
 
   return (
-    <div className="group h-full flex flex-col bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(15,20,25,0.08)] hover:shadow-[0_14px_36px_-14px_rgba(15,20,25,0.22)] ring-1 ring-slate-100 overflow-hidden transition-all duration-300 hover:-translate-y-0.5">
+    <div className="group h-full flex flex-col bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(15,20,25,0.08)] hover:shadow-[0_20px_44px_-16px_rgba(15,20,25,0.28)] ring-1 ring-slate-100 hover:ring-slate-200/80 overflow-hidden transition-all duration-300 ease-out hover:-translate-y-1">
       {/* Image */}
       <Link href={detailsHref} className="relative block overflow-hidden">
         <div className="relative aspect-[4/3] bg-slate-100">
