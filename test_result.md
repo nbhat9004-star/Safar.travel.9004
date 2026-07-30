@@ -114,10 +114,116 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Explore Profile page (/explore/me) — pixel-close recreation of the approved mobile design (cover hero + back/share/more icons, floating circular avatar with green verified check, name + purple verified badge, location + bio, single 4-column stats card with colored icons, underline tabs Trips/Rewards/Badges, premium trip cards with Verified by Safar pill + date pill + host row + category pill + joined counter + emerald Request to Join CTA + bookmark). Zero backend/API/routing changes."
+    - "Marketplace hub page (/marketplace) — pixel-close recreation of the approved reference image: Kashmir Dal Lake hero + Explore Kashmir title + subtitle + floating dark-green circular Search button, Browse Categories (5×2 grid of 10 tiles with pastel icons + counts) with View all, Featured Stays with horizontal rail on desktop + 2-col grid on mobile (cards with Popular/Best Seller/New badge, wishlist, rating pill, title, location). Zero backend/API/routing changes."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: MARKETPLACE HUB PAGE REDESIGN (July 2026) — 1 credit
+# ---------------------------------------------------------------------------
+module_marketplace_hub_redesign:
+  - task: "Marketplace hub redesign — recreate reference image exactly"
+    implemented: true
+    working: "NA"
+    file: "/app/app/marketplace/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "1 credit, no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          FULL UI REWRITE of /app/app/marketplace/page.js (single file). Zero
+          backend / API / routing changes. IMAGE was the source of truth per
+          user directive (their text prompt included sections the image did
+          not, and vice-versa — image wins).
+
+          SECTIONS (top → bottom, matching the reference image):
+            1. Existing Safar Navbar (unchanged).
+            2. HERO — 220 mobile / 260 sm / 300 md / 340 lg px height. Kashmir
+               Dal Lake houseboats background image (object-cover). Dark
+               left-to-right gradient (slate-950/70 → /25) + subtle top/bottom
+               gradient for text legibility. Copy left-aligned:
+                 - "Explore Kashmir" (extrabold 32/40/46/52).
+                 - "Hotels, homestays, houseboats,\ntransport & experiences."
+                   (white/90).
+               Floating circular Search button bottom-right — 64 mobile /
+               76 md / 84 lg — bg #0E6B4E (primary green per user's spec),
+               2px white ring, deep drop shadow, hover scale, focus ring.
+               Smooth-scrolls to Browse Categories on click.
+            3. BROWSE CATEGORIES:
+               - Header: extrabold heading + emerald "View all" link with
+                 chevron (scrolls to full category list).
+               - 5 × 2 grid at lg (10 tiles). Responsive: 2 mobile / 3 sm /
+                 4 md / 5 lg columns.
+               - Tiles curated to match reference exactly:
+                 Hotels (128 stays) · Homestays (342 stays) · Houseboats (56
+                 stays) · Cars (120 vehicles) · Bikes (85 bikes) · Guides
+                 (64 guides) · Airport Pickup (48 services) · Gondola Tickets
+                 (22 options) · Experiences (96 experiences) · Food & Dining
+                 (75 places).
+               - Each tile: white rounded-[20px] card, ring-1 slate-100,
+                 soft shadow, hover lift (-translate-y-1) + deeper shadow;
+                 56–60px pastel-tinted icon square (emerald / sky / amber /
+                 violet / rose per reference), lucide icons, extrabold title,
+                 small slate count.
+               - Link href routes to /marketplace/<slug> (existing detail
+                 pages) — guarded with tileHref() so a missing slug falls
+                 back to /marketplace.
+               - "Show all 26 categories" expandable panel reveals the
+                 remaining MARKETPLACE_CATEGORIES so nothing is lost.
+            4. FEATURED STAYS:
+               - Header: extrabold heading + emerald "View all" link (→
+                 /marketplace/hotels).
+               - Mobile: 2-column grid (per user's explicit spec) with the
+                 first 4 stays.
+               - Tablet/desktop: horizontal snap-scroll rail with prev/next
+                 arrow buttons (top-right). 300/340/380px card widths.
+               - Card: aspect-16/11 image, top-left badge (Popular =
+                 emerald-800 white, Best Seller = amber-400 dark, New =
+                 emerald-700 white), top-right white heart button (toggles
+                 liked), bottom-left dark emerald rating pill with amber
+                 star, title (extrabold), location with pin. Hover lift +
+                 image zoom.
+
+          REMOVED (per image — not present):
+            - Amber gradient hero backdrop.
+            - "SAFAR CURATED MARKETPLACE" pre-title label.
+            - "Everything Kashmir, one curated marketplace." heading.
+            - Search bar + filter button.
+            - Trust strip / 2×2 trust card.
+            - AI CTA band.
+
+          PRESERVED:
+            - /marketplace/<slug> deep links via MARKETPLACE_CATEGORIES.
+            - Existing Navbar + bottom nav (Build Trip / Marketplace / AI
+              Planner / Become Host / Explore).
+            - Footer.
+            - Zero new dependencies. Zero backend calls. No new state.
+
+          RESPONSIVE:
+            - Mobile 390: hero 220px, 2-col categories, 2-col featured stays
+              grid, bottom nav intact.
+            - Tablet 820: 3–4 col categories, horizontal featured rail.
+            - Desktop 1440: 5-col categories, horizontal featured rail with
+              arrow controls.
+
+          VERIFICATION:
+            - Lint: zero errors.
+            - Playwright screenshots at 390×844 (mobile) and 1440×900
+              (desktop) confirm hero, categories grid, and Featured Stays
+              rail all render pixel-close to the reference image.
+
+          Files modified: 1 (app/marketplace/page.js)
+          Files added:    0
+          New deps:       0
+          Backend impact: 0
+
+          NO TESTING AGENT invoked per user constraint.
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: EXPLORE PROFILE PAGE REDESIGN (July 2026) — 1 credit
