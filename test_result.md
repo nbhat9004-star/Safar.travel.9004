@@ -123,11 +123,59 @@ test_plan:
 # MODULE: MARKETPLACE HUB PAGE (July 2026) — 1 credit, no testing agent
 # ---------------------------------------------------------------------------
 module_marketplace_hub:
-  - task: "Fix Marketplace navigation — dedicated /marketplace hub page with 25 service category cards"
+  - task: "Redesign Marketplace page to match approved reference mockup (premium, elegant, responsive)"
     implemented: true
     working: "NA"
-    file: "/app/app/marketplace/page.js, /app/components/safar/Navbar.jsx"
-    budget: "1 credit, no testing agent"
+    file: "/app/app/marketplace/page.js"
+    budget: "1 credit (redesign only), no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          FULLY REDESIGNED /marketplace to match the approved mockup:
+            • Hero: peach→amber gradient with masked Kashmir houseboat photo on
+              the right; small amber "SAFAR CURATED MARKETPLACE" eyebrow;
+              extra-bold black headline with "one curated marketplace." in
+              emerald green; subtitle; large white search field + dark green
+              filter button.
+            • Trust strip card floating over hero: Verified · Best Price ·
+              24/7 Support · Loved by Travelers, each with pastel icon square.
+            • Browse by Category: 9 large white rounded tiles matching the
+              mockup exactly — Stays (emerald building), Guides & Tours (violet
+              person), Transport (orange car), Activities (sky mountain),
+              Airport Services (teal plane), Experiences (rose camera),
+              Tickets & Passes (amber gondola), Essentials (purple store),
+              All Categories (slate grid). Each has centered icon square,
+              bold title, 2-line description and a soft chevron pill.
+            • Because the mockup groups categories, an additional All Services
+              section is rendered below (anchored from the "All Categories"
+              tile) to preserve every single one of the 25 existing categories
+              — nothing renamed, merged or hidden.
+            • Search filters the All Services grid in real time.
+            • Bottom AI CTA band: dark emerald-950 panel with amber sparkles
+              and a white "Plan My Trip" pill (→ /ai-planner).
+            • Standard Safar Navbar + Footer preserved.
+            • Fully responsive: 2-col mobile, 3-col tablet, 3-col desktop tiles;
+              hero image opacity reduced on mobile for text legibility, full
+              opacity on sm+.
+
+          UNTOUCHED (per user directive):
+            - No other page modified.
+            - No backend / API changes.
+            - No new dependencies.
+            - Every marketplace category preserved.
+
+          VERIFIED:
+            - Lint: zero errors.
+            - Playwright screenshots at 390×844 (mobile), 820×1180 (tablet),
+              1440×900 (desktop) all render as intended.
+            - Hotels tile still routes to /explore?cat=stay&sub=hotel; all
+              9 groups + 25 subcategory chips route to correct /explore?cat=
+              URLs. Booking flow untouched.
+
+          Files modified: 1  (marketplace/page.js — full rewrite)
+          Files added:    0
+          New deps:       0
     status_history:
       - working: "NA"
         agent: "main"
