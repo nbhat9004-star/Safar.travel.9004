@@ -114,10 +114,118 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Marketplace category listing hero — replaced the oversized search bar with a premium floating circular Search button anchored top-right inside the hero. Clicking it opens a beautiful modal that searches listings by name / location / keyword (existing query state). Everything else on the page is untouched."
+    - "Explore Profile page (/explore/me) — pixel-close recreation of the approved mobile design (cover hero + back/share/more icons, floating circular avatar with green verified check, name + purple verified badge, location + bio, single 4-column stats card with colored icons, underline tabs Trips/Rewards/Badges, premium trip cards with Verified by Safar pill + date pill + host row + category pill + joined counter + emerald Request to Join CTA + bookmark). Zero backend/API/routing changes."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: EXPLORE PROFILE PAGE REDESIGN (July 2026) — 1 credit
+# ---------------------------------------------------------------------------
+module_explore_profile_redesign:
+  - task: "Explore Profile page redesign — match reference design exactly"
+    implemented: true
+    working: "NA"
+    file: "/app/app/explore/me/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "1 credit, no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          FULL UI REWRITE of /app/app/explore/me/page.js (single file). Zero
+          backend / API / routing / state-shape changes.
+
+          HERO COVER:
+            - Full-width mountain photo, height 240 mobile / 280 sm / 320 md /
+              340 lg. Soft bottom-fade for elegant avatar overlap.
+            - Top-left: 44px white circular Back button (ArrowLeft icon,
+              slate-800), routes to previous page (or /explore).
+            - Top-right: 44px white circular Share (Share2) + More
+              (MoreHorizontal) buttons with soft shadow + ring-1 ring-black/5.
+
+          PROFILE BLOCK:
+            - Circular avatar 128–140px, ring-[5px] ring-white, deep soft
+              shadow. Green verified check pip (emerald-600, ring-white)
+              anchored bottom-right of avatar.
+            - Name "Shahnawaz" font-display extrabold + violet BadgeCheck.
+            - Location row: slate pin icon + "Srinagar, Jammu & Kashmir".
+            - Bio: "Explorer at heart, host by choice. Sharing incredible
+              places and experiences."
+            - Layout: column on mobile (avatar floats over hero), row on md+
+              (avatar left, text right).
+
+          STATS CARD — one 22px-radius white card with soft shadow,
+            ring-1 ring-slate-100, 4 equal columns divided by vertical
+            slate-100 rules:
+              1) briefcase (emerald tint)  · 12  · Hosted · Trips
+              2) users (violet tint)       · 8   · Joined · Trips
+              3) gift (amber tint)         · 3/9 · Rewards · Level
+              4) star (sky tint)           · 4.9 · Rating (green star inline) · (128 Reviews)
+
+          TABS (underline pill style):
+            - Grid of 3 buttons — Trips / Rewards (gift icon) / Badges (shield).
+            - Active tab: emerald-700 text + 3px emerald-600 underline pill
+              (width 40px) anchored to bottom border.
+            - Inactive: slate-500 hover slate-700, no underline.
+
+          TRIP CARDS (ProfileTripCard):
+            - White card, rounded-[22px], ring-1 ring-slate-100, soft shadow.
+            - Image 16:10 aspect. Group hover: card lifts (-translate-y-0.5),
+              image zooms 1.04, shadow deepens.
+            - Top-left badge: emerald-700 "Verified by Safar" pill (ShieldCheck
+              icon) for mode==='safar', violet-600 "Self Hosted" pill otherwise.
+            - Top-right pill: white rounded-full with date range,
+              shadow-sm ring-black/5.
+            - Content: title (extrabold 17–18px), location (pin + text),
+              host row (emerald mini avatar + "Hosted by X" + optional violet
+              verified check) with category pill on the right
+              (emerald-50 outline, category icon + label — Camping/Bike/
+              Backpacking/Trek).
+            - Joined counter row (users icon + "6 / 10 joined").
+            - CTA row: full-width emerald-800 "Request to Join" button
+              (routes to /explore/trip/[id]) + 44px bookmark button on right
+              (toggles saved state).
+
+          REWARDS TAB:
+            - Redesigned to premium white card with amber/emerald palette
+              (was violet). Progress bar uses emerald-500→emerald-700 gradient.
+              Unlocked tiles use amber gradient, locked tiles use slate-50
+              with slate lock icon.
+
+          BADGES TAB:
+            - White cards with 22px radius, soft shadow, hover lift. Kept
+              existing gradient badge tiles for hierarchy.
+
+          PRESERVED:
+            - Shell wrapper (Navbar/bottom nav Explore/My Trips/+ FAB/Requests
+              (badge 3)/Profile) — unchanged.
+            - useSearchParams tab param.
+            - Data sources MORE_TRIPS, REWARD_CARDS, BADGES.
+            - Route /explore/me. Trip detail link /explore/trip/[id].
+            - No new dependencies, no backend calls.
+
+          RESPONSIVE:
+            - Mobile 390: matches reference — avatar overlaps hero, single
+              column, 4-col stats card, single column trip cards.
+            - md+: avatar + name become a row, trip cards in 2-column grid.
+
+          VERIFICATION:
+            - Lint: zero errors.
+            - Playwright screenshots at 390×844 (mobile) and 1440×900
+              (desktop) confirm layout, spacing, colors and tab switching
+              (Rewards tab progress bar + tiles render correctly).
+
+          Files modified: 1 (app/explore/me/page.js)
+          Files added:    0
+          New deps:       0
+          Backend impact: 0
+
+          NO TESTING AGENT invoked per user constraint.
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: MARKETPLACE LISTING — FLOATING SEARCH ICON (July 2026) — 1 credit
