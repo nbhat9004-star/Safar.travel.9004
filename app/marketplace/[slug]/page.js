@@ -289,9 +289,9 @@ export default function MarketplaceCategoryPage() {
     <>
       <Navbar />
 
-      <main className="min-h-screen bg-slate-50 pt-16 lg:pt-20 pb-24 md:pb-16">
+      <main className="min-h-screen bg-white pt-16 lg:pt-20 pb-24 md:pb-16">
         {/* ============================== HERO ============================= */}
-        <section className="relative overflow-hidden isolate bg-emerald-950">
+        <section className="relative overflow-hidden isolate bg-emerald-950 min-h-[240px] md:min-h-[300px]">
           <div
             className="absolute inset-0"
             style={{
@@ -304,7 +304,7 @@ export default function MarketplaceCategoryPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-emerald-950/85 via-emerald-950/55 to-emerald-950/25" />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-emerald-950/25" />
 
-          <div className="container relative z-10 pt-6 md:pt-10 pb-24 md:pb-32">
+          <div className="container relative z-10 pt-4 md:pt-8 pb-16 md:pb-24">
             {/* Breadcrumb */}
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12.5px] md:text-[13px] text-white/85">
               <Link href="/" className="hover:text-white">Home</Link>
@@ -326,7 +326,7 @@ export default function MarketplaceCategoryPage() {
           </div>
 
           {/* Floating search card */}
-          <div className="container relative -mt-16 md:-mt-20 z-10">
+          <div className="container relative -mt-12 md:-mt-16 z-10">
             <div className="bg-white rounded-2xl md:rounded-[20px] shadow-[0_20px_50px_-20px_rgba(15,25,20,0.35)] ring-1 ring-slate-100 p-3 md:p-3.5">
               <div className="flex flex-col md:flex-row md:items-stretch gap-2 md:gap-0">
                 {/* Search */}
@@ -391,7 +391,7 @@ export default function MarketplaceCategoryPage() {
 
         {/* ============================ CATEGORY CHIPS ==================== */}
         {chips.length > 1 && (
-          <section className="container mt-4 md:mt-6">
+          <section className="container mt-8 md:mt-10">
             <div className="flex items-center gap-2 md:gap-3 overflow-x-auto no-scrollbar-mp -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap">
               {chips.map((c) => {
                 const isActive = c.slug === category.slug;
@@ -499,12 +499,12 @@ export default function MarketplaceCategoryPage() {
 
               {/* Loading skeleton */}
               {loading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-100 overflow-hidden animate-pulse">
                       <div className="aspect-[4/3] bg-slate-100" />
-                      <div className="p-4 space-y-2.5">
-                        <div className="h-4 bg-slate-100 rounded w-2/3" />
+                      <div className="p-3 md:p-4 space-y-2">
+                        <div className="h-3.5 bg-slate-100 rounded w-2/3" />
                         <div className="h-3 bg-slate-100 rounded w-1/2" />
                         <div className="h-3 bg-slate-100 rounded w-3/4" />
                       </div>
@@ -518,7 +518,7 @@ export default function MarketplaceCategoryPage() {
                   onClear={() => { setQuery(''); resetFilters(); }}
                 />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5">
                   {paged.map((l, i) => (
                     <ListingCard key={l.id || i} listing={l} fallbackIndex={i} category={category} />
                   ))}
@@ -831,7 +831,7 @@ function ListingCard({ listing, fallbackIndex = 0, category }) {
   const detailsHref = listing._demo ? '#' : `/property/${listing.id}`;
 
   return (
-    <div className="group bg-white rounded-2xl md:rounded-[20px] shadow-[0_6px_24px_-14px_rgba(15,20,25,0.18)] hover:shadow-[0_16px_40px_-16px_rgba(15,20,25,0.24)] ring-1 ring-slate-100 overflow-hidden transition hover:-translate-y-0.5">
+    <div className="group h-full flex flex-col bg-white rounded-xl md:rounded-2xl shadow-[0_4px_18px_-12px_rgba(15,20,25,0.18)] hover:shadow-[0_16px_40px_-16px_rgba(15,20,25,0.24)] ring-1 ring-slate-100 overflow-hidden transition hover:-translate-y-0.5">
       {/* Image */}
       <Link href={detailsHref} className="relative block overflow-hidden">
         <div className="relative aspect-[4/3] bg-slate-100">
@@ -839,14 +839,14 @@ function ListingCard({ listing, fallbackIndex = 0, category }) {
             src={img}
             alt={listing.title || 'Listing image'}
             fill
-            sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 33vw"
+            sizes="(max-width:640px) 50vw, (max-width:1024px) 33vw, 25vw"
             className="object-cover group-hover:scale-105 transition-transform duration-500"
             unoptimized
           />
         </div>
         {/* Badge */}
         {badge && (
-          <div className={`absolute top-3 left-3 rounded-md px-2.5 py-1 text-[11px] font-bold ${badgeStyle} shadow`}>
+          <div className={`absolute top-2 left-2 md:top-3 md:left-3 rounded md:rounded-md px-1.5 md:px-2.5 py-0.5 md:py-1 text-[10px] md:text-[11px] font-bold ${badgeStyle} shadow`}>
             {badge}
           </div>
         )}
@@ -854,17 +854,17 @@ function ListingCard({ listing, fallbackIndex = 0, category }) {
         <button
           onClick={(e) => { e.preventDefault(); setLiked((v) => !v); }}
           aria-label={liked ? 'Remove from wishlist' : 'Add to wishlist'}
-          className="absolute top-3 right-3 grid place-items-center size-9 rounded-full bg-white/95 shadow hover:scale-105 active:scale-95 transition"
+          className="absolute top-2 right-2 md:top-3 md:right-3 grid place-items-center size-7 md:size-9 rounded-full bg-white/95 shadow hover:scale-105 active:scale-95 transition"
         >
-          <Heart className={`size-[18px] ${liked ? 'fill-rose-500 text-rose-500' : 'text-slate-700'}`} strokeWidth={2.2} />
+          <Heart className={`size-[14px] md:size-[18px] ${liked ? 'fill-rose-500 text-rose-500' : 'text-slate-700'}`} strokeWidth={2.2} />
         </button>
         {/* Rating chip */}
-        <div className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-md bg-emerald-950/85 backdrop-blur px-2 py-1 text-white text-[12px] font-bold">
-          <Star className="size-3.5 fill-amber-400 text-amber-400" />
+        <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3 inline-flex items-center gap-0.5 md:gap-1 rounded md:rounded-md bg-emerald-950/85 backdrop-blur px-1.5 md:px-2 py-0.5 md:py-1 text-white text-[10.5px] md:text-[12px] font-bold">
+          <Star className="size-3 md:size-3.5 fill-amber-400 text-amber-400" />
           {rating.toFixed(1)}
         </div>
-        {/* Dots indicator (visual only — 3 dots) */}
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1">
+        {/* Dots indicator — desktop only */}
+        <div className="hidden md:flex absolute bottom-3 left-1/2 -translate-x-1/2 items-center gap-1">
           <span className="size-1.5 rounded-full bg-white" />
           <span className="size-1.5 rounded-full bg-white/60" />
           <span className="size-1.5 rounded-full bg-white/60" />
@@ -872,19 +872,19 @@ function ListingCard({ listing, fallbackIndex = 0, category }) {
       </Link>
 
       {/* Body */}
-      <div className="p-4 md:p-5">
-        <h3 className="font-display font-extrabold text-slate-900 text-[17px] md:text-[18px] leading-tight tracking-tight line-clamp-1">
+      <div className="flex-1 flex flex-col p-2.5 md:p-4 lg:p-5">
+        <h3 className="font-display font-extrabold text-slate-900 text-[13.5px] md:text-[17px] lg:text-[18px] leading-tight tracking-tight line-clamp-1">
           {listing.title || 'Untitled listing'}
         </h3>
         {(listing.location || listing.city) && (
-          <div className="mt-1.5 flex items-center gap-1 text-slate-500 text-[13px]">
-            <MapPin className="size-[14px] shrink-0" strokeWidth={2.2} />
+          <div className="mt-1 md:mt-1.5 flex items-center gap-1 text-slate-500 text-[11px] md:text-[13px]">
+            <MapPin className="size-[12px] md:size-[14px] shrink-0" strokeWidth={2.2} />
             <span className="truncate">{listing.location || listing.city}</span>
           </div>
         )}
 
-        {/* Amenities */}
-        <div className="mt-3 flex items-center gap-3 md:gap-4 flex-wrap text-slate-500 text-[12px]">
+        {/* Amenities — hidden on tight mobile grid, visible from md+ */}
+        <div className="hidden md:flex mt-3 items-center gap-3 md:gap-4 flex-wrap text-slate-500 text-[12px]">
           {amenities.map((a) => {
             const A = AMENITY_ICONS[a] || AMENITY_ICONS.wifi;
             const Icon = A.icon;
@@ -897,21 +897,22 @@ function ListingCard({ listing, fallbackIndex = 0, category }) {
           })}
         </div>
 
-        <div className="mt-4 pt-4 border-t border-slate-100 flex items-end justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Starting from</div>
-            <div className="mt-0.5 flex items-baseline gap-1">
-              <span className="font-display font-extrabold text-slate-900 text-[17px] md:text-[18px]">
+        <div className="mt-auto pt-2.5 md:pt-4 md:border-t md:border-slate-100 flex items-end justify-between gap-2 md:gap-3">
+          <div className="min-w-0">
+            <div className="hidden md:block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Starting from</div>
+            <div className="md:mt-0.5 flex items-baseline gap-1 min-w-0">
+              <span className="font-display font-extrabold text-slate-900 text-[14px] md:text-[17px] lg:text-[18px] truncate">
                 {inr(price)}
               </span>
-              {priceSuffix && <span className="text-slate-500 text-[12px]">{priceSuffix}</span>}
+              {priceSuffix && <span className="text-slate-500 text-[10.5px] md:text-[12px] shrink-0">{priceSuffix}</span>}
             </div>
           </div>
           <Link
             href={detailsHref}
-            className="shrink-0 inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 text-emerald-800 hover:bg-emerald-700 hover:text-white font-bold text-[12.5px] px-3.5 py-2 transition"
+            className="shrink-0 inline-flex items-center justify-center rounded-md md:rounded-lg border md:border-2 border-emerald-700 text-emerald-800 hover:bg-emerald-700 hover:text-white font-bold text-[11px] md:text-[12.5px] px-2 md:px-3.5 py-1.5 md:py-2 transition"
           >
-            View Details
+            <span className="hidden sm:inline">View Details</span>
+            <span className="sm:hidden">View</span>
           </Link>
         </div>
       </div>
