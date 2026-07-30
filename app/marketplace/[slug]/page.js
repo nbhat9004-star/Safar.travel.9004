@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import {
   Search, SlidersHorizontal, ChevronDown, ChevronLeft, ChevronRight,
-  Heart, Star, MapPin, Calendar, X,
+  Heart, Star, MapPin, X,
   Wifi, Coffee, ParkingCircle,
   Hotel, Home, Ship, DoorOpen, Palmtree, Building, Building2, Tent,
   Car, Bike, CarTaxiFront, PlaneLanding, PlaneTakeoff,
@@ -138,11 +138,8 @@ export default function MarketplaceCategoryPage() {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Search card state
+  // Search state
   const [query, setQuery] = useState('');
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
-  const [guests, setGuests] = useState(1);
 
   // Toolbar state
   const [sort, setSort] = useState('recommended');
@@ -293,7 +290,7 @@ export default function MarketplaceCategoryPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-emerald-950 via-emerald-950/85 to-emerald-950/10" aria-hidden />
           <div className="absolute inset-0 bg-gradient-to-b from-emerald-950/40 via-transparent to-emerald-950/20" aria-hidden />
 
-          <div className="container relative z-10 pt-4 md:pt-6 pb-24 md:pb-28">
+          <div className="container relative z-10 pt-4 md:pt-6 pb-12 md:pb-16">
             {/* Breadcrumb */}
             <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[12.5px] md:text-[13px] text-white/80">
               <Link href="/" className="hover:text-white transition">Home</Link>
@@ -314,62 +311,29 @@ export default function MarketplaceCategoryPage() {
             </p>
           </div>
 
-          {/* Floating search card — overlaps hero bottom */}
-          <div className="container relative -mt-14 md:-mt-20 z-20">
-            <div className="bg-white rounded-2xl md:rounded-[20px] shadow-[0_20px_50px_-20px_rgba(15,25,20,0.35)] ring-1 ring-slate-100 overflow-hidden">
-              {/* Row 1: search input */}
-              <div className="flex items-center gap-3 px-4 md:px-5 py-3.5 md:py-4 border-b border-slate-100">
+          {/* Simple, elegant search bar — replaces the multi-field booking form */}
+          <div className="container relative -mt-7 md:-mt-8 z-20">
+            <div className="mx-auto w-full max-w-[720px] lg:max-w-[820px]">
+              <div className="flex items-center gap-3 bg-white rounded-full ring-1 ring-slate-100 shadow-[0_14px_36px_-14px_rgba(15,25,20,0.28)] px-5 md:px-6 h-[52px] md:h-[56px] focus-within:ring-2 focus-within:ring-emerald-500/30 transition">
                 <Search className="size-5 text-slate-400 shrink-0" strokeWidth={2.2} />
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                  placeholder={`Search by location, ${category.title.toLowerCase().replace(/s$/, '')} name or keyword`}
-                  className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] md:text-[14.5px] text-slate-900 placeholder:text-slate-400"
+                  placeholder={`Search ${category.title.toLowerCase()}...`}
+                  className="flex-1 min-w-0 bg-transparent outline-none text-[14px] md:text-[15px] text-slate-900 placeholder:text-slate-400"
                   aria-label={`Search ${category.title}`}
                 />
-              </div>
-              {/* Row 2: check-in / check-out / guests / search button */}
-              <div className="flex flex-col md:flex-row md:items-stretch">
-                <FieldBlock label="CHECK-IN" value={checkIn ? checkIn : 'Add dates'} icon={Calendar}>
-                  <input
-                    type="date"
-                    value={checkIn}
-                    onChange={(e) => setCheckIn(e.target.value)}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    aria-label="Check-in date"
-                  />
-                </FieldBlock>
-                <FieldBlock label="CHECK-OUT" value={checkOut ? checkOut : 'Add dates'} icon={Calendar}>
-                  <input
-                    type="date"
-                    value={checkOut}
-                    onChange={(e) => setCheckOut(e.target.value)}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    aria-label="Check-out date"
-                  />
-                </FieldBlock>
-                <FieldBlock label="GUESTS" value={`${guests} ${guests === 1 ? 'Guest' : 'Guests'}`} icon={ChevronDown} iconRight noBorder>
-                  <select
-                    value={guests}
-                    onChange={(e) => setGuests(Number(e.target.value))}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    aria-label="Number of guests"
-                  >
-                    {[1,2,3,4,5,6,7,8].map((n) => (
-                      <option key={n} value={n}>{n} {n === 1 ? 'Guest' : 'Guests'}</option>
-                    ))}
-                  </select>
-                </FieldBlock>
-                <div className="p-3 md:p-3 md:pl-1 md:flex md:items-center">
+                {query && (
                   <button
                     type="button"
-                    onClick={() => setPage(1)}
-                    className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl md:rounded-2xl bg-emerald-800 hover:bg-emerald-900 active:scale-[0.98] text-white font-bold text-[14px] md:text-[15px] px-7 md:px-9 py-3.5 md:py-4 shadow-md shadow-emerald-900/25 transition"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                    className="shrink-0 grid place-items-center size-7 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition"
                   >
-                    <Search className="size-4 md:size-5" strokeWidth={2.4} /> Search
+                    <X className="size-4" strokeWidth={2.2} />
                   </button>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -577,28 +541,6 @@ export default function MarketplaceCategoryPage() {
 }
 
 // =============================== SUB-COMPONENTS ==============================
-
-function FieldBlock({ label, value, icon: Icon, iconRight, noBorder, children }) {
-  return (
-    <label className={`relative flex-1 flex flex-col justify-center px-4 md:px-5 py-2.5 md:py-3 border-b md:border-b-0 ${noBorder ? '' : 'md:border-r'} border-slate-100 min-w-0`}>
-      <span className="text-[10.5px] md:text-[11px] font-bold uppercase tracking-wider text-slate-500">
-        {label}
-      </span>
-      <span className="mt-0.5 flex items-center justify-between gap-2 min-w-0">
-        <span className="truncate text-[13.5px] md:text-[15px] font-semibold text-slate-900">
-          {value}
-        </span>
-        {Icon && (
-          <Icon
-            className={`size-4 md:size-[18px] ${iconRight ? 'text-slate-500' : 'text-slate-400'} shrink-0`}
-            strokeWidth={2.2}
-          />
-        )}
-      </span>
-      {children}
-    </label>
-  );
-}
 
 function FiltersPanel({
   priceMin, setPriceMin,

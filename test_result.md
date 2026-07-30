@@ -114,10 +114,98 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Marketplace category listing page (/marketplace/<slug>) — pixel-close recreation of the approved reference mockup (emerald hero + right-anchored Dal Lake image, floating white search card, icon category chips, horizontal Filters/Sort bar, 128 Hotels found + Showing results in Kashmir, 2-col mobile / 4-col desktop card grid with Popular/Best Seller/New badges, wishlist, rating pill, amenities row, From ₹X / night + View Details, pagination). No backend / API changes."
+    - "Marketplace category listing page — simplified search area: removed Check-in / Check-out / Guests / large Search button; replaced with ONE elegant pill-shaped search bar (Search hotels... / Search homestays... etc placeholder based on category). Category chips moved up. Hero, breadcrumb, title, subtitle, chips, filters, sort, grid all preserved. No backend/API changes."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: MARKETPLACE LISTING — SIMPLIFIED SEARCH (July 2026) — 1 credit
+# ---------------------------------------------------------------------------
+module_marketplace_listing_simple_search:
+  - task: "Simplify category listing search — remove booking form (dates/guests/button), replace with single elegant search bar"
+    implemented: true
+    working: "NA"
+    file: "/app/app/marketplace/[slug]/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "1 credit, no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          UI-ONLY SIMPLIFICATION (single file: /app/app/marketplace/[slug]/page.js)
+
+          REMOVED (from the floating hero card):
+            - CHECK-IN date field
+            - CHECK-OUT date field
+            - GUESTS dropdown
+            - Large emerald "Search" button
+            - Unused FieldBlock sub-component
+            - Unused Calendar / checkIn / checkOut / guests state
+
+          REPLACED WITH:
+            - Single elegant pill-shaped search bar (rounded-full, h-52 mobile /
+              h-56 desktop, white bg, soft shadow, subtle emerald focus ring).
+            - Search icon on the left.
+            - Category-aware placeholder: "Search hotels..." / "Search
+              homestays..." / "Search houseboats..." / etc — derived from
+              category.title.toLowerCase().
+            - Clear (X) button appears when query has value.
+            - Centered with max-w-[720px] on md / max-w-[820px] on lg+.
+            - Full-width on mobile with proper container side margins.
+            - Reuses the existing `query` state — filtering + grid results
+              logic UNCHANGED.
+
+          LAYOUT ORDER (matches user requirement):
+            Hero Image → Category Title → Subtitle → Simple Search Bar →
+            Category Chips → Filters + Sort → Listing Grid → Pagination
+
+          HERO SPACING:
+            - Reduced hero bottom padding pb-24→pb-12 (mobile) / pb-28→pb-16 (desktop).
+            - Search bar overlaps hero by only -mt-7 / -mt-8 (was -mt-14 / -mt-20)
+              because the bar is much shorter than the old 2-row card. Ensures
+              no gap and no overlap with the listing content below.
+
+          PRESERVED (per user directive):
+            - Hero image (Dal Lake houseboats).
+            - Breadcrumb: Home › Marketplace › Stays › Hotels.
+            - Category title & subtitle.
+            - Category chips (Hotels active, Homestays, Houseboats, Guest
+              Houses, Resorts, Apartments, Villas, Camping, More).
+            - Filters button (with active-count badge) + Sort dropdown.
+            - Results header "128 Hotels found" + "Showing results in Kashmir".
+            - Card grid: 2 cols mobile / 3 tablet / 4 desktop.
+            - Pagination.
+            - Existing Safar Navbar + bottom nav.
+            - /api/listings fetch, /property/[id] linking.
+            - Zero backend / API / routing / DB changes. Zero new deps.
+
+          VERIFICATION:
+            - Lint: zero errors.
+            - Playwright screenshots at 1440×900 (desktop), 820×1180 (tablet),
+              390×844 (mobile) confirm:
+                * Elegant single search bar renders correctly at all three
+                  breakpoints with the requested pill shape, height, and shadow.
+                * Category chips sit directly below the search bar with no
+                  empty space.
+                * Filters + Sort row remains intact.
+                * "128 Hotels found" + "Showing results in Kashmir" header intact.
+                * Card grid renders as before with the same Popular/Best
+                  Seller/New badges and hover effects.
+                * Bottom navigation on mobile is not overlapped.
+            - Preview MongoDB is not connected → /api/listings 500 (documented
+              pre-existing infra). Demo fallback still renders the design.
+
+          Files modified: 1 (marketplace/[slug]/page.js)
+          Files added:    0
+          New deps:       0
+          Backend impact: 0
+
+          NO TESTING AGENT invoked per user constraint.
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: MARKETPLACE LISTING PAGE — REFERENCE RECREATION (July 2026)
