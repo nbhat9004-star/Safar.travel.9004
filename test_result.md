@@ -114,12 +114,104 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Explore Home hero polish — reduced dark overlay, responsive profile capsule (no overflow on mobile), 3D Kashmir globe as first rotating hero slide, and mobile bottom-nav padding to prevent overlap. Only /explore/home hero + ExploreShell header capsule + explore.css touched. Rest of app unchanged."
+    - "Marketplace UX correction — remove duplicate 'All Services' section; SINGLE 'Browse Categories' section listing every individual category (not grouped); each category links to a dedicated /marketplace/<slug> listing page that reuses PropertyCard + /api/listings (NOT /explore). Explore & Build Trip must remain untouched."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 # ---------------------------------------------------------------------------
+# MODULE: MARKETPLACE UX CORRECTION (July 2026) — 1 credit
+# ---------------------------------------------------------------------------
+module_marketplace_ux_fix:
+  - task: "Marketplace UX fix — single Browse Categories section + dedicated /marketplace/<slug> listing pages"
+    implemented: true
+    working: "NA"
+    file: "/app/app/marketplace/page.js, /app/app/marketplace/[slug]/page.js, /app/lib/marketplace-categories.js"
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          FIXES DELIVERED:
+
+          1. NEW /app/lib/marketplace-categories.js — single source of truth:
+             26 individual marketplace categories, each with:
+              { slug, title, iconKey, color, filter: { category, subcategory? } }
+             Categories: hotels, homestays, houseboats, guest-houses, resorts,
+             apartments, villas, camping, cars, bikes, taxi, airport-pickup,
+             airport-drop, tour-guides, local-guides, tour-packages,
+             religious-tours, experiences, activities, shikara-ride,
+             gondola-tickets, trekking, photography, food-experiences,
+             shopping-tours, travel-essentials.
+
+          2. REWRITTEN /app/app/marketplace/page.js:
+             * Removed the duplicate "All Services" section entirely.
+             * ONE single section — "Browse Categories" — renders EVERY
+               individual category directly (no grouping into blocks).
+             * Grid: 2 cols mobile / 3 cols small tablet / 4 md / 5 lg / 6 xl.
+             * Each card links to /marketplace/<slug> (NOT /explore).
+             * Kept the approved hero (peach gradient + Kashmir houseboat
+               image), trust strip, live search filter, and AI CTA band.
+
+          3. NEW /app/app/marketplace/[slug]/page.js — dedicated listing page:
+             * Reads slug via useParams(), resolves category via
+               findCategoryBySlug() from the shared lib.
+             * Fetches /api/listings?category=X&subcategory=Y&limit=60 (existing
+               endpoint, no backend change).
+             * Reuses <PropertyCard> (existing app-wide card) — so listings
+               look identical to the rest of the site and clicking one opens
+               /property/[id] → normal booking flow.
+             * Header: breadcrumb (Marketplace / <Category>), page title
+               "<Category> Listings", live listing count, local search box,
+               sort dropdown (Recommended / Price ↑ / Price ↓ / Top rated).
+             * States: skeleton grid while loading, ErrorState on API 500,
+               EmptyState when no results.
+             * Bottom: "Explore other categories" chip strip (12 alternatives)
+               linking to sibling /marketplace/<slug> pages.
+             * Fully responsive; unknown slug renders 404-style empty screen.
+
+          4. UPDATED test_result.md test_plan.current_focus.
+
+          UNTOUCHED (per user directive):
+             * /explore page — not modified, not reused.
+             * /build-trip — untouched.
+             * /ai-planner — untouched.
+             * Booking flow, PropertyCard, /api/listings — reused, not
+               modified.
+             * No new dependencies.
+
+          NAVIGATION NOW:
+             /marketplace                     → hub with 26 individual tiles
+             /marketplace/hotels              → Hotels Listings (cat=stay, sub=hotel)
+             /marketplace/cars                → Car Listings   (cat=transport, sub=car)
+             /marketplace/tour-guides         → Guide Listings (cat=tour, sub=guide)
+             /marketplace/bikes               → Bike Listings  (cat=transport, sub=bike)
+             /marketplace/houseboats          → Houseboat Listings (cat=stay, sub=houseboat)
+             /marketplace/airport-pickup      → Airport Pickup Listings
+             …and so on for every category. NONE of these pages redirect to
+             /explore. Explore is a completely independent route.
+
+          TESTING FOCUS:
+             * GET /marketplace should render 200, show a SINGLE "Browse
+               Categories" heading (no "All Services" heading anywhere), and
+               render all 26 individual category tiles.
+             * Every tile's href must start with "/marketplace/" (never
+               "/explore").
+             * GET /marketplace/hotels should render 200 with breadcrumb
+               "Marketplace / Hotels" + h1 "Hotels Listings" + working sort
+               dropdown + working search box + skeleton/error/empty/grid
+               states as appropriate.
+             * If preview MongoDB isn't connected, ErrorState is expected on
+               /marketplace/<slug> (API returns 500). This is NOT a bug —
+               documented pre-existing infra issue. Verify the ErrorState
+               component renders with retry button, not a hard crash.
+             * Explore route (/explore) MUST still render 200 with its own
+               layout (not the marketplace layout).
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
+
 # MODULE: MARKETPLACE HUB PAGE (July 2026) — 1 credit, no testing agent
 # ---------------------------------------------------------------------------
 module_marketplace_hub:
