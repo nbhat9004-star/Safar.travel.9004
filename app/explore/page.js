@@ -23,8 +23,9 @@ export default function ExploreHome() {
 
   return (
     <Shell>
-      {/* Hero \u2014 full-bleed immersive */}
-      <section className="relative w-full h-[70vh] min-h-[500px] md:h-[80vh] md:min-h-[600px] overflow-hidden">
+      {/* Hero \u2014 reduced height so the "Featured Trips" section peeks
+          on first load and the user immediately sees more content below */}
+      <section className="relative w-full h-[52vh] min-h-[380px] md:h-[62vh] md:min-h-[440px] overflow-hidden">
         <Image src={HERO_IMAGES[heroIdx]} alt="Kashmir" fill priority className="object-cover" unoptimized />
         {/* Overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-slate-900/40 via-transparent to-slate-950/90" />

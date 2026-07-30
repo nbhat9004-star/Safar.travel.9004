@@ -114,10 +114,132 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "Marketplace hub page (/marketplace) — pixel-close recreation of the approved reference image: Kashmir Dal Lake hero + Explore Kashmir title + subtitle + floating dark-green circular Search button, Browse Categories (5×2 grid of 10 tiles with pastel icons + counts) with View all, Featured Stays with horizontal rail on desktop + 2-col grid on mobile (cards with Popular/Best Seller/New badge, wishlist, rating pill, title, location). Zero backend/API/routing changes."
+    - "UI refinement pass across 3 pages: (1) Home hero height reduced so Curated Stays begins to peek; (2) Explore hero height reduced so Featured Trips peeks on first load; (3) Explore Profile — Edit Profile button + Edit Profile modal (photo/cover/name/tagline/location/bio/about/languages/interests) + camera icons on cover & avatar + tagline pill under username. Zero backend/API/routing changes."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: HOME + EXPLORE + PROFILE UI REFINEMENT (July 2026) — 1 credit
+# ---------------------------------------------------------------------------
+module_ui_refinement_pass:
+  - task: "Reduce hero height on Home + Explore, add Edit Profile flow to /explore/me"
+    implemented: true
+    working: "NA"
+    files:
+      - "/app/app/page.js"
+      - "/app/app/explore/page.js"
+      - "/app/app/explore/me/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "1 credit, no testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          UI-ONLY REFINEMENT across three pages. Zero backend / API / routing
+          / data-shape changes. Zero new dependencies.
+
+          1) /app/app/page.js — Safar Home hero
+             - Section min-height: 100svh → 70svh mobile / 78svh md / 82svh lg.
+             - Inner padding: pt-24/28/32 → pt-20/24/28. pb-16/24 → pb-10/14/16.
+             - Heading clamp: 2.6→5.6rem → 2.1→4.6rem (slightly smaller so all
+               hero content + search card fit inside the reduced height).
+             - Subtitle: text-lg/xl → text-base/lg; mt-5 → mt-4.
+             - CTA row spacing: mt-8 → mt-5/6; CTA buttons h-14 → h-12 md:h-14.
+             - Trust badge: mt-8 → mt-5/6.
+             - Preserved: background slideshow, dark gradient overlays, all
+               copy, both CTAs, trust badge, full search card + search state.
+             - Result: on mobile ~30% shorter hero, the first Curated Stays
+               row starts to peek immediately below the fold.
+
+          2) /app/app/explore/page.js — Explore Home hero
+             - Section height h-[70vh] min-h-[500px] md:h-[80vh] md:min-h-[600px]
+               → h-[52vh] min-h-[380px] md:h-[62vh] md:min-h-[440px].
+             - Preserved: hero background image, gradient overlay, heading,
+               subtitle, CTAs.
+             - Result: "Featured Trips" section header + first two trip
+               cards are visible in the first mobile fold (verified via
+               Playwright screenshot).
+
+          3) /app/app/explore/me/page.js — Explore Profile edit flow
+             a) Editable profile state — profile object (name, tagline,
+                location, bio, about, avatar, cover, languages[], interests[]).
+                Default seed keeps existing displayed values. Persisted in
+                localStorage under `safar-explore-profile-v1` so edits survive
+                page reload. NO backend / API / /api call added.
+             b) Cover has a small circular camera edit button (bottom-right
+                of cover, bg-black/55 backdrop-blur) that opens the modal.
+             c) Avatar has a small circular camera edit button (bottom-left
+                of avatar, white bg + shadow) that opens the modal.
+             d) Tagline pill added directly under the username (emerald-50
+                bg + emerald-100 ring + emerald-800 text + sparkles icon).
+                Defaults to "Mountain Explorer". Fully editable in modal.
+             e) Prominent "Edit Profile" button (emerald-800 pill, pencil
+                icon, full-width mobile, auto-width md+) placed IMMEDIATELY
+                BELOW the profile info block (before stats card).
+             f) Languages + Interests chip row rendered alongside the Edit
+                Profile button — small subtle pills so user can see edits
+                reflect on the profile page.
+             g) Edit Profile modal (EditProfileModal sub-component):
+                - Backdrop + blur, centered card md+ / bottom sheet on
+                  mobile with rounded-t-3xl.
+                - Sections (all editable): Cover photo (aspect-16/6 preview,
+                  hover "Change cover" overlay, corner camera button, file
+                  input reads local file as base64), Profile photo (round
+                  preview + Change overlay + Upload new button + file
+                  input), Display name (text), Tagline (text) + suggested
+                  taglines chip row (Solo Traveler, Photographer, Adventure
+                  Lover, Mountain Explorer, Foodie, Backpacker, Trek
+                  Enthusiast — active state emerald), Location (text), Bio
+                  (textarea 3 rows), About me (textarea 4 rows), Languages
+                  (chip editor with Enter to add + delete X on chip),
+                  Interests (chip editor + quick-add suggestions Trekking /
+                  Photography / Camping / Local Food / Fishing / Wildlife /
+                  Culture).
+                - Footer: Cancel + Save changes buttons; Save persists to
+                  localStorage and closes the modal.
+                - Escape closes; body scroll locked while open; file size
+                  cap 6 MB with friendly alert.
+
+          NEW LUCIDE ICONS IMPORTED: Camera, Pencil, X, Plus, Sparkles.
+          Existing imports preserved. No new npm dependencies.
+
+          RESPONSIVE:
+            - Home / Explore heroes verified at 390×844 mobile.
+            - Profile page verified at 390×844 — tagline pill + Edit Profile
+              button + language/interest chips render cleanly.
+            - Edit Profile modal: bottom sheet on mobile with rounded-t-3xl;
+              floating card on md+.
+
+          PRESERVED (per user constraint):
+            - Backend / APIs / routes / navigation / booking flow / auth /
+              database / Shell wrapper + bottom nav / all existing subpages.
+            - Search state, filter state, tab state, MORE_TRIPS / REWARD_CARDS
+              / BADGES data sources.
+            - No changes to layouts of untouched sections.
+
+          VERIFICATION:
+            - Lint: zero errors on all three files.
+            - Playwright screenshots at 390×844 (mobile) confirm:
+                * Home hero shorter, all elements + search card intact.
+                * Explore hero shorter — "Featured Trips" title + first row
+                  of trip cards visible above the fold.
+                * Profile: cover camera icon, avatar camera icon, tagline
+                  pill, Edit Profile button, language + interest chips.
+                * Edit Profile modal opens with all fields populated,
+                  suggested taglines, file inputs for photo/cover, chip
+                  editors for languages/interests, Cancel + Save footer.
+
+          Files modified: 3 (page.js / explore/page.js / explore/me/page.js)
+          Files added:    0
+          New deps:       0
+          Backend impact: 0
+
+          NO TESTING AGENT invoked per user constraint.
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: MARKETPLACE HUB PAGE REDESIGN (July 2026) — 1 credit

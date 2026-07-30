@@ -162,8 +162,9 @@ function AppInner() {
     <main className="min-h-screen bg-background">
       <Navbar transparent />
 
-      {/* HERO with Seasonal Slideshow */}
-      <section className="relative min-h-[100svh] w-full overflow-hidden">
+      {/* HERO with Seasonal Slideshow — height reduced so the top of the
+          "Curated Stays" section peeks in on first load */}
+      <section className="relative min-h-[70svh] md:min-h-[78svh] lg:min-h-[82svh] w-full overflow-hidden">
         {/* Seasonal Background Slideshow - PERF: Removed parallax effect to reduce JavaScript load */}
         <div className="absolute inset-0">
           {SEASONAL_IMAGES.map((image, index) => (
@@ -188,22 +189,22 @@ function AppInner() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.50)_0%,rgba(15,20,25,0.35)_35%,rgba(15,20,25,0.60)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
-        <div className="relative h-full container flex flex-col justify-end pt-24 md:pt-28 lg:pt-32 pb-16 md:pb-24">
+        <div className="relative h-full container flex flex-col justify-end pt-20 md:pt-24 lg:pt-28 pb-10 md:pb-14 lg:pb-16">
           <div className="max-w-3xl text-white">
-            <h1 className="font-display font-bold text-[clamp(2.6rem,6.4vw,5.6rem)] leading-[1.02] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
+            <h1 className="font-display font-bold text-[clamp(2.1rem,5.4vw,4.6rem)] leading-[1.03] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.
             </h1>
-            <p className="mt-5 text-lg md:text-xl text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
+            <p className="mt-4 text-base md:text-lg text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
               Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-5 md:mt-6 flex flex-wrap gap-3">
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-7 h-14 font-semibold text-base">
+                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-6 md:px-7 h-12 md:h-14 font-semibold text-base">
                   <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
                 </Button>
               </div>
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-7 h-14 font-semibold text-base">
+                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-6 md:px-7 h-12 md:h-14 font-semibold text-base">
                   <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
                 </Button>
               </div>
@@ -211,7 +212,7 @@ function AppInner() {
           </div>
 
           {/* Premium trust badge — repositioned from the top pill. Sits between the CTAs and the search card, above the fold. */}
-          <div className="mt-8 inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full glass-dark text-white/95 text-[11px] uppercase tracking-[0.22em] font-semibold w-fit">
+          <div className="mt-5 md:mt-6 inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full glass-dark text-white/95 text-[11px] uppercase tracking-[0.22em] font-semibold w-fit">
             <ShieldCheck className="size-3.5 text-gold" aria-hidden="true" />
             Curated by locals · Trusted by travelers
           </div>
