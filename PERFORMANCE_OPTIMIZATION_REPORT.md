@@ -259,4 +259,4 @@ robots: {
 
 ---
 
-**Website Live**: https://safar-properties.preview.emergentagent.com
+**Website Live**: https://kashmir-local-stays.preview.emergentagent.com

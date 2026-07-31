@@ -114,10 +114,127 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "UI refinement pass across 3 pages: (1) Home hero height reduced so Curated Stays begins to peek; (2) Explore hero height reduced so Featured Trips peeks on first load; (3) Explore Profile — Edit Profile button + Edit Profile modal (photo/cover/name/tagline/location/bio/about/languages/interests) + camera icons on cover & avatar + tagline pill under username. Zero backend/API/routing changes."
+    - "NEW page /home-2 — pixel-close recreation of approved reference design (Home Page 2). Standalone page; existing homepage untouched. No backend / API / routing / dependency changes."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: HOME PAGE 2 — EXACT DESIGN RECREATION (July 2026) — <5 credits
+# ---------------------------------------------------------------------------
+module_home_page_2:
+  - task: "Home Page 2 — pixel-close recreation of approved reference design"
+    implemented: true
+    working: "NA"
+    file: "/app/app/home-2/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "under 5 credits, NO testing agent"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          NEW standalone page at /app/app/home-2/page.js. Existing homepage
+          (/app/app/page.js) NOT modified. Zero backend / API / routing /
+          dependency changes.
+
+          DESIGN TOKENS (exact per reference):
+            - Colors: primary #0E5A3A, dark #0A3F2A, bg #FAFAF8,
+              text #111111, muted #6B7280, border #ECECEC.
+            - Radii: hero 28, search 30, cards 24, categories 18, nav 28,
+              buttons 999.
+            - Font: Inter (already loaded in root layout via next/font).
+
+          SECTIONS (top → bottom, matching the reference image):
+            1. HEADER (84px mobile / 88px md) — sticky, bg #FAFAF8.
+                * Left: dark-green rounded square (14px) with gold MapPin icon
+                  + "Safar" wordmark bold.
+                * Center: white pill (rounded-full) with MapPin (emerald) +
+                  "Kashmir" + ChevronDown, subtle ring + shadow.
+                * Right: 44px cream (#FBF4E1) circular button with gold
+                  Compass icon.
+            2. HERO — 520/560/600/640px tall, rounded 28px, Dal Lake houseboats
+                image with a left→right dark gradient for legibility. Content
+                anchored top-left:
+                * H1 (Inter Bold, 36/44/52/58 px, tight leading): "Experience
+                  Kashmir\nLike a Local." (line break preserved).
+                * Subtitle (14.5–16 px, white/86, 3-line max-w 420): "Discover
+                  authentic stays, local experiences, transport, guides, and
+                  unforgettable journeys across Kashmir."
+                * Buttons row:
+                  - "Explore Stays" — 52/56 px pill, bg #0A3F2A, deep drop
+                    shadow, ArrowRight icon.
+                  - "Plan My Trip with AI" — 52/56 px glassmorphism pill
+                    (rgba(255,255,255,0.14) + backdrop-blur + white/25 ring),
+                    Wand2 icon.
+                * Trust badge — dark-emerald translucent pill with gold ring:
+                  ShieldCheck (gold) + "CURATED BY LOCALS · TRUSTED BY
+                  TRAVELERS" (11 px, uppercase, tracking .16em, white).
+            3. SEARCH + FILTER (side-by-side, mt-6/8):
+                * Left flex-1 white card (rounded 30, h-64) with Search icon
+                  + input placeholder "Search stays, experiences, transport...".
+                * Right 72×64 dark-emerald (#0A3F2A) square (rounded 20) with
+                  SlidersHorizontal icon + "Filter" label stacked.
+            4. CATEGORIES — 6 tiles in a single grid-cols-6 row (mobile → xl):
+                Stays (Building2/emerald · 1.2K+), Houseboats (Ship/blue · 320+),
+                Cabins (Home/orange · 480+), Transport (Car/orange · 650+),
+                Guides (Flag/violet · 240+), Experiences (Star filled amber
+                · 240+). Each tile: white bg, rounded 18, ring #ECECEC, soft
+                shadow, pastel icon square (14 radius) + title (semibold) +
+                small muted count. Hover lift.
+            5. CURATED HEADER:
+                * Green uppercase label "CURATED SELECTION".
+                * H2 (22/26/30/34 px bold): "Stays travelers can't stop
+                  talking about" — with "View all" green arrow link on right.
+            6. FILTER CHIPS (with icons):
+                All (Sparkles) · Houseboats (Anchor) · Cabins (Bell) ·
+                Ski-in/Ski-out (Snowflake) · Heritage (Landmark).
+                Active = dark-emerald fill white text + soft green shadow;
+                inactive = white bg + #ECECEC outline + soft shadow.
+            7. PROPERTY CARDS — horizontal carousel:
+                * Card 300/320/340 wide, rounded 24, ring #ECECEC, soft shadow,
+                  hover lift.
+                * Image aspect 4:3.
+                * Top-left: white rounded-10 category badge (Heritage,
+                  Ski-in/Ski-out, Cabins).
+                * Top-right: 36px white heart button (toggles fill/red).
+                * Bottom-left: dark-emerald pill with gold filled Star +
+                  rating (e.g. 4.96).
+                * Content: bold 16/17 px title, muted location w/ pin, price
+                  "₹6,800 / night", "SUPERHOST" small emerald pill.
+                4 cards: Royal Heritage Houseboat, Pinepeak Cabin, Apple
+                Orchard Cottage, Chinar Heritage Villa.
+            8. BOTTOM NAV — fixed floating, rounded-top-28, white, soft
+                shadow, ring #ECECEC. 5 items:
+                Build Trip (Sparkles) · Marketplace (Store, ACTIVE — light
+                emerald bg #E7F3EC + green icon/label) · AI Planner (Wand2) ·
+                Become Host (Home) · Explore (Compass). Others grey (#6B7280).
+
+          RESPONSIVE:
+            - Mobile 428×926: everything fits per reference, all 6 categories
+              in one row, hero fills upper ~55%, search + filter share row,
+              curated section peeks below, cards carousel horizontal.
+            - md/lg: same visual hierarchy, larger padding/sizes, container
+              max-w-6xl centered.
+
+          PRESERVED / UNCHANGED:
+            - Existing homepage (/app/app/page.js) — untouched.
+            - Root layout, navigation, backend routes — untouched.
+            - No new dependencies (only existing lucide-react + next/image).
+
+          VERIFICATION:
+            - Lint: zero errors on /app/app/home-2/page.js.
+            - Playwright screenshots at 428×926 mobile confirm header/hero/
+              buttons/trust-badge/search+filter/6-categories/curated header/
+              filter chips/property card/bottom-nav all render matching the
+              approved reference image (95–100% visual match).
+            - Design tokens (colors, radii, spacing, typography) implemented
+              via inline styles for pixel accuracy.
+
+          NO TESTING AGENT invoked per user constraint (<5 credits, no tests).
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: HOME + EXPLORE + PROFILE UI REFINEMENT (July 2026) — 1 credit
