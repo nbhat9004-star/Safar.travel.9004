@@ -162,9 +162,8 @@ function AppInner() {
     <main className="min-h-screen bg-background">
       <Navbar transparent />
 
-      {/* HERO — compact (~40% shorter) so users see search bar + categories +
-          the Curated Selection heading immediately without excessive scroll */}
-      <section className="relative min-h-[44svh] md:min-h-[48svh] lg:min-h-[52svh] w-full overflow-hidden">
+      {/* HERO — further reduced (~25% shorter) so property cards peek */}
+      <section className="relative min-h-[32svh] md:min-h-[36svh] lg:min-h-[40svh] w-full overflow-hidden">
         {/* Seasonal Background Slideshow - PERF: Removed parallax effect to reduce JavaScript load */}
         <div className="absolute inset-0">
           {SEASONAL_IMAGES.map((image, index) => (
@@ -189,22 +188,22 @@ function AppInner() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.50)_0%,rgba(15,20,25,0.35)_35%,rgba(15,20,25,0.60)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
-        <div className="relative h-full container flex flex-col justify-end pt-16 md:pt-20 lg:pt-22 pb-6 md:pb-8 lg:pb-10">
+        <div className="relative h-full container flex flex-col justify-end pt-12 md:pt-14 lg:pt-16 pb-4 md:pb-5 lg:pb-6">
           <div className="max-w-3xl text-white">
-            <h1 className="font-display font-bold text-[clamp(1.9rem,4.6vw,3.8rem)] leading-[1.03] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
+            <h1 className="font-display font-bold text-[clamp(1.65rem,4vw,3.2rem)] leading-[1.05] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.
             </h1>
-            <p className="mt-3 text-sm md:text-base text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
+            <p className="mt-2 text-[13px] md:text-sm text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
               Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
             </p>
-            <div className="mt-4 md:mt-5 flex flex-wrap gap-3">
+            <div className="mt-3 md:mt-4 flex flex-wrap gap-2">
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-5 md:px-6 h-11 md:h-12 font-semibold text-[15px]">
+                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-4 md:px-5 h-10 md:h-11 font-semibold text-[14px]">
                   <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
                 </Button>
               </div>
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-5 md:px-6 h-11 md:h-12 font-semibold text-[15px]">
+                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-4 md:px-5 h-10 md:h-11 font-semibold text-[14px]">
                   <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
                 </Button>
               </div>
@@ -212,15 +211,15 @@ function AppInner() {
           </div>
 
           {/* Trust badge */}
-          <div className="mt-4 md:mt-5 inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full glass-dark text-white/95 text-[11px] uppercase tracking-[0.22em] font-semibold w-fit">
-            <ShieldCheck className="size-3.5 text-gold" aria-hidden="true" />
+          <div className="mt-3 md:mt-4 inline-flex items-center gap-2 self-start px-3 py-1 rounded-full glass-dark text-white/95 text-[10.5px] uppercase tracking-[0.22em] font-semibold w-fit">
+            <ShieldCheck className="size-3 text-gold" aria-hidden="true" />
             Curated by locals · Trusted by travelers
           </div>
 
-          {/* Premium single search bar — replaces old booking widget */}
+          {/* Premium single search bar — sits closer to trust badge */}
           <form
             onSubmit={onSearch}
-            className="mt-4 md:mt-5 bg-white rounded-full shadow-[0_18px_46px_-18px_rgba(0,0,0,0.35)] ring-1 ring-black/5 flex items-center gap-3 pl-5 pr-1.5 py-1.5 w-full max-w-2xl"
+            className="mt-3 md:mt-4 bg-white rounded-full shadow-[0_18px_46px_-18px_rgba(0,0,0,0.35)] ring-1 ring-black/5 flex items-center gap-3 pl-5 pr-1.5 py-1.5 w-full max-w-2xl"
           >
             <Search className="size-5 shrink-0 text-charcoal/50" aria-hidden="true" />
             <input
@@ -244,7 +243,7 @@ function AppInner() {
       </section>
 
       {/* CATEGORIES + FEATURED — brought up (stats section removed) */}
-      <section className="pt-7 md:pt-8 pb-16 md:pb-20">
+      <section className="pt-4 md:pt-5 pb-16 md:pb-20">
         <div className="container">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
             <div>
