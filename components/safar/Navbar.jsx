@@ -775,51 +775,51 @@ export default function Navbar({ transparent = false }) {
       <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={()=>setAuthMode(null)} />
     </header>
 
-    {/* Mobile bottom navigation — Polarsteps-inspired premium layout. Fixed at
-        the bottom, respects iOS/Android safe-area, uses existing Safar routes
-        and brand color. Hidden for admin/super_admin users. Desktop nav is
-        unaffected (md:hidden). */}
+    {/* Mobile bottom navigation — Premium floating design.
+        - Floats above content with rounded corners + soft shadow + subtle ring.
+        - Fixed at bottom, respects iOS/Android safe-area.
+        - ~28% shorter than previous edge-to-edge version.
+        - Compact active pill (icon + label) in soft emerald.
+        - Hidden for admin/super_admin. Desktop nav unaffected (md:hidden). */}
     {!isAdminUser && (
       <nav
         aria-label="Primary mobile navigation"
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/98 backdrop-blur-md shadow-[0_-4px_20px_-6px_rgba(15,20,25,0.08),0_-1px_2px_rgba(15,20,25,0.04)]"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <ul className="grid grid-cols-5 items-stretch px-1 pt-1.5 pb-1">
-          {BOTTOM_NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const active = item.match(pathname || '');
-            return (
-              <li key={item.href} className="flex">
-                <Link
-                  href={item.href}
-                  aria-current={active ? 'page' : undefined}
-                  className="group flex-1 flex flex-col items-center justify-center gap-1 py-1.5 px-0.5 min-h-[60px] rounded-2xl transition-colors duration-200"
-                >
-                  <span
-                    className={`relative flex items-center justify-center h-8 w-12 rounded-full transition-all duration-200 ${
-                      active
-                        ? 'bg-emerald2/10'
-                        : 'bg-transparent group-active:bg-secondary'
+        <div className="pointer-events-auto mx-3 mb-2 bg-white/98 backdrop-blur-md rounded-3xl ring-1 ring-black/[0.06] shadow-[0_14px_36px_-14px_rgba(15,20,25,0.22),0_2px_6px_rgba(15,20,25,0.05)]">
+          <ul className="grid grid-cols-5 items-stretch px-1 py-1">
+            {BOTTOM_NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const active = item.match(pathname || '');
+              return (
+                <li key={item.href} className="flex">
+                  <Link
+                    href={item.href}
+                    aria-current={active ? 'page' : undefined}
+                    className={`group flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 min-h-[44px] rounded-2xl transition-all duration-250 ease-out ${
+                      active ? 'bg-emerald2/[0.10]' : 'hover:bg-black/[0.03] active:bg-black/[0.05]'
                     }`}
                   >
                     <Icon
-                      className={`size-[22px] transition-colors ${active ? 'text-emerald2' : 'text-charcoal/60'}`}
+                      className={`size-[22px] transition-all duration-250 ${
+                        active ? 'text-emerald2 scale-105' : 'text-charcoal/55'
+                      }`}
                       strokeWidth={active ? 2.4 : 2}
                     />
-                  </span>
-                  <span
-                    className={`text-[10.5px] leading-none tracking-tight transition-colors ${
-                      active ? 'text-emerald2 font-semibold' : 'text-charcoal/60 font-medium'
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    <span
+                      className={`text-[10.5px] leading-none tracking-tight transition-colors duration-250 ${
+                        active ? 'text-emerald2 font-semibold' : 'text-charcoal/55 font-medium'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </nav>
     )}
     </>
