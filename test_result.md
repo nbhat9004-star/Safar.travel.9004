@@ -114,10 +114,71 @@ user_problem_statement: |
 
 test_plan:
   current_focus:
-    - "NEW page /home-2 — pixel-close recreation of approved reference design (Home Page 2). Standalone page; existing homepage untouched. No backend / API / routing / dependency changes."
+    - "MAIN HOMEPAGE (/) replaced to match approved reference design pixel-close. Hero shortened so search + all 6 categories + curated header peek in first fold. Existing /home-2 kept."
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+# ---------------------------------------------------------------------------
+# MODULE: MAIN HOMEPAGE — REPLACED WITH REFERENCE DESIGN (July 2026)
+# ---------------------------------------------------------------------------
+module_homepage_replaced:
+  - task: "Replace / (main homepage) with approved reference design; shorter hero so search+categories+curated peek"
+    implemented: true
+    working: "NA"
+    file: "/app/app/page.js"
+    priority: "high"
+    needs_retesting: false
+    budget: "under 5 credits, NO testing agents"
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Replaced /app/app/page.js with the approved Home Page 2 design
+          (previously built at /home-2 and confirmed by user as final).
+
+          HERO — intentionally SHORTENED per user requirement:
+            * Height: 420 mobile / 460 sm / 520 md / 560 lg (was 520/560/600/640).
+            * H1: 30/36/44/50 (was 36/44/52/58) — still bold, still legible.
+            * Subtitle: 13/14.5/15.5 with max-w 380 (was 14.5/15.5/16 max-w 420).
+            * Buttons h-46/52 (was 52/56), padding 5/6 (was 6).
+            * Trust badge slightly smaller (px-3.5 py-2, tracking .14em, size-3.5).
+            * Result on mobile 428×926: header + hero + search bar + all 6
+              category tiles + "CURATED SELECTION" label + Curated heading
+              ALL fit within the first fold as required by the reference.
+
+          Everything else identical to the approved /home-2 design:
+            - Header: dark-green rounded logo + MapPin + "Safar" wordmark;
+              centered "Kashmir" pill; amber-cream circular compass.
+            - Search + Filter side-by-side cards (rounded 30 + rounded 20).
+            - 6 categories in single row (Stays 1.2K+, Houseboats 320+,
+              Cabins 480+, Transport 650+, Guides 240+, Experiences 240+).
+            - Curated header + View all link.
+            - Filter chips with icons (Sparkles/Anchor/Bell/Snowflake/Landmark).
+            - Property cards carousel with 4:3 image, category badge,
+              wishlist heart, rating pill, title/location/price/night, Superhost.
+            - Floating bottom nav rounded-top-28 with Marketplace ACTIVE.
+
+          Bottom-nav Marketplace href updated from '/home-2' → '/' (this
+          page IS the marketplace landing now).
+
+          PRESERVED:
+            - Existing /home-2 route remains available (unchanged copy).
+            - No backend / API / routing / dependency changes.
+            - Lint: zero errors on /app/app/page.js.
+
+          VERIFICATION:
+            - Playwright at 428×926 mobile confirms:
+                * Header + hero + all buttons + trust badge fit in ~510px.
+                * Search bar visible above the fold.
+                * All 6 category tiles visible in ONE row.
+                * "CURATED SELECTION" + heading start peek at the fold.
+            - Scroll reveals filter chips, property carousel, bottom-nav.
+
+          NO TESTING AGENT invoked per user constraint (<5 credits).
+    stuck_count: 0
+
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # MODULE: HOME PAGE 2 — EXACT DESIGN RECREATION (July 2026) — <5 credits
