@@ -190,37 +190,37 @@ function AppInner() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
         <div className="relative h-full container flex flex-col justify-start pt-20 md:pt-24 lg:pt-24 pb-4 md:pb-5 lg:pb-6">
-          <div className="max-w-3xl text-white">
+          <div className="max-w-[520px] md:max-w-[560px] text-white">
             <h1 className="font-display font-bold text-[clamp(1.55rem,3.6vw,2.9rem)] leading-[1.06] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.
             </h1>
-            <p className="mt-1.5 text-[12.5px] md:text-sm text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
-              Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
+            <p className="mt-1.5 text-[12.5px] md:text-sm text-white/85 max-w-[420px] text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
+              Discover authentic stays, local experiences and unforgettable journeys across Kashmir.
             </p>
-            <div className="mt-2.5 md:mt-3 flex flex-wrap gap-2">
+            <div className="mt-2 md:mt-2.5 flex flex-wrap gap-1.5">
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-4 md:px-5 h-10 md:h-11 font-semibold text-[14px]">
-                  <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
+                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-4 md:px-4.5 h-9 md:h-10 font-semibold text-[13.5px]">
+                  <Link href="/explore">Explore Stays <ArrowRight className="ml-1.5 size-3.5" /></Link>
                 </Button>
               </div>
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-4 md:px-5 h-10 md:h-11 font-semibold text-[14px]">
-                  <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
+                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-4 md:px-4.5 h-9 md:h-10 font-semibold text-[13.5px]">
+                  <Link href="/ai-planner"><Wand2 className="mr-1.5 size-3.5 text-gold" /> Plan My Trip with AI</Link>
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Trust badge */}
-          <div className="mt-2.5 md:mt-3 inline-flex items-center gap-2 self-start px-3 py-1 rounded-full glass-dark text-white/95 text-[10.5px] uppercase tracking-[0.22em] font-semibold w-fit">
+          {/* Trust badge — slimmer */}
+          <div className="mt-2 md:mt-2.5 inline-flex items-center gap-1.5 self-start px-2.5 py-[3px] rounded-full glass-dark text-white/95 text-[10px] uppercase tracking-[0.20em] font-semibold w-fit">
             <ShieldCheck className="size-3 text-gold" aria-hidden="true" />
             Curated by locals · Trusted by travelers
           </div>
 
-          {/* Premium single search bar — sits ~16px below trust badge */}
+          {/* Premium single search bar — closer to trust badge, smaller filter btn */}
           <form
             onSubmit={onSearch}
-            className="mt-2.5 md:mt-3 bg-white rounded-full shadow-[0_18px_46px_-18px_rgba(0,0,0,0.35)] ring-1 ring-black/5 flex items-center gap-3 pl-4 md:pl-5 pr-1.5 py-1.5 w-full max-w-2xl"
+            className="mt-2 md:mt-2.5 bg-white rounded-full shadow-[0_18px_46px_-18px_rgba(0,0,0,0.35)] ring-1 ring-black/5 flex items-center gap-3 pl-4 md:pl-5 pr-1.5 py-1.5 w-full max-w-2xl"
           >
             <Search className="size-5 shrink-0 text-charcoal/50" aria-hidden="true" />
             <input
@@ -234,9 +234,9 @@ function AppInner() {
             <Button
               type="submit"
               size="lg"
-              className="rounded-full bg-emerald2 hover:bg-emerald2-deep h-11 px-4 md:px-5 font-semibold shadow-[0_10px_26px_-12px_rgba(15,61,46,0.55)] shrink-0 gap-2 text-[14px]"
+              className="rounded-full bg-emerald2 hover:bg-emerald2-deep h-10 px-3.5 md:px-4 font-semibold shadow-[0_10px_26px_-12px_rgba(15,61,46,0.55)] shrink-0 gap-1.5 text-[13.5px]"
             >
-              <SlidersHorizontal className="size-4" />
+              <SlidersHorizontal className="size-3.5" />
               <span className="hidden sm:inline">Filter</span>
             </Button>
           </form>
@@ -244,17 +244,17 @@ function AppInner() {
       </section>
 
       {/* CATEGORIES + FEATURED — brought up (stats section removed) */}
-      <section className="pt-4 md:pt-5 pb-16 md:pb-20">
+      <section className="pt-3 md:pt-4 pb-16 md:pb-20">
         <div className="container">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 mb-4">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-2 mb-3">
             <div>
               <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Curated Selection</div>
-              <h2 className="font-display text-3xl md:text-5xl font-bold mt-1.5 text-balance">Stays travelers can’t stop talking about</h2>
+              <h2 className="font-display text-3xl md:text-5xl font-bold mt-1 text-balance">Stays travelers can’t stop talking about</h2>
             </div>
             <Link href="/explore" className="text-sm font-semibold text-charcoal inline-flex items-center gap-1 hover:gap-2 transition-all">View all <ChevronRight className="size-4" /></Link>
           </div>
           <CategoryPills value={cat} onChange={setCat} />
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6 mt-4 md:mt-5">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6 mt-3 md:mt-4">
             {filtered.slice(0, 8).map((l, i) => <PropertyCard key={l.id} item={l} index={i} priority={i < 4} />)}
           </div>
         </div>
