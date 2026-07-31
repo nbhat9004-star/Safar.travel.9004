@@ -14,10 +14,18 @@ export default function TripDetail({ params }) {
   const [openDay, setOpenDay] = useState(1);
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     let alive = true;
     fetchTrip(id).then(t => { if (alive && t) setTrip(t); }).catch(() => {});
+    // Load persisted saved-state for this trip
+    try {
+      const raw = localStorage.getItem('safar_saved_trips');
+      const list = raw ? JSON.parse(raw) : [];
+      setSaved(list.includes(id));
+    } catch { /* ignore */ }
     return () => { alive = false; };
   }, [id]);
 
@@ -32,6 +40,59 @@ export default function TripDetail({ params }) {
       toast.error(e.message || 'Could not send request. Please sign in and try again.');
     } finally {
       setJoining(false);
+    }
+  };
+
+  // Native share sheet with clipboard fallback.
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    // Light haptic where supported
+    try { navigator?.vibrate?.(15); } catch { /* ignore */ }
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const title = trip?.title || 'Kashmir Trip on Safar Curated';
+    const location = trip?.location || 'Kashmir';
+    const dates = trip?.dates || '';
+    const text = `Join me on this amazing ${title} using Safar Curated.${dates ? ` (${dates})` : ''}${location ? ` — ${location}` : ''}\n${url}`;
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        await navigator.share({ title, text, url });
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied to clipboard');
+      } else {
+        toast('Sharing is not supported on this device');
+      }
+    } catch (e) {
+      // User cancelled → do nothing. Any other error → toast.
+      if (e && e.name !== 'AbortError') {
+        toast.error('Could not open share sheet');
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  // Toggle bookmark (localStorage-backed).
+  const handleSave = () => {
+    try { navigator?.vibrate?.(15); } catch { /* ignore */ }
+    try {
+      const raw = localStorage.getItem('safar_saved_trips');
+      const list = raw ? JSON.parse(raw) : [];
+      let next;
+      if (list.includes(id)) {
+        next = list.filter((t) => t !== id);
+        setSaved(false);
+        toast('Removed from saved trips');
+      } else {
+        next = [...list, id];
+        setSaved(true);
+        toast.success('Trip saved successfully');
+      }
+      localStorage.setItem('safar_saved_trips', JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('safar:saved-trips-changed', { detail: next }));
+    } catch {
+      toast.error('Could not save trip');
     }
   };
 
@@ -55,8 +116,27 @@ export default function TripDetail({ params }) {
         <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-transparent to-transparent" />
         <Link href="/explore" className="absolute top-[max(1rem,env(safe-area-inset-top))] left-4 size-10 grid place-items-center rounded-full bg-white/15 backdrop-blur-xl border border-white/25 text-white active:scale-95"><ArrowLeft className="size-5" /></Link>
         <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 flex items-center gap-2">
-          <button className="size-10 grid place-items-center rounded-full bg-white/15 backdrop-blur-xl border border-white/25 text-white active:scale-95"><Share2 className="size-4" /></button>
-          <button className="size-10 grid place-items-center rounded-full bg-white/15 backdrop-blur-xl border border-white/25 text-white active:scale-95"><Bookmark className="size-4" /></button>
+          <button
+            type="button"
+            onClick={handleShare}
+            aria-label="Share trip"
+            className="size-10 grid place-items-center rounded-full bg-white/15 backdrop-blur-xl border border-white/25 text-white active:scale-90 hover:bg-white/25 transition-all duration-200"
+          >
+            <Share2 className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            aria-label={saved ? 'Remove from saved trips' : 'Save trip'}
+            aria-pressed={saved}
+            className="size-10 grid place-items-center rounded-full bg-white/15 backdrop-blur-xl border border-white/25 text-white active:scale-90 hover:bg-white/25 transition-all duration-200"
+          >
+            <Bookmark
+              className={`size-4 transition-all duration-200 ${saved ? 'text-amber-300' : 'text-white'}`}
+              fill={saved ? 'currentColor' : 'none'}
+              strokeWidth={saved ? 2.4 : 2}
+            />
+          </button>
         </div>
         <div className="absolute top-4 left-16 md:left-20">
           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500 text-white px-2.5 py-1 text-[10px] font-bold"><ShieldCheck className="size-3" /> Verified by Safar</span>

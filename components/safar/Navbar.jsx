@@ -15,6 +15,9 @@ import { useRouter, usePathname } from 'next/navigation';
 // bundle no longer ships on the initial paint of every marketplace page.
 const AuthModal = dynamic(() => import('@/components/safar/AuthModal'), { ssr: false });
 
+// PERF: LocationModal only mounts when the user taps the location selector.
+const LocationModal = dynamic(() => import('@/components/safar/LocationModal'), { ssr: false });
+
 export default function Navbar({ transparent = false }) {
   const { user } = useAuth();
   const router = useRouter();
@@ -34,6 +37,9 @@ export default function Navbar({ transparent = false }) {
   const [expandedCard, setExpandedCard] = useState(null);
   const [lang, setLang] = useState('English');
   const [showLangMenu, setShowLangMenu] = useState(false);
+  // Location selector modal (mobile Kashmir pill) + user's chosen location.
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   // Desktop nav — "Experience" (marketplace) dropdown
   const [showExperience, setShowExperience] = useState(false);
 
@@ -97,6 +103,18 @@ export default function Navbar({ transparent = false }) {
       ],
     },
   ];
+  
+  // Load persisted user location on mount + listen for cross-tab / same-tab
+  // updates so the Kashmir pill always reflects the freshest choice.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('safar_location');
+      if (raw) setSelectedLocation(JSON.parse(raw));
+    } catch { /* ignore */ }
+    const onLocChange = (e) => setSelectedLocation(e?.detail || null);
+    window.addEventListener('safar:location-changed', onLocChange);
+    return () => window.removeEventListener('safar:location-changed', onLocChange);
+  }, []);
   
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -328,19 +346,21 @@ export default function Navbar({ transparent = false }) {
           <span className={`sm:hidden font-display font-bold text-lg tracking-tight ${solid ? 'text-charcoal' : 'text-charcoal md:text-white'}`}>Safar</span>
         </Link>
 
-        {/* Mobile location chip — clean center pill (Polarsteps-inspired).
-            Kept as a simple visual anchor + Link into the marketplace, since the
-            existing app doesn't have a dedicated location-selector service. */}
+        {/* Mobile location chip — Polarsteps-inspired pill that opens the
+            LocationModal instead of navigating. Shows detected/selected
+            location, falling back to "Kashmir". */}
         {!isAdminUser && (
-          <Link
-            href="/explore"
-            aria-label="Browse Kashmir"
-            className="md:hidden flex-1 min-w-0 mx-1 flex items-center justify-center gap-1.5 h-10 px-3 rounded-full bg-secondary/70 border border-border/50 text-charcoal text-[13px] font-semibold hover:bg-secondary transition-colors"
+          <button
+            type="button"
+            onClick={() => setLocationModalOpen(true)}
+            aria-label="Change location"
+            aria-haspopup="dialog"
+            className="md:hidden flex-1 min-w-0 mx-1 flex items-center justify-center gap-1.5 h-10 px-3 rounded-full bg-secondary/70 border border-border/50 text-charcoal text-[13px] font-semibold hover:bg-secondary transition-colors active:scale-[0.98]"
           >
             <MapPin className="size-3.5 text-emerald2 shrink-0" strokeWidth={2.4} />
-            <span className="truncate">Kashmir</span>
+            <span className="truncate">{selectedLocation?.name || 'Kashmir'}</span>
             <ChevronDown className="size-3.5 text-muted-foreground/70 shrink-0" />
-          </Link>
+          </button>
         )}
 
         <nav className="hidden xl:flex items-center gap-0.5">
@@ -773,6 +793,11 @@ export default function Navbar({ transparent = false }) {
       </div>
       {/* Root-level AuthModal so Radix Sheet's pointer-events lock doesn't pass clicks through to nav Links underneath. */}
       <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={()=>setAuthMode(null)} />
+      <LocationModal
+        open={locationModalOpen}
+        onClose={() => setLocationModalOpen(false)}
+        onLocationSelected={(loc) => setSelectedLocation(loc)}
+      />
     </header>
 
     {/* Mobile bottom navigation — Premium floating design.
@@ -797,7 +822,7 @@ export default function Navbar({ transparent = false }) {
                   <Link
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
-                    className={`group flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 min-h-[44px] rounded-2xl transition-all duration-250 ease-out ${
+                    className={`group flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 min-h-[44px] rounded-2xl transition-all duration-250 ease-out ${
                       active ? 'bg-emerald2/[0.10]' : 'hover:bg-black/[0.03] active:bg-black/[0.05]'
                     }`}
                   >
@@ -808,7 +833,7 @@ export default function Navbar({ transparent = false }) {
                       strokeWidth={active ? 2.4 : 2}
                     />
                     <span
-                      className={`text-[10.5px] leading-none tracking-tight transition-colors duration-250 ${
+                      className={`text-[9.5px] leading-none tracking-tight whitespace-nowrap transition-colors duration-250 ${
                         active ? 'text-emerald2 font-semibold' : 'text-charcoal/55 font-medium'
                       }`}
                     >
