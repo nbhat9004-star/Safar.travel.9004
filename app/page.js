@@ -243,20 +243,8 @@ function AppInner() {
         </div>
       </section>
 
-      {/* STATS */}
-      <section className="py-12 border-b">
-        <div className="container grid grid-cols-2 md:grid-cols-4 gap-6">
-          {STATS.map((s, i) => (
-            <div key={s.label} className="text-center md:text-left" style={{animationDelay: `${i*50}ms`}}>
-              <div className="font-display text-3xl md:text-4xl font-bold gradient-text-emerald">{s.value}</div>
-              <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* CATEGORIES + FEATURED */}
-      <section className="py-20">
+      {/* CATEGORIES + FEATURED — brought up (stats section removed) */}
+      <section className="pt-7 md:pt-8 pb-16 md:pb-20">
         <div className="container">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
             <div>
