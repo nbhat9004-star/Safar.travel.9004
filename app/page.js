@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useState, useEffect, Suspense } from 'react';
-import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check, Loader2 } from 'lucide-react';
+import { Search, MapPin, CalendarRange, Users, Sparkles, ArrowRight, ShieldCheck, BadgeCheck, Star, Wand2, Plane, Mountain, Compass, ChevronRight, Check, Loader2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/safar/Navbar';
 import PropertyCard from '@/components/safar/PropertyCard';
@@ -162,9 +162,9 @@ function AppInner() {
     <main className="min-h-screen bg-background">
       <Navbar transparent />
 
-      {/* HERO with Seasonal Slideshow — height reduced so the top of the
-          "Curated Stays" section peeks in on first load */}
-      <section className="relative min-h-[70svh] md:min-h-[78svh] lg:min-h-[82svh] w-full overflow-hidden">
+      {/* HERO — compact (~40% shorter) so users see search bar + categories +
+          the Curated Selection heading immediately without excessive scroll */}
+      <section className="relative min-h-[44svh] md:min-h-[48svh] lg:min-h-[52svh] w-full overflow-hidden">
         {/* Seasonal Background Slideshow - PERF: Removed parallax effect to reduce JavaScript load */}
         <div className="absolute inset-0">
           {SEASONAL_IMAGES.map((image, index) => (
@@ -189,121 +189,57 @@ function AppInner() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,20,25,0.50)_0%,rgba(15,20,25,0.35)_35%,rgba(15,20,25,0.60)_70%,rgba(15,20,25,0.92)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(15,61,46,0.30),transparent_60%)]" />
 
-        <div className="relative h-full container flex flex-col justify-end pt-20 md:pt-24 lg:pt-28 pb-10 md:pb-14 lg:pb-16">
+        <div className="relative h-full container flex flex-col justify-end pt-16 md:pt-20 lg:pt-22 pb-6 md:pb-8 lg:pb-10">
           <div className="max-w-3xl text-white">
-            <h1 className="font-display font-bold text-[clamp(2.1rem,5.4vw,4.6rem)] leading-[1.03] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
+            <h1 className="font-display font-bold text-[clamp(1.9rem,4.6vw,3.8rem)] leading-[1.03] tracking-tight text-balance drop-shadow-[0_2px_24px_rgba(0,0,0,0.35)]">
               Experience Kashmir<br/>Like a Local.
             </h1>
-            <p className="mt-4 text-base md:text-lg text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
+            <p className="mt-3 text-sm md:text-base text-white/85 max-w-2xl text-balance leading-relaxed drop-shadow-[0_1px_12px_rgba(0,0,0,0.35)]">
               Discover authentic stays, local experiences, transport, guides, and unforgettable journeys across Kashmir.
             </p>
-            <div className="mt-5 md:mt-6 flex flex-wrap gap-3">
+            <div className="mt-4 md:mt-5 flex flex-wrap gap-3">
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-6 md:px-7 h-12 md:h-14 font-semibold text-base">
+                <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-5 md:px-6 h-11 md:h-12 font-semibold text-[15px]">
                   <Link href="/explore">Explore Stays <ArrowRight className="ml-2 size-4" /></Link>
                 </Button>
               </div>
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
-                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-6 md:px-7 h-12 md:h-14 font-semibold text-base">
+                <Button asChild size="lg" variant="outline" className="rounded-full bg-white/[0.08] hover:bg-white/15 backdrop-blur-md text-white border-white/40 hover:border-gold hover:text-white shadow-lg transition-all px-5 md:px-6 h-11 md:h-12 font-semibold text-[15px]">
                   <Link href="/ai-planner"><Wand2 className="mr-2 size-4 text-gold" /> Plan My Trip with AI</Link>
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Premium trust badge — repositioned from the top pill. Sits between the CTAs and the search card, above the fold. */}
-          <div className="mt-5 md:mt-6 inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full glass-dark text-white/95 text-[11px] uppercase tracking-[0.22em] font-semibold w-fit">
+          {/* Trust badge */}
+          <div className="mt-4 md:mt-5 inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full glass-dark text-white/95 text-[11px] uppercase tracking-[0.22em] font-semibold w-fit">
             <ShieldCheck className="size-3.5 text-gold" aria-hidden="true" />
             Curated by locals · Trusted by travelers
           </div>
 
-          {/* Search Card — responsive, fully contained at all viewports */}
+          {/* Premium single search bar — replaces old booking widget */}
           <form
             onSubmit={onSearch}
-            className="mt-4 md:mt-6 glass rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.4)] p-3 lg:p-2 flex flex-col gap-2 lg:flex-row lg:items-stretch w-full max-w-4xl"
+            className="mt-4 md:mt-5 bg-white rounded-full shadow-[0_18px_46px_-18px_rgba(0,0,0,0.35)] ring-1 ring-black/5 flex items-center gap-3 pl-5 pr-1.5 py-1.5 w-full max-w-2xl"
           >
-            {/* Fields wrapper: stack on mobile, 2x2 grid on sm-tablet, inline row on lg+ */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-1 lg:items-stretch gap-2 lg:gap-0 min-w-0">
-              <label className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition cursor-text min-w-0 lg:flex-1">
-                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><MapPin className="size-4 text-emerald2" /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Where</div>
-                  <input
-                    type="text"
-                    value={where}
-                    onChange={(e) => setWhere(e.target.value)}
-                    placeholder="Srinagar, Gulmarg..."
-                    className="w-full bg-transparent text-sm text-charcoal placeholder:text-charcoal/60 outline-none border-0 p-0 truncate"
-                  />
-                </div>
-              </label>
-              <div className="hidden lg:block self-center h-10 w-px bg-border/80 shrink-0" />
-              <label className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition cursor-pointer min-w-0 lg:flex-1">
-                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-in</div>
-                  <input
-                    type="date"
-                    min={todayStr}
-                    value={checkIn}
-                    onChange={(e) => { setCheckIn(e.target.value); if (checkOut && e.target.value && checkOut <= e.target.value) setCheckOut(''); }}
-                    className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
-                  />
-                </div>
-              </label>
-              <div className="hidden lg:block self-center h-10 w-px bg-border/80 shrink-0" />
-              <label className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition cursor-pointer min-w-0 lg:flex-1">
-                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><CalendarRange className="size-4 text-emerald2" /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Check-out</div>
-                  <input
-                    type="date"
-                    min={checkIn || todayStr}
-                    value={checkOut}
-                    onChange={(e) => setCheckOut(e.target.value)}
-                    className="w-full bg-transparent text-sm text-charcoal outline-none border-0 p-0 [color-scheme:light]"
-                  />
-                </div>
-              </label>
-              <div className="hidden lg:block self-center h-10 w-px bg-border/80 shrink-0" />
-              <div className="flex items-center gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-2xl hover:bg-white transition min-w-0 lg:flex-1">
-                <div className="size-9 rounded-xl bg-emerald2/10 grid place-items-center shrink-0"><Users className="size-4 text-emerald2" /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-charcoal">Guests</div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <button type="button" onClick={() => setGuests(Math.max(1, guests - 1))} aria-label="Decrease guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition shrink-0">−</button>
-                    <span className="text-sm font-semibold text-charcoal whitespace-nowrap">{guests} {guests === 1 ? 'guest' : 'guests'}</span>
-                    <button type="button" onClick={() => setGuests(Math.min(20, guests + 1))} aria-label="Increase guests" className="size-6 rounded-full border border-charcoal/30 text-charcoal text-sm grid place-items-center hover:bg-charcoal hover:text-white transition shrink-0">+</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Search className="size-5 shrink-0 text-charcoal/50" aria-hidden="true" />
+            <input
+              type="text"
+              value={where}
+              onChange={(e) => setWhere(e.target.value)}
+              placeholder="Search stays, experiences, transport..."
+              aria-label="Search stays, experiences, transport"
+              className="flex-1 min-w-0 bg-transparent text-[14.5px] text-charcoal placeholder:text-charcoal/55 outline-none border-0 py-2.5"
+            />
             <Button
               type="submit"
               size="lg"
-              className="rounded-2xl bg-emerald2 hover:bg-emerald2-deep h-12 lg:h-auto lg:min-h-14 px-5 lg:px-7 font-semibold shadow-lg shadow-emerald2/30 shrink-0 w-full lg:w-auto"
+              className="rounded-full bg-emerald2 hover:bg-emerald2-deep h-11 px-4 md:px-5 font-semibold shadow-[0_10px_26px_-12px_rgba(15,61,46,0.55)] shrink-0 gap-2 text-[14px]"
             >
-              <Search className="size-5 mr-2" /> <span>Search</span>
+              <SlidersHorizontal className="size-4" />
+              <span className="hidden sm:inline">Filter</span>
             </Button>
           </form>
-
-          {/* Trust strip */}
-          <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 text-white/90 text-[13px]">
-            {[
-              {t:'Verified Hosts'},
-              {t:'Secure Payments'},
-              {t:'Free Cancellation'},
-              {t:'Local Support'},
-              {t:'Real Reviews'},
-            ].map((tr) => (
-              <div key={tr.t} className="flex items-center gap-2">
-                <div className="size-5 rounded-full bg-gold/20 ring-1 ring-gold/50 grid place-items-center backdrop-blur-sm">
-                  <Check className="size-3 text-gold" strokeWidth={3} />
-                </div>
-                <span className="font-medium drop-shadow">{tr.t}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
