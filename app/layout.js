@@ -30,21 +30,50 @@ const poppins = Poppins({
 });
 
 export const metadata = {
-  title: 'Safar — Experience Kashmir Like a Local',
+  title: {
+    default: 'Safar Curated — Experience Kashmir Like a Local',
+    template: '%s | Safar Curated',
+  },
   description: 'Book authentic Kashmir stays, houseboats, cabins, transport and AI-planned itineraries. Premium tourism marketplace for Kashmir, India.',
-  keywords: ['Kashmir tourism','Srinagar houseboats','Gulmarg cabins','Pahalgam cottages','AI trip planner','Safar'],
+  keywords: ['Kashmir tourism','Srinagar houseboats','Gulmarg cabins','Pahalgam cottages','AI trip planner','Safar Curated','Kashmir travel','Dal Lake stay'],
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://safarcurated.com'),
+  applicationName: 'Safar Curated',
+  authors: [{ name: 'Safar Curated' }],
+  generator: 'Next.js',
+  referrer: 'origin-when-cross-origin',
+  creator: 'Safar Curated',
+  publisher: 'Safar Curated',
+  formatDetection: { email: false, address: false, telephone: false },
+  alternates: {
+    canonical: '/',
+  },
+  // Icons — Next.js also auto-injects <link> tags from app/icon.svg,
+  // app/apple-icon.svg, and app/icon.js (dynamic PNG). Listing them
+  // explicitly ensures search engines/social scrapers see every size.
+  icons: {
+    icon: [
+      { url: '/icon.svg',  type: 'image/svg+xml' },
+      { url: '/icon',      sizes: '32x32',   type: 'image/png' },
+      { url: '/icon',      sizes: '192x192', type: 'image/png' },
+      { url: '/icon',      sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/icon.svg', sizes: '180x180', type: 'image/svg+xml' },
+    ],
+    shortcut: '/icon.svg',
+  },
+  manifest: '/manifest.webmanifest',
   openGraph: {
-    title: 'Safar — Experience Kashmir Like a Local',
+    title: 'Safar Curated — Experience Kashmir Like a Local',
     description: 'Discover curated stays, experiences, guides, and rentals across Kashmir',
     url: '/',
-    siteName: 'Safar - Kashmir Curated',
+    siteName: 'Safar Curated',
     images: [
       {
         url: '/og-default.jpg',
         width: 1200,
         height: 630,
-        alt: 'Safar Kashmir - Curated Travel Experiences',
+        alt: 'Safar Curated Kashmir — Curated Travel Experiences',
       },
     ],
     locale: 'en_US',
@@ -52,14 +81,96 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Safar — Experience Kashmir Like a Local',
+    title: 'Safar Curated — Experience Kashmir Like a Local',
     description: 'Discover curated stays, experiences, guides, and rentals across Kashmir',
     creator: '@SafarKashmir',
+    site: '@SafarKashmir',
     images: ['/og-default.jpg'],
   },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
+  category: 'travel',
+};
+
+export const viewport = {
+  themeColor: '#0F766E',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({ children }) {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://safarcurated.com';
+
+  // Structured data — Organization + WebSite. Rendered inline in the root
+  // layout so it appears on every page for Google's Knowledge Graph and
+  // sitelinks search box. Kept as an @graph array so both entities share
+  // one <script> tag without conflicting @type definitions.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${baseUrl}#organization`,
+        name: 'Safar Curated',
+        alternateName: 'Safar',
+        url: baseUrl,
+        logo: {
+          '@type': 'ImageObject',
+          url: `${baseUrl}/icon.svg`,
+          width: 512,
+          height: 512,
+        },
+        description: 'Curated tourism marketplace for Kashmir — stays, experiences, guides, transport and AI-planned itineraries.',
+        sameAs: [
+          'https://instagram.com/safarcurated',
+          'https://facebook.com/safarcurated',
+          'https://twitter.com/safarcurated',
+          'https://linkedin.com/company/safarcurated',
+        ],
+        contactPoint: [{
+          '@type': 'ContactPoint',
+          email: 'hello@safarcurated.com',
+          contactType: 'customer support',
+          areaServed: 'IN',
+          availableLanguage: ['English', 'Hindi', 'Urdu'],
+        }],
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: 'Srinagar',
+          addressRegion: 'Kashmir',
+          addressCountry: 'IN',
+        },
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${baseUrl}#website`,
+        url: baseUrl,
+        name: 'Safar Curated',
+        description: 'Discover curated stays, experiences, guides, and rentals across Kashmir',
+        publisher: { '@id': `${baseUrl}#organization` },
+        inLanguage: 'en-US',
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: `${baseUrl}/explore?q={search_term_string}`,
+          },
+          'query-input': 'required name=search_term_string',
+        },
+      },
+    ],
+  };
+
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
       <head>
@@ -71,6 +182,13 @@ export default function RootLayout({ children }) {
         <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
         <link rel="dns-prefetch" href="https://api.razorpay.com" />
         <link rel="dns-prefetch" href="https://api.dicebear.com" />
+        {/* Global Organization + WebSite JSON-LD — powers Google Knowledge
+            Panel, sitelinks searchbox and social rich cards. */}
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
       </head>
       <body className="font-sans">
         <AuthProvider>
