@@ -8,6 +8,7 @@ import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
 import AIAssistantFloating from '@/components/safar/AIAssistantFloating';
 import ServiceBadges from '@/components/safar/ServiceBadges';
+import PropertyGallery from '@/components/safar/PropertyGallery';
 import { Button } from '@/components/ui/button';
 import { useListing, useAvailability } from '@/lib/listings-api';
 import { SERVICE_GROUPS, SERVICE_INDEX } from '@/lib/services';
@@ -240,21 +241,25 @@ function App() {
               {item?.superhost && <span className="flex items-center gap-1 text-emerald2"><BadgeCheck className="size-4" /> Superhost</span>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2">
             <Button variant="outline" size="sm" className="rounded-full" onClick={handleShare}><Share2 className="size-4 mr-2" /> Share</Button>
             <Button variant="outline" size="sm" className="rounded-full" onClick={handleToggleSave}><Heart className={`size-4 mr-2 ${liked ? 'fill-rose-500 text-rose-500' : ''}`} /> {saveCount > 0 && `${saveCount} `}Saved</Button>
           </div>
         </div>
 
-        {gallery.length > 0 && (
-          <div className="mt-6 grid grid-cols-4 grid-rows-2 gap-3 h-[60vh] min-h-[420px] rounded-3xl overflow-hidden">
-            <motion.img initial={{ opacity: 0 }} animate={{ opacity: 1 }} src={gallery[0]} alt="" className="col-span-2 row-span-2 size-full object-cover" />
-            {[1,2,3,4].map((i) => (
-              <motion.img key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i*0.05 }}
-                src={gallery[i % gallery.length]} alt="" className="size-full object-cover" />
-            ))}
-          </div>
-        )}
+        {/* Premium image gallery — replaces the old 4-col grid.
+            Mobile: single hero carousel (~38dvh) with overlay controls.
+            Desktop: 4-tile collage with "View All Photos" CTA.
+            Both open a shared fullscreen viewer (swipe + pinch/double-tap zoom). */}
+        <PropertyGallery
+          images={gallery}
+          title={item?.title}
+          onBack={() => (typeof window !== 'undefined' ? window.history.back() : null)}
+          onShare={handleShare}
+          onToggleSave={handleToggleSave}
+          isSaved={liked}
+          saveCount={saveCount}
+        />
       </div>
 
       <div className="container mt-10 grid lg:grid-cols-3 gap-10">
