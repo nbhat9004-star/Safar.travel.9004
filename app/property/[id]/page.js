@@ -31,6 +31,7 @@ export async function generateMetadata({ params }) {
     return generateSafarMetadata({
       title: 'Listing not found',
       description: 'This listing is no longer available.',
+      image: '/opengraph-image',
       url: `/property/${id}`,
       noIndex: true,
     });
@@ -39,24 +40,35 @@ export async function generateMetadata({ params }) {
   const hostName = listing.hostName || listing.host?.name;
   const location = listing.location || 'Kashmir';
   const rawTitle = listing.title || 'Kashmir Stay';
-  // Match the requested SEO title format, e.g.:
-  //   "Authentic Houseboat on Dal Lake | Safar Curated"
-  // The layout template already appends " | Safar Curated" globally, so
-  // we only pass the listing-specific portion here.
   const title = rawTitle;
   const description = listing.description
     ? listing.description
     : hostName
       ? `Stay at ${rawTitle} hosted by ${hostName} in ${location}. Curated by Safar.`
       : `Discover ${rawTitle} in ${location} — curated by Safar Curated.`;
-  const images = Array.isArray(listing.images) && listing.images.length ? listing.images : [];
-  const primaryImage = images[0] || listing.image || '/og-default.jpg';
+
+  // Robust image selection — try every plausible field the DB might use.
+  // Whatever we return here goes through absoluteImageUrl() inside
+  // generateSafarMetadata(), which forces absolute HTTPS. If nothing valid
+  // is found, the helper falls back to /opengraph-image.png (guaranteed 200).
+  const candidateImages = [
+    ...(Array.isArray(listing.images) ? listing.images : []),
+    ...(Array.isArray(listing.gallery) ? listing.gallery : []),
+    listing.image,
+    listing.coverImage,
+    listing.thumbnail,
+    listing.host?.avatar,
+  ].filter((u) => typeof u === 'string' && u.trim().length > 0);
+
+  const primaryImage = candidateImages[0];
 
   return generateSafarMetadata({
     title,
     description,
     image: primaryImage,
-    images,
+    // Only pass the primary image — WhatsApp uses only the first og:image
+    // and multiple entries can confuse Facebook's cache-refresh logic.
+    images: primaryImage ? [primaryImage] : undefined,
     url: `/property/${listing.id}`,
     type: 'website',
     location,

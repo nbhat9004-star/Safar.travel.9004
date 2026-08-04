@@ -70,9 +70,11 @@ export const metadata = {
     siteName: 'Safar Curated',
     images: [
       {
-        url: '/og-default.jpg',
+        url: '/opengraph-image',
+        secureUrl: '/opengraph-image',
         width: 1200,
         height: 630,
+        type: 'image/png',
         alt: 'Safar Curated Kashmir — Curated Travel Experiences',
       },
     ],
@@ -85,7 +87,7 @@ export const metadata = {
     description: 'Discover curated stays, experiences, guides, and rentals across Kashmir',
     creator: '@SafarKashmir',
     site: '@SafarKashmir',
-    images: ['/og-default.jpg'],
+    images: ['/opengraph-image'],
   },
   robots: {
     index: true,
