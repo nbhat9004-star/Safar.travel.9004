@@ -3,13 +3,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 import { Heart, Star, MapPin, Navigation } from 'lucide-react';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { useWishlist } from '@/lib/safar-storage';
 import { formatDistance } from '@/lib/location-utils';
 
-export default function PropertyCard({ item, index = 0, priority = false }) {
+function PropertyCard({ item, index = 0, priority = false }) {
   const { user } = useAuth();
   const { has, toggle } = useWishlist(user?.id);
   const liked = has(item.id);
@@ -143,3 +143,14 @@ export default function PropertyCard({ item, index = 0, priority = false }) {
     </div>
   );
 }
+
+// PERF: `memo` prevents re-rendering all 8-12 PropertyCards on the homepage
+// grid whenever a sibling toggles wishlist or the parent state changes. The
+// custom comparator only re-renders when the actual listing identity or
+// index/priority changes (wishlist state is subscribed to internally via
+// useWishlist, so wishlist changes still propagate correctly).
+export default memo(PropertyCard, (prev, next) =>
+  prev.item?.id === next.item?.id &&
+  prev.index === next.index &&
+  prev.priority === next.priority
+);
