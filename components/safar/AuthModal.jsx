@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User as UserIcon, Sparkles, MapPin, Shield, ChevronRight, Loader2, Phone, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { X, Mail, Lock, User as UserIcon, Sparkles, MapPin, Shield, ChevronRight, Loader2, Phone, ArrowLeft, CheckCircle2, Home as HomeIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
@@ -378,6 +378,32 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}
                   className="mt-4 text-center text-[10px] text-muted-foreground">
                   Protected by Google OAuth · Secure JWT sessions
+                </motion.div>
+
+                {/* Become a Host — moved out of primary navigation into the
+                    Sign in / Sign up screen. This is the only place a
+                    logged-out visitor can begin the host onboarding. */}
+                <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.8 }}
+                  className="mt-5 rounded-2xl border border-emerald2/20 bg-emerald2/5 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="size-10 rounded-2xl bg-emerald2/15 grid place-items-center shrink-0">
+                      <HomeIcon className="size-5 text-emerald2" strokeWidth={2.2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display font-semibold text-[15px] text-charcoal leading-tight">Become a Host</div>
+                      <p className="text-[12px] text-muted-foreground mt-1 leading-snug">
+                        List your stay, experience or service on Safar Curated.
+                      </p>
+                      <a
+                        href="/add-listing"
+                        onClick={onClose}
+                        className="mt-3 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-emerald2 hover:bg-emerald2-deep text-white text-[12.5px] font-semibold shadow-md shadow-emerald2/25 transition"
+                      >
+                        Get started
+                        <ChevronRight className="size-3.5" />
+                      </a>
+                    </div>
+                  </div>
                 </motion.div>
               </div>
             </div>

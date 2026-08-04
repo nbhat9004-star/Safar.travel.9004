@@ -199,26 +199,18 @@ export default function Navbar({ transparent = false }) {
       ];
     }
 
-    // Customer navigation (for travelers, hosts, and guests).
-    // NOTE: Marketplace categories (Stays / Experiences / Bikes & Cars /
-    // Tour Guides / Shopping) are surfaced via the "Experience" dropdown
-    // rendered separately in the desktop nav — see EXPERIENCE_CATEGORIES.
-    const baseNav = [
+    // Universal customer navigation — EXACTLY these five primary items on
+    // both desktop (top nav) and mobile (bottom nav). "Become a Host" is
+    // intentionally NOT part of primary navigation: it has been moved into
+    // the Sign in / Sign up screen and the account menu (see AuthModal +
+    // AuthButtons for the new location).
+    return [
+      { href: '/marketplace',         label: 'Marketplace' },
+      { href: '/build-trip',          label: 'Build My Trip' },
+      { href: '/ai-planner',          label: 'AI Trip Planner' },
+      { href: '/explore/home',        label: 'Explore' },
       { href: '/explore?nearme=true', label: 'Near Me' },
-      { href: '/ai-planner',          label: 'AI Planner' },
     ];
-
-    // Add role-specific items
-    if (user?.role === 'traveler') {
-      baseNav.push({ href: '/dashboard/traveler/bookings', label: 'My Bookings' });
-    }
-
-    // Only show "Become a Host" if user is NOT logged in
-    if (!user) {
-      baseNav.push({ href: '/add-listing', label: 'Become a Host' });
-    }
-
-    return baseNav;
   };
 
   // Polarsteps-inspired large icon-card menu (mobile drawer). Groups every
@@ -318,12 +310,16 @@ export default function Navbar({ transparent = false }) {
   // surfaced through the hamburger drawer. Hidden for admin/super_admin who
   // only see their admin nav.
   const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+  // Universal mobile bottom navigation — MUST mirror the desktop top nav
+  // exactly. Same 5 primary items, same order. "Become a Host" is NOT in
+  // primary nav; it has been moved into the Sign in / Sign up screen and
+  // the account menu.
   const BOTTOM_NAV_ITEMS = [
-    { href: '/build-trip',   label: 'Build Trip',   icon: Sparkles, match: (p) => p.startsWith('/build-trip') },
-    { href: '/marketplace',  label: 'Marketplace',  icon: Store,    match: (p) => p.startsWith('/marketplace') },
-    { href: '/ai-planner',   label: 'AI Planner',   icon: Wand2,    match: (p) => p.startsWith('/ai-planner') },
-    { href: '/add-listing',  label: 'Become Host',  icon: Home,     match: (p) => p.startsWith('/add-listing') },
-    { href: '/explore/home', label: 'Explore',      icon: Compass,  match: (p) => p.startsWith('/explore/') },
+    { href: '/marketplace',         label: 'Marketplace',   icon: Store,    match: (p) => p.startsWith('/marketplace') },
+    { href: '/build-trip',          label: 'Build My Trip', icon: Sparkles, match: (p) => p.startsWith('/build-trip') },
+    { href: '/ai-planner',          label: 'AI Planner',    icon: Wand2,    match: (p) => p.startsWith('/ai-planner') },
+    { href: '/explore/home',        label: 'Explore',       icon: Compass,  match: (p) => p.startsWith('/explore/') && !p.includes('nearme') },
+    { href: '/explore?nearme=true', label: 'Near Me',       icon: MapPin,   match: (p) => p.includes('nearme') },
   ];
 
   return (
@@ -364,127 +360,15 @@ export default function Navbar({ transparent = false }) {
         )}
 
         <nav className="hidden xl:flex items-center gap-0.5">
-          {/* Experience — consolidated marketplace entry point (dropdown).
-              Items are only mounted when the dropdown is open, so the header
-              DOM stays minimal on initial paint. */}
-          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-            <div className="relative experience-dropdown">
-              <button
-                type="button"
-                onClick={() => setShowExperience((v) => !v)}
-                aria-haspopup="menu"
-                aria-expanded={showExperience}
-                aria-label="Experience — browse marketplace categories"
-                className={`inline-flex items-center gap-1 px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
-              >
-                Experience
-                <ChevronDown className={`size-3.5 transition-transform ${showExperience ? 'rotate-180' : ''}`} />
-              </button>
-              {showExperience && (
-                <div role="menu" className="absolute left-0 top-full mt-2 w-56 bg-white rounded-2xl border shadow-xl z-50 overflow-hidden">
-                  <div className="p-2">
-                    {EXPERIENCE_CATEGORIES.map((it) => (
-                      <Link
-                        key={it.href}
-                        href={it.href}
-                        onClick={() => setShowExperience(false)}
-                        className="flex items-center px-3 py-2.5 rounded-xl text-sm text-charcoal hover:bg-secondary transition"
-                      >
-                        {it.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Universal top navigation — exactly 5 primary items shared with
+              the mobile bottom nav (see BOTTOM_NAV_ITEMS). No dropdowns,
+              no CTAs, no "Become a Host" here. */}
           {visibleNav.map((n) => (
             <Link key={n.href} href={n.href}
               className={`px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}>
               {n.label}
             </Link>
           ))}
-          {/* Build My Trip — primary CTA */}
-          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-            <Link
-              href="/build-trip"
-              className={`group relative ml-1.5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13.5px] font-semibold tracking-tight transition-all ${solid
-                ? 'text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 shadow-md shadow-orange-500/25 hover:shadow-lg hover:shadow-orange-500/40'
-                : 'text-white bg-gradient-to-r from-amber-400/40 via-orange-400/40 to-rose-400/40 border border-white/25 backdrop-blur hover:from-amber-400/60 hover:via-orange-400/60 hover:to-rose-400/60'}`}
-            >
-              <Sparkles className="size-3.5" />
-              Build My Trip
-            </Link>
-          )}
-          {/* Explore — new social/discovery experience (replaces Safar Circle) */}
-          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-            <Link
-              href="/explore/home"
-              className={`group relative ml-1.5 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13.5px] font-semibold tracking-tight transition-all ${solid
-                ? 'text-white bg-gradient-to-r from-emerald-500 via-violet-500 to-pink-500 shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/40'
-                : 'text-white bg-gradient-to-r from-emerald-400/40 via-violet-400/40 to-pink-400/40 border border-white/25 backdrop-blur hover:from-emerald-400/60 hover:via-violet-400/60 hover:to-pink-400/60'}`}
-            >
-              <Sparkles className="size-3.5" />
-              Explore
-              <span className="ml-0.5 text-[9px] font-bold uppercase tracking-wider bg-white/25 text-white rounded-full px-1.5 py-[1px] leading-none">New</span>
-            </Link>
-          )}
-          {/* Module 11A — More menu (informational + policy links) */}
-          {!(user?.role === 'admin' || user?.role === 'super_admin') && (
-            <div className="relative more-dropdown">
-              <button
-                type="button"
-                onClick={() => setShowMore((v) => !v)}
-                aria-haspopup="menu"
-                aria-expanded={showMore}
-                className={`inline-flex items-center gap-1 px-3.5 py-2 rounded-full text-[13.5px] font-medium tracking-tight transition-colors ${solid ? 'text-charcoal/80 hover:text-charcoal hover:bg-secondary' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
-              >
-                More
-                <ChevronDown className={`size-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
-              </button>
-              {showMore && (
-                <div role="menu" className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border shadow-xl z-50 overflow-hidden">
-                  <div className="p-3 max-h-[75vh] overflow-y-auto">
-                    {MORE_SECTIONS.map((section, sIdx) => (
-                      <div key={section.title} className={sIdx > 0 ? 'mt-2 pt-2 border-t border-border/50' : ''}>
-                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-bold">{section.title}</div>
-                        {section.items.map((it) => {
-                          const ItIcon = it.icon;
-                          const external = it.external;
-                          const disabled = it.soon;
-                          const linkClass = `flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm transition ${disabled ? 'text-muted-foreground cursor-not-allowed' : 'text-charcoal hover:bg-secondary'}`;
-                          const inner = (
-                            <>
-                              <span className="flex items-center gap-2 min-w-0 truncate">
-                                {ItIcon && <ItIcon className="size-4 shrink-0 text-muted-foreground" />}
-                                <span className="truncate">{it.label}</span>
-                              </span>
-                              {disabled && <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground border">Soon</span>}
-                            </>
-                          );
-                          if (disabled) {
-                            return <span key={it.label} className={linkClass}>{inner}</span>;
-                          }
-                          if (external) {
-                            return (
-                              <a key={it.label} href={it.href} target={it.href.startsWith('http') ? '_blank' : undefined} rel={it.href.startsWith('http') ? 'noopener noreferrer' : undefined} onClick={() => setShowMore(false)} className={linkClass}>
-                                {inner}
-                              </a>
-                            );
-                          }
-                          return (
-                            <Link key={it.label} href={it.href} onClick={() => setShowMore(false)} className={linkClass}>
-                              {inner}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </nav>
 
         <div className="flex items-center gap-2">

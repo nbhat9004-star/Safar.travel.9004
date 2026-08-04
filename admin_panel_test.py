@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta
 
 # Base URL from supervisor config
-BASE_URL = "https://kashmir-local-stays.preview.emergentagent.com/api"
+BASE_URL = "https://cross-platform-nav-1.preview.emergentagent.com/api"
 
 # Test results
 results = {
