@@ -480,9 +480,13 @@ export default function Navbar({ transparent = false }) {
                 </div>
               </button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background flex flex-col h-full">
-              {/* Top Section — Safar Curated logo + branding; ShadCN Sheet renders X close top-right */}
-              <div className="p-5 border-b flex-shrink-0">
+            <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background flex flex-col" style={{ height: '100dvh', maxHeight: '100dvh' }}>
+              {/* Top Section — Safar Curated logo + branding; ShadCN Sheet renders X close top-right.
+                  Uses env(safe-area-inset-top) so the logo/tagline never clip on notched devices. */}
+              <div
+                className="border-b flex-shrink-0"
+                style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)', paddingBottom: 20, paddingLeft: 20, paddingRight: 20 }}
+              >
                 <div className="flex items-center gap-2.5">
                   <div className="size-11 rounded-2xl bg-gradient-emerald grid place-items-center shadow-md shadow-emerald2/25 ring-1 ring-white/20">
                     <MapPin className="size-5 text-gold" strokeWidth={2.4} />
@@ -660,17 +664,22 @@ export default function Navbar({ transparent = false }) {
                 </div>
               </div>
 
-              {/* Fixed Account Section at Bottom (unchanged — preserves existing sign-in/sign-up/sign-out logic) */}
-              <div className="border-t flex-shrink-0 bg-background">
-                <div className="p-4 pb-safe">
-                  {user && (
+              {/* Fixed Account Section at Bottom — ONLY rendered when the
+                  user is logged in (shows profile card + View Profile + Logout).
+                  For logged-out users the Sign in / Sign up pair at the top of
+                  the scrollable body is the single entry point — a second
+                  copy here would be a duplicate and leave dead space when
+                  removed on short viewports. Uses safe-area inset for iOS. */}
+              {user && (
+                <div className="border-t flex-shrink-0 bg-background" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+                  <div className="p-4">
                     <div className="mb-3">
                       <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Account</div>
                     </div>
-                  )}
-                  <MobileAuthButtons onClose={()=>setOpen(false)} onOpenAuth={(m)=>setAuthMode(m)} />
+                    <MobileAuthButtons onClose={()=>setOpen(false)} onOpenAuth={(m)=>setAuthMode(m)} />
+                  </div>
                 </div>
-              </div>
+              )}
             </SheetContent>
           </Sheet>
         </div>

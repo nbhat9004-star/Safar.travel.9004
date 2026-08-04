@@ -278,18 +278,33 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
     const modalNode = (
       <AnimatePresence>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center">
+          onClick={onClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            minHeight: '100dvh',
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            WebkitOverflowScrolling: 'touch',
+          }}
+          className="z-[100] overflow-y-auto overscroll-contain flex items-start md:items-center justify-center">
           
-          <div className="absolute inset-0">
+          <div className="fixed inset-0 -z-10">
             <img src={IMG.mtn1} alt="" className="absolute inset-0 w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/85 via-teal-800/75 to-emerald-950/90" />
           </div>
 
           <motion.div initial={{ scale: 0.9, y: 40 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 40 }}
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-md mx-4 md:mx-auto">
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md mx-4 md:mx-auto my-6 md:my-8">
             
-            <div className="relative backdrop-blur-2xl bg-white/95 rounded-3xl shadow-2xl overflow-hidden border border-white/20">
+            {/* NOTE: `overflow-hidden` REMOVED from this card. On short mobile
+                viewports the card content is taller than the screen; hiding
+                overflow prevented users from scrolling to reach the "Become
+                a Host" CTA and the footer. The parent overlay now handles
+                vertical scroll via overflow-y-auto + safe-area padding. */}
+            <div className="relative backdrop-blur-2xl bg-white/95 rounded-3xl shadow-2xl border border-white/20">
               
               <button onClick={onClose} aria-label="Close"
                 className="absolute top-5 right-5 z-10 size-10 grid place-items-center rounded-full bg-white/10 backdrop-blur hover:bg-white/20 transition">
@@ -421,11 +436,22 @@ export default function AuthModal({ open, onClose, defaultMode = 'login' }) {
   const modalNode = (
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        style={{ position: 'fixed', inset: 0, height: '100dvh' }}
-        className="z-[1000] bg-charcoal/55 backdrop-blur-md flex items-center justify-center p-0 md:p-6 overflow-y-auto overscroll-contain" onClick={onClose}>
+        style={{
+          position: 'fixed',
+          inset: 0,
+          minHeight: '100dvh',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          WebkitOverflowScrolling: 'touch',
+        }}
+        className="z-[1000] bg-charcoal/55 backdrop-blur-md flex items-start md:items-center justify-center p-0 md:p-6 overflow-y-auto overscroll-contain" onClick={onClose}>
         <motion.div onClick={(e) => e.stopPropagation()} initial={{ y: 40, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 30, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 240, damping: 26 }}
-          className="w-full md:max-w-md bg-white md:rounded-3xl shadow-2xl border overflow-hidden max-h-[100dvh] md:max-h-[92dvh] overflow-y-auto my-auto">
+          /* NOTE: `overflow-hidden` REMOVED here — it conflicted with the
+             `overflow-y-auto` on the same element and prevented mobile users
+             from scrolling the form content on short screens. The parent
+             overlay handles vertical scroll instead. */
+          className="w-full md:max-w-md bg-white md:rounded-3xl shadow-2xl border md:max-h-[92dvh] md:overflow-y-auto my-0 md:my-auto">
           
           <div className="px-6 pt-6 pb-5 bg-gradient-emerald text-white relative">
             <button onClick={()=>setShowEmailForm(false)} aria-label="Back" className="absolute top-4 left-4 size-9 grid place-items-center rounded-full hover:bg-white/15"><ArrowLeft className="size-5" /></button>
