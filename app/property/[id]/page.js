@@ -28,10 +28,13 @@ export async function generateMetadata({ params }) {
   const { id } = await Promise.resolve(params);
   const listing = await loadListing(id);
   if (!listing) {
+    // Note: we deliberately do NOT set `image` here. The co-located
+    // `opengraph-image.js` handles the null-listing case internally by
+    // rendering a branded fallback, and Next.js file convention auto-emits
+    // the og:image tag pointing at the correct URL with correct dimensions.
     return generateSafarMetadata({
       title: 'Listing not found',
       description: 'This listing is no longer available.',
-      image: '/opengraph-image',
       url: `/property/${id}`,
       noIndex: true,
     });
@@ -47,28 +50,15 @@ export async function generateMetadata({ params }) {
       ? `Stay at ${rawTitle} hosted by ${hostName} in ${location}. Curated by Safar.`
       : `Discover ${rawTitle} in ${location} — curated by Safar Curated.`;
 
-  // Robust image selection — try every plausible field the DB might use.
-  // Whatever we return here goes through absoluteImageUrl() inside
-  // generateSafarMetadata(), which forces absolute HTTPS. If nothing valid
-  // is found, the helper falls back to /opengraph-image.png (guaranteed 200).
-  const candidateImages = [
-    ...(Array.isArray(listing.images) ? listing.images : []),
-    ...(Array.isArray(listing.gallery) ? listing.gallery : []),
-    listing.image,
-    listing.coverImage,
-    listing.thumbnail,
-    listing.host?.avatar,
-  ].filter((u) => typeof u === 'string' && u.trim().length > 0);
-
-  const primaryImage = candidateImages[0];
-
+  // NOTE: we intentionally do NOT pass `image`/`images` here. The co-located
+  // `app/property/[id]/opengraph-image.js` file-convention route auto-injects
+  // the canonical `<meta property="og:image">` (plus width/height/type) at
+  // build time — a real 1200x630 PNG sized under WhatsApp's ~1 MB ceiling.
+  // Passing images here would emit a SECOND og:image tag pointing at the raw
+  // multi-megabyte Unsplash source, which WhatsApp silently rejects.
   return generateSafarMetadata({
     title,
     description,
-    image: primaryImage,
-    // Only pass the primary image — WhatsApp uses only the first og:image
-    // and multiple entries can confuse Facebook's cache-refresh logic.
-    images: primaryImage ? [primaryImage] : undefined,
     url: `/property/${listing.id}`,
     type: 'website',
     location,
