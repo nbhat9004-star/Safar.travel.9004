@@ -480,12 +480,8 @@ export default function Navbar({ transparent = false }) {
                 </div>
               </button>
             </SheetTrigger>
-            <SheetContent
-              side="right"
-              className="w-[90vw] sm:w-[420px] p-0 bg-background flex flex-col overflow-hidden"
-              style={{ height: '100dvh', maxHeight: '100dvh' }}
-            >
-              {/* Top Section (FIXED) — Safar Curated logo + branding; ShadCN Sheet renders X close top-right */}
+            <SheetContent side="right" className="w-[90vw] sm:w-[420px] p-0 bg-background flex flex-col h-full">
+              {/* Top Section — Safar Curated logo + branding; ShadCN Sheet renders X close top-right */}
               <div className="p-5 border-b flex-shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="size-11 rounded-2xl bg-gradient-emerald grid place-items-center shadow-md shadow-emerald2/25 ring-1 ring-white/20">
@@ -498,14 +494,8 @@ export default function Navbar({ transparent = false }) {
                 </div>
               </div>
 
-              {/* Scrollable body — contains ALL menu content INCLUDING the
-                  account/logout section so every item (Earnings, Settings,
-                  Language, Help Center, About, Privacy, Terms, Logout) stays
-                  reachable via vertical scroll on mobile. */}
-              <div
-                className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
-                style={{ WebkitOverflowScrolling: 'touch' }}
-              >
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto">
                 <div className="p-5 pb-6 space-y-5">
                   {/* Auth buttons (Polarsteps-style pair) — only when logged out */}
                   {!user && (
@@ -665,20 +655,20 @@ export default function Navbar({ transparent = false }) {
                     })}
                   </div>
 
-                  {/* Account section — now inside the scroll area so Logout
-                      and every account item is reachable via scroll. */}
-                  <div className="pt-2 border-t">
-                    {user && (
-                      <div className="px-2 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Account</div>
-                    )}
-                    <MobileAuthButtons onClose={() => setOpen(false)} onOpenAuth={(m) => setAuthMode(m)} />
-                  </div>
+                  {/* Extra padding at bottom to ensure last item is always visible */}
+                  <div className="h-6" />
+                </div>
+              </div>
 
-                  {/* Safe-area bottom padding so Logout clears iOS home indicator */}
-                  <div
-                    className="h-6"
-                    style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-                  />
+              {/* Fixed Account Section at Bottom (unchanged — preserves existing sign-in/sign-up/sign-out logic) */}
+              <div className="border-t flex-shrink-0 bg-background">
+                <div className="p-4 pb-safe">
+                  {user && (
+                    <div className="mb-3">
+                      <div className="px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-bold">Account</div>
+                    </div>
+                  )}
+                  <MobileAuthButtons onClose={()=>setOpen(false)} onOpenAuth={(m)=>setAuthMode(m)} />
                 </div>
               </div>
             </SheetContent>

@@ -214,8 +214,10 @@ export function MobileAuthButtons({ onClose, onOpenAuth }) {
     );
   }
 
+  const dashHref = (user.role === 'admin' || user.role === 'super_admin')
+    ? '/admin'
+    : (user.role === 'host' ? '/dashboard/host' : '/dashboard/traveler');
   const roleLabel = user.role?.charAt(0).toUpperCase() + user.role?.slice(1);
-  const accountItems = buildAccountMenu(user);
 
   return (
     <div className="space-y-2">
@@ -231,17 +233,11 @@ export function MobileAuthButtons({ onClose, onOpenAuth }) {
           </div>
         </div>
       </div>
-
-      {/* Universal account menu — identical items to the desktop dropdown */}
-      <div className="rounded-2xl border overflow-hidden bg-white">
-        {accountItems.map((item) => (
-          <div key={item.key}>
-            {item.divider && <div className="border-t border-border/60" />}
-            <AccountRow item={item} onClick={onClose} />
-          </div>
-        ))}
-      </div>
-
+      <Link href={dashHref} onClick={onClose} className="w-full">
+        <Button variant="outline" className="w-full h-11 rounded-full font-semibold">
+          <User className="size-4 mr-2" /> View Profile
+        </Button>
+      </Link>
       <Button
         variant="outline"
         className="w-full h-11 rounded-full font-semibold text-rose-600 hover:text-rose-600"
