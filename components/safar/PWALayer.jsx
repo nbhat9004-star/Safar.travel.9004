@@ -10,6 +10,7 @@
  * The splash is CSS-only (no heavy images) and auto-dismisses in ~1s.
  */
 import { useEffect, useState } from 'react';
+import OnboardingFlow from '@/components/safar/OnboardingFlow';
 
 export default function PWALayer() {
   const [showSplash, setShowSplash] = useState(false);
@@ -53,25 +54,29 @@ export default function PWALayer() {
     }
   }, []);
 
-  if (!showSplash) return null;
-
   return (
-    <div
-      aria-hidden="true"
-      className={`pwa-splash ${fade ? 'pwa-splash--hide' : ''}`}
-    >
-      <div className="pwa-splash__inner">
-        <div className="pwa-splash__logo">
-          {/* Uses the existing Safar icon (served by Next at /icon.svg) */}
-          <img src="/icon.svg" alt="" width={84} height={84} />
+    <>
+      {showSplash && (
+        <div
+          aria-hidden="true"
+          className={`pwa-splash ${fade ? 'pwa-splash--hide' : ''}`}
+        >
+          <div className="pwa-splash__inner">
+            <div className="pwa-splash__logo">
+              {/* Uses the existing Safar icon (served by Next at /icon.svg) */}
+              <img src="/icon.svg" alt="" width={84} height={84} />
+            </div>
+            <div className="pwa-splash__wordmark">
+              <span className="pwa-splash__title">Safar</span>
+              <span className="pwa-splash__sub">CURATED</span>
+            </div>
+            <p className="pwa-splash__tagline">Experience Kashmir Like a Local</p>
+            <span className="pwa-splash__bar"><i /></span>
+          </div>
         </div>
-        <div className="pwa-splash__wordmark">
-          <span className="pwa-splash__title">Safar</span>
-          <span className="pwa-splash__sub">CURATED</span>
-        </div>
-        <p className="pwa-splash__tagline">Experience Kashmir Like a Local</p>
-        <span className="pwa-splash__bar"><i /></span>
-      </div>
-    </div>
+      )}
+      {/* First-launch onboarding — installed PWA only, self-gated. */}
+      <OnboardingFlow />
+    </>
   );
 }
