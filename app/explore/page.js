@@ -7,11 +7,33 @@ import Shell from '@/components/explore-v2/Shell';
 import { HERO_IMAGES, FEATURED_TRIPS, CATEGORIES, REWARD_CARDS, HIGHLIGHTS, BADGES } from '@/lib/explore-v2-data';
 import { fetchTrips } from '@/lib/explore-api';
 
+// -----------------------------------------------------------------------------
+// DEMO / PREVIEW trips — FRONTEND FALLBACK ONLY.
+// These are NOT written to the database and are shown ONLY when there are zero
+// eligible real published trips. Real published trips ALWAYS take priority.
+// Images reuse already-whitelisted Unsplash URLs (no new deps / no huge images).
+// -----------------------------------------------------------------------------
+function buildDemoTrips() {
+  const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const at = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
+  const single = (n) => fmt(at(n));
+  const range = (a, b) => `${fmt(at(a))} – ${fmt(at(b))}`;
+  return [
+    { id: 'demo-astanmarg', demo: true, title: 'Astanmarg Sunset Trek', type: 'LOCAL TREK', location: 'Astanmarg, Srinagar', dateRange: single(3), price: 1499, free: false, joined: 5, capacity: 8, max: 8, cover: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80' },
+    { id: 'demo-doodhpathri', demo: true, title: 'Doodhpathri Day Escape', type: 'DAY TRIP', location: 'Doodhpathri, Kashmir', dateRange: single(5), price: 1299, free: false, joined: 3, capacity: 10, max: 10, cover: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80' },
+    { id: 'demo-gurez', demo: true, title: 'Gurez Valley Adventure', type: 'ADVENTURE', location: 'Gurez, Kashmir', dateRange: range(7, 9), price: 4999, free: false, joined: 4, capacity: 6, max: 6, cover: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80' },
+    { id: 'demo-yusmarg', demo: true, title: 'Yusmarg Nature Walk', type: 'NATURE', location: 'Yusmarg, Kashmir', dateRange: single(6), price: 999, free: false, joined: 2, capacity: 8, max: 8, cover: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800&q=80' },
+    { id: 'demo-dachigam', demo: true, title: 'Dachigam Wildlife Experience', type: 'WILDLIFE', location: 'Dachigam, Srinagar', dateRange: single(8), price: 1799, free: false, joined: 1, capacity: 6, max: 6, cover: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&q=80' },
+    { id: 'demo-gangbal', demo: true, title: 'Gangbal Lake Trek', type: 'TREK', location: 'Ganderbal, Kashmir', dateRange: range(10, 13), price: 3499, free: false, joined: 5, capacity: 7, max: 7, cover: 'https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?w=800&q=80' },
+  ];
+}
+
 export default function ExploreHome() {
   const [heroIdx] = useState(0);
   const [featured, setFeatured] = useState(FEATURED_TRIPS);
   const [joinable, setJoinable] = useState([]);
   const [tripsLoaded, setTripsLoaded] = useState(false);
+  const [demoTrips] = useState(buildDemoTrips); // frontend-only fallback, lazy init (client-safe)
   const unlockedCount = REWARD_CARDS.filter(r => r.unlocked).length;
   const progress = Math.round((unlockedCount / 9) * 100);
 
@@ -41,6 +63,10 @@ export default function ExploreHome() {
       .finally(() => { if (alive) setTripsLoaded(true); });
     return () => { alive = false; };
   }, []);
+
+  // Real published trips ALWAYS take priority; demo trips only when none exist.
+  const isDemo = tripsLoaded && joinable.length === 0;
+  const displayTrips = joinable.length > 0 ? joinable : demoTrips;
 
   return (
     <Shell>
@@ -143,44 +169,41 @@ export default function ExploreHome() {
               <h2 className="font-display font-bold text-[22px] md:text-[28px] tracking-tight text-slate-900">🌄 Trips You Can Join</h2>
               <p className="text-[12.5px] md:text-[14px] text-slate-500 mt-0.5">Don&rsquo;t explore Kashmir alone. Find your people and go.</p>
             </div>
-            {tripsLoaded && joinable.length > 0 && (
-              <Link href="/explore/feed" className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-emerald-700 hover:gap-2 transition-all">View all <ArrowRight className="size-4" /></Link>
+            {tripsLoaded && (
+              <Link href={isDemo ? '/explore/create' : '/explore/feed'} className="hidden sm:inline-flex items-center gap-1 text-[13px] font-semibold text-emerald-700 hover:gap-2 transition-all">{isDemo ? 'Create a Trip' : 'View all'} <ArrowRight className="size-4" /></Link>
             )}
           </div>
 
           {!tripsLoaded ? (
             <div className="mt-5 rounded-3xl bg-slate-100 animate-pulse aspect-[16/11] sm:aspect-[16/8]" />
-          ) : joinable.length === 0 ? (
-            /* Beautiful empty state — links to EXISTING Create Trip flow */
-            <div className="mt-5 relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-gradient-to-br from-emerald-950 via-emerald-900 to-[#0A2C21] text-white p-7 md:p-10 text-center">
-              <div className="absolute -top-16 -right-10 size-56 rounded-full bg-amber-400/15 blur-3xl" aria-hidden="true" />
-              <div className="relative">
-                <div className="mx-auto size-14 rounded-2xl bg-white/10 border border-white/15 grid place-items-center text-[28px]">🌄</div>
-                <h3 className="mt-4 font-display font-bold text-[22px] md:text-[26px]">Your next adventure is waiting.</h3>
-                <p className="mt-1.5 text-white/75 text-[13.5px] md:text-[15px] max-w-md mx-auto">New community trips are coming soon. Be the first to create one and gather your crew.</p>
-                <Link href="/explore/create" className="mt-6 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-emerald-950 px-6 py-3 text-[14px] font-bold shadow-lg shadow-amber-500/25 active:scale-95 transition">
-                  Create a Trip <ArrowRight className="size-4" />
-                </Link>
-              </div>
-            </div>
           ) : (
             <>
-              {/* Featured joinable trip */}
+              {isDemo && (
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 px-3 py-1 text-[11px] font-semibold">
+                  <Sparkles className="size-3" /> Preview trips — create your own to appear here
+                </div>
+              )}
+
+              {/* Featured trip — real published trip, or a demo preview when none exist */}
               {(() => {
-                const t = joinable[0];
+                const t = displayTrips[0];
+                if (!t) return null;
                 const cap = t.capacity || t.max || 0;
                 const spots = cap ? Math.max(0, cap - (t.joined || 0)) : 0;
-                const fillingFast = cap && spots > 0 && spots <= 3;
+                const fillingFast = !isDemo && cap && spots > 0 && spots <= 3;
+                const href = isDemo ? '/explore/create' : `/explore/trip/${t.id}`;
                 return (
-                  <Link href={`/explore/trip/${t.id}`} className="mt-5 group block relative overflow-hidden rounded-3xl bg-slate-900 active:scale-[0.99] transition shadow-xl shadow-emerald-950/10">
+                  <Link href={href} className="mt-4 group block relative overflow-hidden rounded-3xl bg-slate-900 active:scale-[0.99] transition shadow-xl shadow-emerald-950/10">
                     <div className="relative aspect-[16/11] sm:aspect-[16/8]">
                       <Image src={t.cover} alt={t.title} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-700" sizes="(max-width:768px) 100vw, 900px" loading="lazy" unoptimized />
                       <div className="absolute inset-0 bg-gradient-to-t from-emerald-950 via-emerald-950/45 to-transparent" />
                       <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
                         <span className="inline-flex items-center gap-1 rounded-full bg-white/15 backdrop-blur-md border border-white/25 text-white px-2.5 py-1 text-[10.5px] font-bold tracking-wide">{t.type}</span>
-                        {fillingFast && (
+                        {isDemo ? (
+                          <span className="inline-flex items-center rounded-full bg-white/90 text-emerald-900 px-2.5 py-1 text-[10.5px] font-extrabold shadow">Preview</span>
+                        ) : fillingFast ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 text-emerald-950 px-2.5 py-1 text-[10.5px] font-extrabold shadow"><Flame className="size-3" /> Filling fast</span>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                     <div className="absolute inset-x-0 bottom-0 p-4 md:p-6 text-white">
@@ -196,7 +219,7 @@ export default function ExploreHome() {
                           <div className="text-[11px] text-white/70 mt-0.5">{t.free ? 'to join' : 'per person'}{cap > 0 && spots > 0 ? ` · ${spots} spot${spots > 1 ? 's' : ''} left` : ''}</div>
                         </div>
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-emerald-950 px-5 py-3 text-[13px] font-extrabold shadow-lg shadow-amber-500/25 group-active:scale-95 transition whitespace-nowrap">
-                          JOIN THIS TRIP <ArrowRight className="size-4" />
+                          {isDemo ? 'CREATE A TRIP' : 'JOIN THIS TRIP'} <ArrowRight className="size-4" />
                         </span>
                       </div>
                     </div>
@@ -204,19 +227,22 @@ export default function ExploreHome() {
                 );
               })()}
 
-              {/* More joinable trips — horizontal scroll */}
-              {joinable.length > 1 && (
+              {/* More trips — horizontal scroll */}
+              {displayTrips.length > 1 && (
                 <div className="mt-4 flex gap-3 overflow-x-auto scrollbar-none snap-x -mx-4 px-4 md:mx-0 md:px-0">
-                  {joinable.slice(1, 6).map((t) => {
+                  {displayTrips.slice(1, 6).map((t) => {
                     const cap = t.capacity || t.max || 0;
                     const spots = cap ? Math.max(0, cap - (t.joined || 0)) : 0;
+                    const href = isDemo ? '/explore/create' : `/explore/trip/${t.id}`;
                     return (
-                      <Link key={t.id} href={`/explore/trip/${t.id}`} className="shrink-0 snap-start w-[190px] md:w-[220px] rounded-2xl overflow-hidden bg-white border border-slate-200 active:scale-[0.98] transition">
+                      <Link key={t.id} href={href} className="shrink-0 snap-start w-[190px] md:w-[220px] rounded-2xl overflow-hidden bg-white border border-slate-200 active:scale-[0.98] transition">
                         <div className="relative aspect-[4/3] bg-slate-200">
                           <Image src={t.cover} alt={t.title} fill className="object-cover" sizes="220px" loading="lazy" unoptimized />
-                          {cap > 0 && spots > 0 && spots <= 3 && (
+                          {isDemo ? (
+                            <span className="absolute top-2 left-2 inline-flex items-center rounded-full bg-white/90 text-emerald-900 px-2 py-0.5 text-[9.5px] font-extrabold">Preview</span>
+                          ) : cap > 0 && spots > 0 && spots <= 3 ? (
                             <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-amber-400 text-emerald-950 px-2 py-0.5 text-[9.5px] font-extrabold"><Flame className="size-2.5" /> {spots} left</span>
-                          )}
+                          ) : null}
                         </div>
                         <div className="p-3">
                           <h4 className="font-semibold text-[13px] text-slate-900 leading-tight line-clamp-1">{t.title}</h4>
@@ -232,9 +258,9 @@ export default function ExploreHome() {
                 </div>
               )}
 
-              {/* View all upcoming trips */}
+              {/* Footer CTA */}
               <div className="mt-4 flex justify-center sm:hidden">
-                <Link href="/explore/feed" className="inline-flex items-center gap-1.5 rounded-full bg-emerald-900 text-white px-5 py-2.5 text-[13px] font-semibold active:scale-95">View all upcoming trips <ArrowRight className="size-4" /></Link>
+                <Link href={isDemo ? '/explore/create' : '/explore/feed'} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-900 text-white px-5 py-2.5 text-[13px] font-semibold active:scale-95">{isDemo ? 'Create a Trip' : 'View all upcoming trips'} <ArrowRight className="size-4" /></Link>
               </div>
             </>
           )}

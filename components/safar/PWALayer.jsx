@@ -18,7 +18,21 @@ export default function PWALayer() {
   useEffect(() => {
     // --- Service worker registration (safe: never caches /api) ---
     if ('serviceWorker' in navigator) {
-      const register = () => navigator.serviceWorker.register('/sw.js').catch(() => {});
+      // Auto-update: when a new SW (from a fresh Vercel deploy) takes control,
+      // reload once so the user immediately gets the latest app shell instead
+      // of a stale cached page. `hadController` prevents a reload on first install.
+      const hadController = !!navigator.serviceWorker.controller;
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing || !hadController) return;
+        refreshing = true;
+        window.location.reload();
+      });
+      const register = () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => { reg.update().catch(() => {}); })
+          .catch(() => {});
+      };
       if (document.readyState === 'complete') register();
       else window.addEventListener('load', register, { once: true });
     }

@@ -9,7 +9,7 @@
      - Only same-origin static assets (_next/static, icons, fonts, images) are
        cached stale-while-revalidate. */
 
-const VERSION = 'safar-v1';
+const VERSION = 'safar-v2';
 const STATIC_CACHE = `${VERSION}-static`;
 const PAGES_CACHE = `${VERSION}-pages`;
 const OFFLINE_URL = '/';
