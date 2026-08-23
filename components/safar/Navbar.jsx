@@ -314,12 +314,13 @@ export default function Navbar({ transparent = false }) {
   // exactly. Same 5 primary items, same order. "Become a Host" is NOT in
   // primary nav; it has been moved into the Sign in / Sign up screen and
   // the account menu.
+  // Native-app style bottom navigation. Targets reuse existing routes only.
   const BOTTOM_NAV_ITEMS = [
-    { href: '/marketplace',         label: 'Marketplace',   icon: Store,    match: (p) => p.startsWith('/marketplace') },
-    { href: '/build-trip',          label: 'Build My Trip', icon: Sparkles, match: (p) => p.startsWith('/build-trip') },
-    { href: '/ai-planner',          label: 'AI Planner',    icon: Wand2,    match: (p) => p.startsWith('/ai-planner') },
-    { href: '/explore/home',        label: 'Explore',       icon: Compass,  match: (p) => p.startsWith('/explore/') && !p.includes('nearme') },
-    { href: '/near-me',              label: 'Near Me',       icon: MapPin,   match: (p) => p.startsWith('/near-me') },
+    { href: '/',                            label: 'Home',    icon: Home,      match: (p) => p === '/' },
+    { href: '/explore',                     label: 'Explore', icon: Compass,   match: (p) => p.startsWith('/explore') || p.startsWith('/marketplace') },
+    { href: '/dashboard/traveler/bookings', label: 'Trips',   icon: Briefcase, match: (p) => p.startsWith('/dashboard/traveler/bookings') || p.startsWith('/trip') },
+    { href: '/wishlist',                    label: 'Saved',   icon: Heart,     match: (p) => p.startsWith('/wishlist') || p.includes('/wishlist') },
+    { href: '/dashboard/traveler',          label: 'Profile', icon: User,      match: (p) => p === '/dashboard/traveler' || p.startsWith('/dashboard/traveler/messages') },
   ];
 
   return (

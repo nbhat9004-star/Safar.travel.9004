@@ -2,6 +2,7 @@ import { Inter, Poppins } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/lib/auth-context';
+import PWALayer from '@/components/safar/PWALayer';
 
 // PERF: Only load the Inter weights actually used in the UI (body uses 400, UI accents use 500/600/700).
 const inter = Inter({
@@ -104,10 +105,11 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: '#0F766E',
+  themeColor: '#0F3D2E',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }) {
@@ -176,6 +178,12 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
       <head>
+        {/* iOS installed-PWA behavior: run standalone, translucent dark status
+            bar over the forest-green splash. Android uses the manifest. */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Safar" />
         <link rel="preconnect" href="https://images.unsplash.com" />
         <link rel="preconnect" href="https://images.pexels.com" />
         <link rel="dns-prefetch" href="https://images.unsplash.com" />
@@ -196,6 +204,7 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           {children}
         </AuthProvider>
+        <PWALayer />
         <Toaster richColors position="top-center" />
       </body>
     </html>

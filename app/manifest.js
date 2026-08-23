@@ -2,17 +2,24 @@
 // and referenced via <link rel="manifest"> injected by the framework.
 export default function manifest() {
   return {
+    id: '/',
     name: 'Safar Curated — Kashmir',
     short_name: 'Safar',
     description: 'Discover curated stays, experiences, guides, and rentals across Kashmir.',
-    start_url: '/',
+    start_url: '/?source=pwa',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#0F766E',
+    display_override: ['standalone', 'minimal-ui'],
+    background_color: '#0F3D2E',
+    theme_color: '#0F3D2E',
     orientation: 'portrait',
     scope: '/',
     lang: 'en',
     categories: ['travel', 'lifestyle', 'business'],
+    shortcuts: [
+      { name: 'Explore Kashmir', short_name: 'Explore', url: '/explore', description: 'Browse stays & experiences' },
+      { name: 'My Trips',        short_name: 'Trips',   url: '/dashboard/traveler/bookings', description: 'View your bookings' },
+      { name: 'Saved',           short_name: 'Saved',   url: '/wishlist', description: 'Your saved listings' },
+    ],
     icons: [
       { src: '/icon.svg',       sizes: 'any',       type: 'image/svg+xml', purpose: 'any' },
       { src: '/apple-icon.svg', sizes: '180x180',   type: 'image/svg+xml', purpose: 'any maskable' },
