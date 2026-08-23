@@ -23,6 +23,14 @@ export default function Shell({ children, hideNav = false, dark = false }) {
 
   useEffect(() => { setFabOpen(false); }, [pathname]);
 
+  // Mark <body> so the global mobile bottom-nav padding (globals.css) does NOT
+  // stack with this shell's own `pb-28` nav clearance below — this was the
+  // source of the large empty gap above the fixed bottom nav on mobile.
+  useEffect(() => {
+    document.body.classList.add('app-shell');
+    return () => document.body.classList.remove('app-shell');
+  }, []);
+
   useEffect(() => {
     if (!fabOpen) return;
     const prev = document.body.style.overflow;

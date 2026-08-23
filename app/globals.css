@@ -49,9 +49,12 @@
   * { @apply border-border; }
   body { @apply bg-background text-foreground antialiased; font-feature-settings: 'cv11','ss01'; }
   /* Mobile only: add bottom padding so content scrolls fully past the
-     floating bottom nav (approx 60px nav + safe-area). Desktop unaffected. */
+     floating bottom nav (approx 60px nav + safe-area). Desktop unaffected.
+     `:not(.app-shell)` excludes the Explore app-shell pages, which already
+     provide their OWN fixed-nav clearance (see components/explore-v2/Shell.jsx)
+     — without this, the two paddings stacked and left a large empty gap. */
   @media (max-width: 767px) {
-    body { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+    body:not(.app-shell) { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   }
   h1,h2,h3,h4 { @apply font-display tracking-tight; }
 }
