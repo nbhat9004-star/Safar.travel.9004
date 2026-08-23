@@ -48,8 +48,8 @@ export default function Shell({ children, hideNav = false, dark = false }) {
   };
 
   return (
-    <div className={dark ? 'min-h-screen bg-slate-950 text-white' : 'min-h-screen bg-slate-50'}>
-      <div className="pb-28 md:pb-32">{children}</div>
+    <div className={dark ? 'md:min-h-screen bg-slate-950 text-white' : 'md:min-h-screen bg-slate-50'}>
+      <div className="pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] md:pb-32">{children}</div>
 
       {/* FAB backdrop */}
       {!hideNav && (

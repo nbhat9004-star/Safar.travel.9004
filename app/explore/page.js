@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Bell, MapPin, Compass, Lock, Sparkles, Heart, Trophy, Users, Flame, CalendarDays } from 'lucide-react';
@@ -34,6 +34,7 @@ export default function ExploreHome() {
   const [joinable, setJoinable] = useState([]);
   const [tripsLoaded, setTripsLoaded] = useState(false);
   const [demoTrips] = useState(buildDemoTrips); // frontend-only fallback, lazy init (client-safe)
+  const [tickIdx, setTickIdx] = useState(0);
   const unlockedCount = REWARD_CARDS.filter(r => r.unlocked).length;
   const progress = Math.round((unlockedCount / 9) * 100);
 
@@ -67,6 +68,25 @@ export default function ExploreHome() {
   // Real published trips ALWAYS take priority; demo trips only when none exist.
   const isDemo = tripsLoaded && joinable.length === 0;
   const displayTrips = joinable.length > 0 ? joinable : demoTrips;
+
+  // "Travelers are joining" live ticker — messages derived ONLY from real/demo
+  // trip data (titles + real availability). Lightweight, CSS fade, no new deps.
+  const tickerMessages = useMemo(() => {
+    const list = [];
+    displayTrips.slice(0, 6).forEach((t) => {
+      const cap = t.capacity || t.max || 0;
+      const spots = cap ? Math.max(0, cap - (t.joined || 0)) : 0;
+      if (spots > 0) list.push(`🔥 Only ${spots} spot${spots > 1 ? 's' : ''} left on ${t.title}`);
+      list.push(`📍 ${t.title} · ${t.location}`);
+    });
+    return list;
+  }, [displayTrips]);
+
+  useEffect(() => {
+    if (tickerMessages.length <= 1) return;
+    const id = setInterval(() => setTickIdx((i) => (i + 1) % tickerMessages.length), 2600);
+    return () => clearInterval(id);
+  }, [tickerMessages.length]);
 
   return (
     <Shell>
@@ -266,6 +286,24 @@ export default function ExploreHome() {
           )}
         </div>
       </section>
+
+      {/* ✨ Travelers are joining — lightweight live activity ticker */}
+      {tripsLoaded && tickerMessages.length > 0 && (
+        <section className="px-4 md:px-8 pb-4 md:pb-6">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-50 border border-emerald-100 px-3.5 py-2.5">
+              <span className="relative flex size-2.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 animate-ping" />
+                <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500" />
+              </span>
+              <span className="text-[10.5px] font-bold uppercase tracking-wide text-emerald-700 shrink-0">✨ Travelers are joining</span>
+              <span key={tickIdx} className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-slate-600 animate-[fadeIn_.45s_ease]">
+                {tickerMessages[tickIdx % tickerMessages.length]}
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Categories */}
       <section className="py-6 md:py-10 px-0 md:px-8">

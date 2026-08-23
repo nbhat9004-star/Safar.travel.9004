@@ -74,6 +74,9 @@
   .pb-safe { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
 }
 
+/* Small shared fade used by the Explore "Travelers are joining" ticker. */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+
 /* -----------------------------------------------------------------------------
    PWA launch splash — shown ONLY for the installed standalone app (see
    components/safar/PWALayer.jsx). CSS-only, no heavy images, so it has zero
