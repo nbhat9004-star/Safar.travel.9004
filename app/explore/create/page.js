@@ -2,13 +2,25 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Sparkles, CheckCircle2, ShieldCheck, Home, Lock, Globe, Link2, QrCode, Trophy, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Sparkles, CheckCircle2, ShieldCheck, Home, Lock, Globe, Link2, QrCode, Trophy, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ImagePlus, X } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
+import TripRouteMap, { RouteList } from '@/components/explore-v2/TripRouteMap';
 import { VERIFIED_SERVICES } from '@/lib/explore-v2-data';
 import { createTrip } from '@/lib/explore-api';
 import { toast } from 'sonner';
 
 const THEME_MAP = { self: 'adventure', safar: 'adventure' };
+
+// Real geocoding via OpenStreetMap Nominatim (free, no key, CORS-enabled).
+// Returns real coords or null (never fabricated). Biased to India.
+async function geocodePlace(q) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=in&q=${encodeURIComponent(q + ', India')}`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error('geocode failed');
+  const data = await res.json();
+  if (!Array.isArray(data) || data.length === 0) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+}
 
 export default function CreateTrip() {
   const router = useRouter();
@@ -21,6 +33,65 @@ export default function CreateTrip() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [description, setDescription] = useState('');
+  // Trip Map generator state
+  const [places, setPlaces] = useState(['', '']);
+  const [route, setRoute] = useState([]);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [failed, setFailed] = useState([]);
+  const [cover, setCover] = useState('');
+
+  const addPlace = () => setPlaces((p) => [...p, '']);
+  const updatePlace = (i, v) => setPlaces((p) => p.map((x, idx) => (idx === i ? v : x)));
+  const removePlace = (i) => setPlaces((p) => (p.length <= 1 ? p : p.filter((_, idx) => idx !== i)));
+  const movePlace = (i, dir) => setPlaces((p) => {
+    const j = i + dir;
+    if (j < 0 || j >= p.length) return p;
+    const n = [...p];
+    [n[i], n[j]] = [n[j], n[i]];
+    return n;
+  });
+
+  const handleGenerate = async () => {
+    const names = places.map((p) => p.trim()).filter(Boolean);
+    if (names.length < 2) { toast.error('Add at least 2 places to generate a map'); return; }
+    setGeoLoading(true);
+    setFailed([]);
+    const resolved = [];
+    const errs = [];
+    for (const name of names) {
+      try {
+        const r = await geocodePlace(name);
+        if (r) resolved.push({ name, lat: r.lat, lng: r.lng, order: resolved.length + 1 });
+        else errs.push(name);
+      } catch (e) { errs.push(name); }
+      // Respect Nominatim's usage policy (light spacing between calls).
+      await new Promise((res) => setTimeout(res, 500));
+    }
+    setGeoLoading(false);
+    setFailed(errs);
+    if (errs.length) toast.error(`Couldn't find: ${errs.join(', ')}. Please check the name(s).`);
+    if (resolved.length >= 2) { setRoute(resolved); if (!errs.length) toast.success('Trip map generated!'); }
+    else if (!errs.length) toast.error('Could not build a route. Please check the place names.');
+  };
+
+  const handleCover = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const max = 1000;
+        let { width, height } = img;
+        if (width > max) { height = Math.round((height * max) / width); width = max; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        setCover(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const toggleSvc = (id) => setAddedSvc(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
@@ -42,6 +113,8 @@ export default function CreateTrip() {
         endDate: endDate || null,
         maxMembers: 8,
         services,
+        cover: cover || null,
+        route,
         visibility: privacy,
       };
       const journey = await createTrip(payload);
@@ -142,6 +215,57 @@ export default function CreateTrip() {
               <label className="text-[12px] font-semibold text-slate-700">Description</label>
               <textarea rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe your trip..." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-[14px] outline-none focus:border-violet-400 resize-none" />
             </div>
+          </div>
+
+          {/* Trip Route — AI-assisted map generator (real OSM geocoding + map) */}
+          <h3 className="mt-8 font-display font-bold text-[18px] tracking-tight text-slate-900">Trip Route</h3>
+          <p className="text-[12.5px] text-slate-500 mt-0.5">Where will your journey take you?</p>
+          <div className="mt-3 space-y-2">
+            {places.map((p, i) => (
+              <div key={i}>
+                <div className="flex items-center gap-2">
+                  <span className="size-8 shrink-0 grid place-items-center rounded-lg bg-emerald-50 text-emerald-700 text-[12px] font-bold">{String(i + 1).padStart(2, '0')}</span>
+                  <input value={p} onChange={(e) => updatePlace(i, e.target.value)} placeholder="e.g. Srinagar" className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-3 h-11 text-[14px] outline-none focus:border-emerald-400" />
+                  <button type="button" aria-label="Move up" onClick={() => movePlace(i, -1)} disabled={i === 0} className="size-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ChevronUp className="size-4" /></button>
+                  <button type="button" aria-label="Move down" onClick={() => movePlace(i, 1)} disabled={i === places.length - 1} className="size-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ChevronDown className="size-4" /></button>
+                  <button type="button" aria-label="Delete place" onClick={() => removePlace(i)} disabled={places.length <= 1} className="size-8 grid place-items-center rounded-lg text-rose-400 hover:bg-rose-50 disabled:opacity-30"><Trash2 className="size-4" /></button>
+                </div>
+                {p.trim() && failed.includes(p.trim()) && (
+                  <p className="mt-1 ml-10 text-[11.5px] text-rose-600">Couldn&rsquo;t find this place. Please check the name.</p>
+                )}
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={addPlace} className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 hover:gap-2 transition-all"><Plus className="size-4" /> Add Place</button>
+
+          <button type="button" onClick={handleGenerate} disabled={geoLoading} className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-700 text-white py-3.5 text-[14px] font-extrabold shadow-lg shadow-emerald-600/25 active:scale-[0.98] transition disabled:opacity-70">
+            {geoLoading ? <><Loader2 className="size-4 animate-spin" /> Generating…</> : <><Sparkles className="size-4" /> Generate Trip Map</>}
+          </button>
+
+          {route.length >= 2 && (
+            <div className="mt-4">
+              <TripRouteMap stops={route} height={300} />
+              <RouteList stops={route} />
+              <button type="button" onClick={handleGenerate} disabled={geoLoading} className="mt-1 inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700 active:scale-95"><Sparkles className="size-3.5" /> Regenerate Map</button>
+            </div>
+          )}
+
+          {/* Trip Cover Image (optional) */}
+          <h3 className="mt-8 font-display font-bold text-[18px] tracking-tight text-slate-900">Trip Cover Image <span className="text-[12px] font-medium text-slate-400">(optional)</span></h3>
+          <div className="mt-3">
+            {cover ? (
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200">
+                <img src={cover} alt="Trip cover" className="w-full h-44 object-cover" />
+                <button type="button" aria-label="Remove cover" onClick={() => setCover('')} className="absolute top-2 right-2 size-8 grid place-items-center rounded-full bg-black/50 text-white active:scale-90"><X className="size-4" /></button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 py-8 cursor-pointer hover:border-emerald-300 transition">
+                <ImagePlus className="size-6 text-slate-400" />
+                <span className="text-[13px] font-semibold text-slate-600">Upload cover image</span>
+                <span className="text-[11px] text-slate-400">One image representing your trip</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleCover(e.target.files?.[0])} />
+              </label>
+            )}
           </div>
 
           {/* Privacy */}

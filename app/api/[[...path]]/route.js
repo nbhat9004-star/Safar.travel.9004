@@ -11134,6 +11134,11 @@ Return ONLY valid JSON, no markdown.`;
         name,
         description: (b.description || '').trim(),
         cover: b.cover || null,
+        // Trip Map route — sanitized ordered stops (name + real geocoded coords).
+        route: Array.isArray(b.route) ? b.route.slice(0, 20)
+          .map((s) => ({ name: String(s?.name || '').slice(0, 120), lat: Number(s?.lat), lng: Number(s?.lng) }))
+          .filter((s) => s.name && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+          .map((s, i) => ({ ...s, order: i + 1 })) : [],
         theme: b.theme || 'weekend_escape',
         destination: {
           name: (dest.name || '').trim(),

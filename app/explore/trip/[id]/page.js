@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Share2, Bookmark, MapPin, Calendar, BadgeCheck, ShieldCheck, ChevronDown, MessageCircle, Users, Loader2 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
+import TripRouteMap, { RouteList } from '@/components/explore-v2/TripRouteMap';
 import { MORE_TRIPS, FEATURED_TRIPS } from '@/lib/explore-v2-data';
 import { fetchTrip, requestToJoin } from '@/lib/explore-api';
 import { toast } from 'sonner';
@@ -169,6 +170,16 @@ export default function TripDetail({ params }) {
           <h3 className="font-display font-bold text-[17px] tracking-tight">About Trip</h3>
           <p className="mt-2 text-[13.5px] text-slate-600 leading-relaxed">A breathtaking trek through the pristine alpine lakes of Kashmir. Experience stunning landscapes, snow-capped peaks and crystal-clear lakes.</p>
         </section>
+
+        {Array.isArray(trip.route) && trip.route.length >= 2 && (
+          <section className="mt-6">
+            <h3 className="font-display font-bold text-[17px] tracking-tight">Your Journey</h3>
+            <div className="mt-3">
+              <TripRouteMap stops={trip.route} height={300} />
+              <RouteList stops={trip.route} />
+            </div>
+          </section>
+        )}
 
         <section className="mt-6">
           <h3 className="font-display font-bold text-[17px] tracking-tight">Highlights</h3>
