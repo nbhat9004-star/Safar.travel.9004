@@ -9,7 +9,13 @@ export default function manifest() {
     start_url: '/?source=pwa',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],
-    background_color: '#0F3D2E',
+    // NOTE: Android/Chrome auto-generates the native PWA splash from the
+    // manifest — it can only render a SOLID background_color + centered icon
+    // (no photographic background is supported by the platform). We set this to
+    // match the in-app Kashmir launch screen's base color (see .pwa-splash in
+    // globals.css) so the native splash flows seamlessly into the full-screen
+    // Kashmir screen with zero color flash. theme_color stays deep-emerald brand.
+    background_color: '#0A2C21',
     theme_color: '#0F3D2E',
     orientation: 'portrait',
     scope: '/',
