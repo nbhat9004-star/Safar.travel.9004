@@ -43,8 +43,8 @@ export default function OnboardingFlow() {
       setVisible(true);
       // Reflect existing notification permission if already granted.
       try { if ('Notification' in window && Notification.permission === 'granted') setNotif('granted'); } catch (e) { /* noop */ }
-      // Reveal AFTER the branded splash (~1.25s) for a smooth hand-off.
-      const t = setTimeout(() => setReady(true), 1300);
+      // Reveal AFTER the branded splash (~2.6s) for a smooth hand-off.
+      const t = setTimeout(() => setReady(true), 2650);
       return () => clearTimeout(t);
     }
   }, []);

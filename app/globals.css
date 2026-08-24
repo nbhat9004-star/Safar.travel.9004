@@ -85,35 +85,54 @@
 .pwa-splash {
   position: fixed; inset: 0; z-index: 9999;
   display: grid; place-items: center;
-  background:
-    radial-gradient(120% 90% at 50% 12%, #14543E 0%, #0F3D2E 45%, #0A2C21 100%);
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow: hidden;
+  background: #0A2C21; /* brand fallback while the photo loads */
   opacity: 1;
-  transition: opacity 380ms ease;
+  transition: opacity 420ms ease;
 }
 .pwa-splash--hide { opacity: 0; }
+/* Full-screen Kashmir landscape (object-cover, covers all aspect ratios). */
+.pwa-splash__bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  animation: pwaSplashZoom 6s ease-out both;
+}
+/* Emerald brand scrim for consistency + text legibility. */
+.pwa-splash__scrim {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, rgba(7,35,26,0.55) 0%, rgba(7,35,26,0.20) 42%, rgba(7,35,26,0.80) 100%),
+    radial-gradient(120% 80% at 50% 42%, rgba(15,61,46,0.10) 0%, rgba(7,35,26,0.55) 100%);
+}
 .pwa-splash__inner {
+  position: relative; z-index: 1;
   display: flex; flex-direction: column; align-items: center;
-  animation: pwaSplashIn 520ms cubic-bezier(0.22,1,0.36,1) both;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 .pwa-splash__logo {
-  width: 96px; height: 96px; border-radius: 26px;
+  width: 92px; height: 92px; border-radius: 26px;
   display: grid; place-items: center;
-  background: rgba(212,175,55,0.10);
-  box-shadow: 0 10px 40px -12px rgba(212,175,55,0.45), inset 0 0 0 1px rgba(212,175,55,0.30);
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 12px 44px -12px rgba(212,175,55,0.5), inset 0 0 0 1px rgba(212,175,55,0.35);
+  animation: pwaPop 620ms cubic-bezier(0.22,1,0.36,1) both;
 }
-.pwa-splash__logo img { width: 84px; height: 84px; }
-.pwa-splash__wordmark { margin-top: 20px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
-.pwa-splash__title { font-size: 34px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
-.pwa-splash__sub { margin-top: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.42em; color: #D4AF37; padding-left: 0.42em; }
-.pwa-splash__tagline { margin-top: 16px; font-size: 13px; color: rgba(255,255,255,0.72); }
-.pwa-splash__bar { margin-top: 26px; width: 120px; height: 3px; border-radius: 999px; background: rgba(255,255,255,0.14); overflow: hidden; }
-.pwa-splash__bar i { display: block; height: 100%; width: 40%; border-radius: 999px; background: linear-gradient(90deg,#E5C158,#D4AF37); animation: pwaSplashBar 1s ease-in-out infinite; }
-@keyframes pwaSplashIn { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
-@keyframes pwaSplashBar { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+.pwa-splash__logo img { width: 78px; height: 78px; }
+.pwa-splash__wordmark {
+  margin-top: 22px; display: flex; flex-direction: column; align-items: center; line-height: 1;
+  animation: pwaUp 620ms cubic-bezier(0.22,1,0.36,1) both; animation-delay: 240ms;
+}
+.pwa-splash__title { font-size: 34px; font-weight: 800; color: #fff; letter-spacing: 0.16em; padding-left: 0.16em; text-shadow: 0 2px 18px rgba(0,0,0,0.4); }
+.pwa-splash__sub { margin-top: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.44em; color: #E5C158; padding-left: 0.44em; }
+.pwa-splash__tagline {
+  margin-top: 16px; font-size: 13px; color: rgba(255,255,255,0.9); text-shadow: 0 1px 10px rgba(0,0,0,0.5);
+  animation: pwaUp 620ms ease both; animation-delay: 480ms;
+}
+@keyframes pwaUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes pwaPop { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: none; } }
+@keyframes pwaSplashZoom { from { transform: scale(1.08); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .pwa-splash__inner { animation: none; }
-  .pwa-splash__bar i { animation: none; width: 100%; }
+  .pwa-splash__bg, .pwa-splash__logo, .pwa-splash__wordmark, .pwa-splash__tagline { animation: none; }
 }
 
 .aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
