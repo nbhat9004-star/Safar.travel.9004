@@ -1,14 +1,21 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, Sparkles, CheckCircle2, ShieldCheck, Home, Lock, Globe, Link2, QrCode, Trophy, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ImagePlus, X } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import TripRouteMap, { RouteList } from '@/components/explore-v2/TripRouteMap';
+import AuthGate from '@/components/safar/AuthGate';
+import { useAuth } from '@/lib/auth-context';
 import { VERIFIED_SERVICES } from '@/lib/explore-v2-data';
 import { createTrip } from '@/lib/explore-api';
 import { toast } from 'sonner';
 
+// Reuse the existing premium Sign In / Sign Up modal (no duplicate auth system).
+const AuthModal = dynamic(() => import('@/components/safar/AuthModal'), { ssr: false });
+
+const DRAFT_KEY = 'safar_create_draft';
 const THEME_MAP = { self: 'adventure', safar: 'adventure' };
 
 // Real geocoding via OpenStreetMap Nominatim (free, no key, CORS-enabled).
@@ -24,6 +31,7 @@ async function geocodePlace(q) {
 
 export default function CreateTrip() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [mode, setMode] = useState(null);
   const [privacy, setPrivacy] = useState('public');
   const [addedSvc, setAddedSvc] = useState([]);
@@ -39,6 +47,44 @@ export default function CreateTrip() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [failed, setFailed] = useState([]);
   const [cover, setCover] = useState('');
+  // Auth gate / draft-preservation state
+  const [gateOpen, setGateOpen] = useState(false);
+  const [authMode, setAuthMode] = useState(null); // 'login' | 'register' | null
+  const [pendingPublish, setPendingPublish] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  // Restore any saved draft on mount (survives refresh + sign-in navigation).
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.mode !== undefined) setMode(d.mode);
+        if (d.privacy) setPrivacy(d.privacy);
+        if (Array.isArray(d.addedSvc)) setAddedSvc(d.addedSvc);
+        if (typeof d.title === 'string') setTitle(d.title);
+        if (typeof d.destination === 'string') setDestination(d.destination);
+        if (typeof d.startDate === 'string') setStartDate(d.startDate);
+        if (typeof d.endDate === 'string') setEndDate(d.endDate);
+        if (typeof d.description === 'string') setDescription(d.description);
+        if (Array.isArray(d.places) && d.places.length) setPlaces(d.places);
+        if (Array.isArray(d.route)) setRoute(d.route);
+        if (typeof d.cover === 'string') setCover(d.cover);
+      }
+    } catch (e) { /* ignore corrupt draft */ }
+    setDraftLoaded(true);
+  }, []);
+
+  // Persist the draft continuously (only after initial restore) — cover is a
+  // compressed data-URL string so the selected image survives too.
+  useEffect(() => {
+    if (!draftLoaded) return;
+    try {
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({
+        mode, privacy, addedSvc, title, destination, startDate, endDate, description, places, route, cover,
+      }));
+    } catch (e) { /* quota / unavailable — non-fatal */ }
+  }, [draftLoaded, mode, privacy, addedSvc, title, destination, startDate, endDate, description, places, route, cover]);
 
   const addPlace = () => setPlaces((p) => [...p, '']);
   const updatePlace = (i, v) => setPlaces((p) => p.map((x, idx) => (idx === i ? v : x)));
@@ -97,6 +143,9 @@ export default function CreateTrip() {
 
   const handlePublish = async () => {
     if (!title.trim() || title.trim().length < 3) { toast.error('Trip title must be at least 3 characters'); return; }
+    // AUTH GATE: never surface a red "sign in" error — show the premium prompt.
+    // The draft is already persisted, so nothing is lost while the user signs in.
+    if (!authLoading && !user) { setPendingPublish(true); setGateOpen(true); return; }
     setPublishing(true);
     try {
       const services = mode === 'safar' ? addedSvc.map(id => {
@@ -118,14 +167,25 @@ export default function CreateTrip() {
         visibility: privacy,
       };
       const journey = await createTrip(payload);
+      // Only clear the draft AFTER a successful publish.
+      try { window.localStorage.removeItem(DRAFT_KEY); } catch (e) { /* noop */ }
       toast.success('Trip published successfully!');
       router.push(`/explore/trip/${journey.id}`);
     } catch (e) {
-      toast.error(e.message || 'Could not publish. Please sign in and try again.');
+      toast.error(e.message || 'Could not publish. Please try again.');
     } finally {
       setPublishing(false);
     }
   };
+
+  // After a successful sign-in/sign-up (user becomes available), automatically
+  // resume the publish the user originally intended — no data re-entry.
+  useEffect(() => {
+    if (user && pendingPublish && !gateOpen && !authMode) {
+      setPendingPublish(false);
+      handlePublish();
+    }
+  }, [user, pendingPublish, gateOpen, authMode]);
 
   return (
     <Shell hideNav={!!mode}>
@@ -333,6 +393,15 @@ export default function CreateTrip() {
           </div>
         </main>
       )}
+
+      {/* Premium auth gate + existing Sign In/Up modal (draft already saved) */}
+      <AuthGate
+        open={gateOpen}
+        onClose={() => { setGateOpen(false); setPendingPublish(false); }}
+        onSignIn={() => { setGateOpen(false); setAuthMode('login'); }}
+        onCreate={() => { setGateOpen(false); setAuthMode('register'); }}
+      />
+      <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={() => setAuthMode(null)} />
     </Shell>
   );
 }
