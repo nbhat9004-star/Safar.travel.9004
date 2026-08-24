@@ -706,7 +706,7 @@ export default function Navbar({ transparent = false }) {
         className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <div className="pointer-events-auto mx-3 mb-2 bg-white/98 backdrop-blur-md rounded-3xl ring-1 ring-black/[0.06] shadow-[0_14px_36px_-14px_rgba(15,20,25,0.22),0_2px_6px_rgba(15,20,25,0.05)]">
+        <div className="pointer-events-auto mx-3 mb-2 bg-white rounded-3xl border border-black/[0.06] ring-1 ring-black/[0.04] shadow-[0_14px_36px_-14px_rgba(15,20,25,0.28),0_2px_6px_rgba(15,20,25,0.06)]">
           <ul className="grid grid-cols-5 items-stretch px-1 py-1">
             {BOTTOM_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
@@ -717,18 +717,18 @@ export default function Navbar({ transparent = false }) {
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
                     className={`group flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5 min-h-[44px] rounded-2xl transition-all duration-250 ease-out ${
-                      active ? 'bg-emerald2/[0.10]' : 'hover:bg-black/[0.03] active:bg-black/[0.05]'
+                      active ? 'bg-emerald-50' : 'hover:bg-black/[0.03] active:bg-black/[0.05]'
                     }`}
                   >
                     <Icon
                       className={`size-[22px] transition-all duration-250 ${
-                        active ? 'text-emerald2 scale-105' : 'text-charcoal/55'
+                        active ? 'text-emerald-700 scale-105' : 'text-slate-500'
                       }`}
                       strokeWidth={active ? 2.4 : 2}
                     />
                     <span
                       className={`text-[9.5px] leading-none tracking-tight whitespace-nowrap transition-colors duration-250 ${
-                        active ? 'text-emerald2 font-semibold' : 'text-charcoal/55 font-medium'
+                        active ? 'text-emerald-700 font-semibold' : 'text-slate-500 font-medium'
                       }`}
                     >
                       {item.label}
