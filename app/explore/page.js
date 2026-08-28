@@ -305,6 +305,23 @@ export default function ExploreHome() {
         </section>
       )}
 
+      {/* 🏔️ Become a Trip Creator — premium promo card (links to new page) */}
+      <section className="px-4 md:px-8 pb-4 md:pb-6">
+        <div className="max-w-6xl mx-auto">
+          <Link href="/explore/become-creator" className="group block relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-[#0A2C21] text-white p-5 md:p-7 active:scale-[0.99] transition shadow-xl shadow-emerald-950/10">
+            <div className="absolute -top-14 -right-8 size-48 rounded-full bg-amber-400/15 blur-3xl" aria-hidden="true" />
+            <div className="relative">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 border border-white/20 px-3 py-1 text-[10.5px] font-bold tracking-wide">🏔️ KNOW KASHMIR LIKE A LOCAL?</span>
+              <h3 className="mt-3 font-display font-bold text-[21px] md:text-[26px] leading-tight tracking-tight">Become a Safar Trip Creator</h3>
+              <p className="mt-2 text-[13px] md:text-[14px] text-white/80 leading-relaxed max-w-xl">Turn your passion and knowledge of Kashmir into unforgettable experiences. Create trips, bring travelers together, and earn from eligible Safar experiences.</p>
+              <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-emerald-950 px-5 py-2.5 text-[13px] font-extrabold shadow-lg shadow-amber-500/25 group-active:scale-95 transition">
+                Become a Trip Creator <ArrowRight className="size-4" strokeWidth={2.6} />
+              </span>
+            </div>
+          </Link>
+        </div>
+      </section>
+
       {/* Categories */}
       <section className="py-6 md:py-10 px-0 md:px-8">
         <div className="max-w-6xl mx-auto">

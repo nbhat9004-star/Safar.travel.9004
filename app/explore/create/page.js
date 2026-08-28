@@ -208,8 +208,8 @@ export default function CreateTrip() {
             {/* Self Hosted */}
             <button onClick={() => setMode('self')} className="text-left rounded-3xl border-2 border-slate-200 bg-white p-5 md:p-6 hover:border-violet-300 hover:shadow-xl transition group">
               <div className="size-12 rounded-2xl bg-violet-100 text-violet-600 grid place-items-center"><Home className="size-6" strokeWidth={2} /></div>
-              <h3 className="mt-4 font-display font-bold text-[18px] text-slate-900">Self Hosted</h3>
-              <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">Plan everything yourself. Free to use, public or private.</p>
+              <h3 className="mt-4 font-display font-bold text-[18px] text-slate-900">🧳 Create a Free Trip</h3>
+              <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">Plan and create your own journey for free.</p>
               <div className="mt-4 space-y-1.5">
                 {['Free forever','Public or Private','You handle all logistics'].map(x => (
                   <div key={x} className="flex items-center gap-1.5 text-[12.5px] text-slate-700"><CheckCircle2 className="size-3.5 text-violet-600" />{x}</div>
@@ -223,8 +223,8 @@ export default function CreateTrip() {
             <button onClick={() => setMode('safar')} className="relative text-left rounded-3xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 md:p-6 hover:shadow-xl transition group">
               <div className="absolute top-4 right-4 inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white px-2.5 py-1 text-[10px] font-bold"><Sparkles className="size-3" /> RECOMMENDED</div>
               <div className="size-12 rounded-2xl bg-emerald-500 text-white grid place-items-center shadow-lg shadow-emerald-200"><ShieldCheck className="size-6" strokeWidth={2} /></div>
-              <h3 className="mt-4 font-display font-bold text-[18px] text-emerald-900">Verified Safar Services</h3>
-              <p className="mt-1 text-[13px] text-emerald-900/80 leading-relaxed">Build with verified partners. Earn reward cards and badges.</p>
+              <h3 className="mt-4 font-display font-bold text-[18px] text-emerald-900">✨ Create with Safar Hosting</h3>
+              <p className="mt-1 text-[13px] text-emerald-900/80 leading-relaxed">Build your journey using verified Safar service providers.</p>
               <div className="mt-4 space-y-1.5">
                 {['Verified providers','Reward progress','Badge collection','Trust for travelers'].map(x => (
                   <div key={x} className="flex items-center gap-1.5 text-[12.5px] text-emerald-900"><CheckCircle2 className="size-3.5 text-emerald-600" />{x}</div>
