@@ -11,7 +11,7 @@ import sys
 import os
 
 # Get base URL from environment
-BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://safar-pwa-transform.preview.emergentagent.com')
+BASE_URL = os.getenv('NEXT_PUBLIC_BASE_URL', 'https://admin-home-select.preview.emergentagent.com')
 API_URL = f"{BASE_URL}/api"
 
 # Test counters

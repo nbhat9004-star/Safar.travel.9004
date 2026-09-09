@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart, Sparkles, Menu, Settings2, CreditCard, Gift, Ticket, Award, ChevronRight, LogOut, Coins, BadgeIndianRupee } from 'lucide-react';
+import { Users, Home, Calendar, Wallet, ShieldAlert, BarChart3, ArrowUpRight, Search, Check, X, Loader2, AlertTriangle, Upload, FileSpreadsheet, Ban, RotateCcw, Shield, Trash2, UserCog, Star, Eye, TrendingUp, Pencil, Heart, Sparkles, Menu, Settings2, CreditCard, Gift, Ticket, Award, ChevronRight, LogOut, Coins, BadgeIndianRupee, Compass } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '@/components/safar/Navbar';
 import Footer from '@/components/safar/Footer';
@@ -1369,6 +1369,44 @@ function AdminInner() {
             <div>
               <h2 className="font-display text-2xl font-bold">System Settings</h2>
               <p className="text-sm text-muted-foreground mt-1">Configure platform settings</p>
+            </div>
+
+            {/* Public Homepage — pick which EXISTING home experience is the default public landing page */}
+            <div className="rounded-3xl border bg-white p-6">
+              <div className="flex items-center justify-between gap-3 mb-1">
+                <h3 className="font-semibold text-lg">Public Homepage</h3>
+                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald2 border-emerald-200">
+                  Active: {(settings?.publicHomepage || 'safar') === 'explore' ? 'Explore' : 'Safar Curated'}
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">Choose which Safar experience visitors see when they open the main website.</p>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {[
+                  { key: 'safar', title: 'Safar Curated', desc: 'Curated stays, services and travel marketplace', Icon: Home },
+                  { key: 'explore', title: 'Explore', desc: 'Community trips and local travel', Icon: Compass },
+                ].map(({ key, title, desc, Icon }) => {
+                  const active = (settings?.publicHomepage || 'safar') === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => { if (!active) updateSettings({ publicHomepage: key }); }}
+                      className={`text-left rounded-2xl border p-5 flex items-start gap-4 transition ${active ? 'border-emerald2 bg-emerald-50/60 ring-1 ring-emerald2' : 'hover:border-emerald2 hover:shadow-md'}`}
+                    >
+                      <div className={`size-11 rounded-xl grid place-items-center shrink-0 ${active ? 'bg-emerald2 text-white' : 'bg-emerald-50 text-emerald2'}`}>
+                        <Icon className="size-5" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-display text-lg font-bold flex items-center gap-2">
+                          {title}
+                          {active && <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-emerald2 text-white"><Check className="size-3" /> Active</span>}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">{desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Advanced Settings — Super Admin only navigation */}
