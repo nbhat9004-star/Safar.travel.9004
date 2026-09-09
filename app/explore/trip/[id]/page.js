@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowLeft, Share2, Bookmark, MapPin, Calendar, BadgeCheck, ShieldCheck, ChevronDown, MessageCircle, Users, Loader2 } from 'lucide-react';
@@ -7,16 +8,26 @@ import Shell from '@/components/explore-v2/Shell';
 import TripRouteMap, { RouteList } from '@/components/explore-v2/TripRouteMap';
 import { MORE_TRIPS, FEATURED_TRIPS } from '@/lib/explore-v2-data';
 import { fetchTrip, requestToJoin } from '@/lib/explore-api';
+import { useAuth } from '@/lib/auth-context';
+import AuthGate from '@/components/safar/AuthGate';
 import { toast } from 'sonner';
+
+// Reuse the EXISTING Safar Curated auth modal (no new auth UI).
+const AuthModal = dynamic(() => import('@/components/safar/AuthModal'), { ssr: false });
 
 export default function TripDetail({ params }) {
   const { id } = params;
+  const { user, loading: authLoading } = useAuth();
   const [trip, setTrip] = useState(() => [...MORE_TRIPS, ...FEATURED_TRIPS].find(t => t.id === id) || MORE_TRIPS[0]);
   const [openDay, setOpenDay] = useState(1);
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sharing, setSharing] = useState(false);
+  // Existing Safar auth gate/modal state (same pattern as /explore/create).
+  const [gateOpen, setGateOpen] = useState(false);
+  const [authMode, setAuthMode] = useState(null); // 'login' | 'register' | null
+  const [pendingJoin, setPendingJoin] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -32,17 +43,28 @@ export default function TripDetail({ params }) {
 
   const handleJoin = async () => {
     if (!trip?.raw) { toast('Demo trip \u2014 sign in to enable Join'); return; }
+    // Not signed in → open the EXISTING Safar auth experience (no red toast).
+    if (!authLoading && !user) { setPendingJoin(true); setGateOpen(true); return; }
     setJoining(true);
     try {
       await requestToJoin(trip.id, { seats: 1, message: 'I\u2019d love to join!' });
       setJoined(true);
       toast.success('Request sent! The host will review shortly.');
     } catch (e) {
-      toast.error(e.message || 'Could not send request. Please sign in and try again.');
+      toast.error(e.message || 'Could not send request. Please try again.');
     } finally {
       setJoining(false);
     }
   };
+
+  // Resume the intended join automatically once the user is signed in.
+  useEffect(() => {
+    if (user && pendingJoin && !gateOpen && !authMode) {
+      setPendingJoin(false);
+      handleJoin();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, pendingJoin, gateOpen, authMode]);
 
   // Native share sheet with clipboard fallback.
   const handleShare = async () => {
@@ -223,6 +245,17 @@ export default function TripDetail({ params }) {
           )}
         </div>
       </div>
+
+      {/* Existing Safar Curated auth experience (reused, not rebuilt) */}
+      <AuthGate
+        open={gateOpen}
+        onClose={() => { setGateOpen(false); setPendingJoin(false); }}
+        onSignIn={() => { setGateOpen(false); setAuthMode('login'); }}
+        onCreate={() => { setGateOpen(false); setAuthMode('register'); }}
+        title="Join this journey"
+        subtitle="Sign in or create your free Safar account to request a spot."
+      />
+      <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={() => setAuthMode(null)} />
     </Shell>
   );
 }

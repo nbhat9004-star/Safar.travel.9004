@@ -1,5 +1,6 @@
 'use client';
 import { Suspense, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -7,10 +8,15 @@ import {
   ArrowLeft, Share2, MoreHorizontal, MapPin, BadgeCheck, ShieldCheck,
   Briefcase, Users, Gift, Star, Bookmark, Lock, Trophy, Award,
   Gift as GiftIcon, Shield as ShieldIcon, Loader2, Tent, Mountain, Bike,
-  Backpack, Camera, Pencil, X, Plus, Sparkles, Copy, MessageCircle,
+  Backpack, Camera, Pencil, X, Plus, Sparkles, Copy, MessageCircle, LogOut,
 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { MORE_TRIPS, REWARD_CARDS, BADGES } from '@/lib/explore-v2-data';
+import { useAuth } from '@/lib/auth-context';
+import AuthGate from '@/components/safar/AuthGate';
+
+// Reuse the EXISTING Safar Curated auth modal (no new auth UI).
+const AuthModal = dynamic(() => import('@/components/safar/AuthModal'), { ssr: false });
 
 // ---------------------------------------------------------------------------
 // Explore Profile Page — pixel-close to the approved reference design.
@@ -52,6 +58,8 @@ function MeInner() {
   const unlocked = REWARD_CARDS.filter((r) => r.unlocked).length;
 
   // ---- Editable profile (client-only persistence via localStorage) --------
+  const { user, logout, loading: authLoading } = useAuth();
+  const [authMode, setAuthMode] = useState(null); // 'login' | 'register' | null
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
   const [editOpen, setEditOpen] = useState(false);
   useEffect(() => {
@@ -60,9 +68,20 @@ function MeInner() {
       if (raw) setProfile((p) => ({ ...p, ...JSON.parse(raw) }));
     } catch { /* ignore */ }
   }, []);
+  // Reflect the signed-in Safar account (real name/avatar) once auth resolves.
+  useEffect(() => {
+    if (!user) return;
+    setProfile((p) => ({ ...p, name: user.name || p.name, avatar: user.avatar || p.avatar }));
+  }, [user]);
   const saveProfile = (next) => {
     setProfile(next);
     try { window.localStorage.setItem(PROFILE_LS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  // Sign Out reuses the EXISTING Safar Curated logout (auth-context).
+  const handleSignOut = async () => {
+    setMoreOpen(false);
+    try { await logout(); } catch { /* ignore */ }
+    router.push('/explore');
   };
 
   // ---- Share + More menu (functionality only; UI unchanged) ---------------
@@ -135,6 +154,24 @@ function MeInner() {
     { icon: Star,      tint: 'bg-sky-50 text-sky-600',           value: '4.9', label: 'Rating',  sub: '(128 Reviews)', trailing: true },
   ];
 
+  // Not signed in → show the EXISTING Safar Curated auth experience
+  // (AuthGate → AuthModal), never a fake demo profile.
+  if (!authLoading && !user) {
+    return (
+      <Shell>
+        <AuthGate
+          open={!authMode}
+          onClose={() => router.push('/explore')}
+          onSignIn={() => setAuthMode('login')}
+          onCreate={() => setAuthMode('register')}
+          title="Sign in to view your profile"
+          subtitle="Access your Safar profile, trips and rewards."
+        />
+        <AuthModal open={!!authMode} defaultMode={authMode || 'login'} onClose={() => setAuthMode(null)} />
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       <main className="min-h-screen bg-white pb-6">
@@ -206,6 +243,13 @@ function MeInner() {
                       className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition"
                     >
                       <Share2 className="size-[18px] text-slate-500" strokeWidth={2.2} /> Share Profile
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-semibold text-rose-600 hover:bg-rose-50 active:bg-rose-100 transition border-t border-slate-100"
+                    >
+                      <LogOut className="size-[18px]" strokeWidth={2.2} /> Sign Out
                     </button>
                   </>
                 ) : (
