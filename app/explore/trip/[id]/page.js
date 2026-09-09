@@ -144,7 +144,7 @@ export default function TripDetail({ params }) {
         </div>
       </div>
 
-      <main className="max-w-3xl mx-auto px-4 md:px-8 pb-32 -mt-6 relative">
+      <main className="max-w-3xl mx-auto px-4 md:px-8 pb-8 -mt-6 relative">
         <div className="bg-white rounded-3xl p-5 md:p-6 shadow-[0_-10px_30px_-10px_rgba(15,23,42,0.15)]">
           <h1 className="font-display font-bold text-[22px] md:text-[28px] tracking-tight text-slate-900 leading-tight">{trip.title || 'Kashmir Great Lakes'}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-500">

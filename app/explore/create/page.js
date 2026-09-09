@@ -243,7 +243,7 @@ export default function CreateTrip() {
           </div>
         </main>
       ) : (
-        <main className="max-w-3xl mx-auto px-4 md:px-8 py-5 pb-32">
+        <main className="max-w-3xl mx-auto px-4 md:px-8 py-5 pb-8">
           <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10.5px] font-bold"
             style={{ backgroundColor: mode === 'safar' ? '#d1fae5' : '#ede9fe', color: mode === 'safar' ? '#065f46' : '#5b21b6' }}>
             {mode === 'safar' ? <><ShieldCheck className="size-3" /> VERIFIED BY SAFAR</> : <>SELF HOSTED</>}

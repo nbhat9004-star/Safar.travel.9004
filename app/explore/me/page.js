@@ -137,7 +137,7 @@ function MeInner() {
 
   return (
     <Shell>
-      <main className="min-h-screen bg-white pb-28">
+      <main className="min-h-screen bg-white pb-6">
         {/* ============================ HERO COVER ============================ */}
         <section className="relative">
           <div className="relative w-full h-[240px] sm:h-[280px] md:h-[320px] lg:h-[340px] overflow-hidden">
