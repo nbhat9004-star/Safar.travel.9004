@@ -1,11 +1,11 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Bell, MapPin, Compass, Lock, Sparkles, Heart, Trophy, Users, Flame, CalendarDays } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { HERO_IMAGES, FEATURED_TRIPS, CATEGORIES, REWARD_CARDS, HIGHLIGHTS, BADGES } from '@/lib/explore-v2-data';
-import { fetchTrips } from '@/lib/explore-api';
+import { fetchTrips, fetchRecentJoins } from '@/lib/explore-api';
 
 // -----------------------------------------------------------------------------
 // DEMO / PREVIEW trips — FRONTEND FALLBACK ONLY.
@@ -28,13 +28,27 @@ function buildDemoTrips() {
   ];
 }
 
+// Compact relative time for the live-activity cards (real join timestamps).
+function relTime(d) {
+  if (!d) return '';
+  const t = new Date(d).getTime();
+  if (isNaN(t)) return '';
+  const diff = Date.now() - t;
+  if (diff < 60e3) return 'Just now';
+  if (diff < 36e5) return `${Math.floor(diff / 60e3)}m ago`;
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  if (t >= startOfToday.getTime()) return 'Today';
+  if (t >= startOfToday.getTime() - 864e5) return 'Yesterday';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function ExploreHome() {
   const [heroIdx] = useState(0);
   const [featured, setFeatured] = useState(FEATURED_TRIPS);
   const [joinable, setJoinable] = useState([]);
   const [tripsLoaded, setTripsLoaded] = useState(false);
   const [demoTrips] = useState(buildDemoTrips); // frontend-only fallback, lazy init (client-safe)
-  const [tickIdx, setTickIdx] = useState(0);
+  const [recentJoins, setRecentJoins] = useState([]);
   const unlockedCount = REWARD_CARDS.filter(r => r.unlocked).length;
   const progress = Math.round((unlockedCount / 9) * 100);
 
@@ -69,24 +83,18 @@ export default function ExploreHome() {
   const isDemo = tripsLoaded && joinable.length === 0;
   const displayTrips = joinable.length > 0 ? joinable : demoTrips;
 
-  // "Travelers are joining" live ticker — messages derived ONLY from real/demo
-  // trip data (titles + real availability). Lightweight, CSS fade, no new deps.
-  const tickerMessages = useMemo(() => {
-    const list = [];
-    displayTrips.slice(0, 6).forEach((t) => {
-      const cap = t.capacity || t.max || 0;
-      const spots = cap ? Math.max(0, cap - (t.joined || 0)) : 0;
-      if (spots > 0) list.push(`🔥 Only ${spots} spot${spots > 1 ? 's' : ''} left on ${t.title}`);
-      list.push(`📍 ${t.title} · ${t.location}`);
-    });
-    return list;
-  }, [displayTrips]);
-
+  // Real "Travelers are going together" activity — sourced ONLY from real
+  // accepted join records via the existing circle data. Simplest revalidation:
+  // fetch on mount + light polling (no new backend architecture, no sockets).
   useEffect(() => {
-    if (tickerMessages.length <= 1) return;
-    const id = setInterval(() => setTickIdx((i) => (i + 1) % tickerMessages.length), 2600);
-    return () => clearInterval(id);
-  }, [tickerMessages.length]);
+    let alive = true;
+    const load = () => fetchRecentJoins({ limit: 6 })
+      .then((items) => { if (alive) setRecentJoins(items || []); })
+      .catch(() => {});
+    load();
+    const id = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
 
   return (
     <Shell>
@@ -287,23 +295,45 @@ export default function ExploreHome() {
         </div>
       </section>
 
-      {/* ✨ Travelers are joining — lightweight live activity ticker */}
-      {tripsLoaded && tickerMessages.length > 0 && (
-        <section className="px-4 md:px-8 pb-4 md:pb-6">
-          <div className="max-w-6xl mx-auto">
-            <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-50 border border-emerald-100 px-3.5 py-2.5">
-              <span className="relative flex size-2.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 animate-ping" />
-                <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500" />
-              </span>
-              <span className="text-[10.5px] font-bold uppercase tracking-wide text-emerald-700 shrink-0">✨ Travelers are joining</span>
-              <span key={tickIdx} className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-slate-600 animate-[fadeIn_.45s_ease]">
-                {tickerMessages[tickIdx % tickerMessages.length]}
-              </span>
-            </div>
+      {/* ✨ Travelers are going together — compact real-time join activity */}
+      <section className="px-4 md:px-8 pb-4 md:pb-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center gap-2">
+            <span className="relative flex size-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 animate-ping" />
+              <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500" />
+            </span>
+            <h2 className="font-display font-bold text-[18px] md:text-[22px] tracking-tight text-slate-900">Travelers are going together</h2>
           </div>
-        </section>
-      )}
+          <p className="text-[12.5px] md:text-[13.5px] text-slate-500 mt-0.5">Real people. Real trips. Real-time activity.</p>
+
+          {recentJoins.length > 0 ? (
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+              {recentJoins.map((a) => (
+                <div key={a.id} className="flex items-start gap-3 rounded-2xl bg-white border border-slate-200/80 shadow-sm shadow-slate-900/[0.03] px-3.5 py-3 animate-[fadeIn_.45s_ease]">
+                  <span className="relative flex size-2.5 mt-1.5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
+                    <span className="relative inline-flex rounded-full size-2.5 bg-emerald-500" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13.5px] text-slate-900 leading-tight"><span className="font-bold">{a.userName}</span> joined</div>
+                    <div className="text-[13px] text-slate-700 leading-tight mt-0.5 truncate">{a.tripName}</div>
+                    <div className="text-[11.5px] text-slate-500 mt-1">
+                      {relTime(a.joinedAt)}
+                      {typeof a.spotsLeft === 'number' && a.spotsLeft > 0 ? ` · ${a.spotsLeft} spot${a.spotsLeft > 1 ? 's' : ''} left` : ''}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-2xl bg-white border border-slate-200/80 shadow-sm px-4 py-5 text-center">
+              <div className="text-[13.5px] font-semibold text-slate-800">No travelers have joined recently.</div>
+              <div className="text-[12.5px] text-slate-500 mt-0.5">Be the first to find your people and go.</div>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* 🏔️ Become a Trip Creator — premium promo card (links to new page) */}
       <section className="px-4 md:px-8 pb-4 md:pb-6">

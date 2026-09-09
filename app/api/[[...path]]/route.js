@@ -10983,6 +10983,37 @@ Return ONLY valid JSON, no markdown.`;
     const journeys = await getCollection('circle_journeys');
     const circleMembers = await getCollection('circle_members');
 
+    // GET /api/circle/recent-joins — real recent "joined a trip" activity for the
+    // Explore live-activity section. Public (social proof). Reuses the existing
+    // circle_members + circle_journeys collections; no new collection/table.
+    if (path === '/circle/recent-joins' && method === 'GET') {
+      const limit = Math.min(Number(url.searchParams.get('limit')) || 6, 12);
+      const rows = await circleMembers
+        .find({ status: 'accepted', role: { $in: ['traveler', 'co_curator'] } }, { projection: { _id: 0 } })
+        .sort({ decidedAt: -1, updatedAt: -1, createdAt: -1 })
+        .limit(limit)
+        .toArray();
+      const items = [];
+      const jcache = {};
+      for (const r of rows) {
+        if (!(r.journeyId in jcache)) {
+          jcache[r.journeyId] = (await journeys.findOne({ id: r.journeyId }, { projection: { _id: 0 } })) || null;
+        }
+        const j = jcache[r.journeyId];
+        if (!j || j.visibility !== 'public') continue;
+        const summary = await getJourneyMemberSummary(r.journeyId, j);
+        items.push({
+          id: r.id,
+          userName: r.userName || 'A traveler',
+          tripName: j.name,
+          tripId: j.id,
+          joinedAt: r.decidedAt || r.updatedAt || r.createdAt,
+          spotsLeft: summary.seatsRemaining,
+        });
+      }
+      return ok({ items });
+    }
+
     // -------- Live marketplace proxy --------
     // GET /api/circle/marketplace  -> live approved listings, optionally filtered.
     if (path === '/circle/marketplace' && method === 'GET') {
