@@ -7,7 +7,7 @@ import {
   ArrowLeft, Share2, MoreHorizontal, MapPin, BadgeCheck, ShieldCheck,
   Briefcase, Users, Gift, Star, Bookmark, Lock, Trophy, Award,
   Gift as GiftIcon, Shield as ShieldIcon, Loader2, Tent, Mountain, Bike,
-  Backpack, Camera, Pencil, X, Plus, Sparkles,
+  Backpack, Camera, Pencil, X, Plus, Sparkles, Copy, MessageCircle,
 } from 'lucide-react';
 import Shell from '@/components/explore-v2/Shell';
 import { MORE_TRIPS, REWARD_CARDS, BADGES } from '@/lib/explore-v2-data';
@@ -65,6 +65,61 @@ function MeInner() {
     try { window.localStorage.setItem(PROFILE_LS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
   };
 
+  // ---- Share + More menu (functionality only; UI unchanged) ---------------
+  // /explore/me always renders the authenticated user's OWN profile, so the
+  // More menu shows owner actions (Edit Profile + Share Profile).
+  const isOwner = true;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  useEffect(() => {
+    if (!toastMsg) return;
+    const t = setTimeout(() => setToastMsg(''), 2200);
+    return () => clearTimeout(t);
+  }, [toastMsg]);
+
+  // The URL of the profile CURRENTLY being viewed (never hardcoded).
+  const getProfileUrl = () => (typeof window !== 'undefined' ? window.location.href : '');
+  const buildShareData = () => ({
+    title: `${profile.name} — Safar Curated`,
+    text: 'Explore this profile and discover trips on Safar Curated.',
+    url: getProfileUrl(),
+  });
+
+  const handleShare = async () => {
+    setMoreOpen(false);
+    const data = buildShareData();
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try { await navigator.share(data); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; /* else fall back */ }
+    }
+    setShareOpen(true);
+  };
+
+  const copyLink = async () => {
+    const url = getProfileUrl();
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else if (typeof document !== 'undefined') {
+        const ta = document.createElement('textarea');
+        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+    } catch { /* ignore — still confirm to the user */ }
+    setShareOpen(false);
+    setToastMsg('Profile link copied');
+  };
+
+  const shareWhatsApp = () => {
+    const d = buildShareData();
+    const text = encodeURIComponent(`${d.text} ${d.url}`);
+    if (typeof window !== 'undefined') window.open(`https://wa.me/?text=${text}`, '_blank', 'noopener,noreferrer');
+    setShareOpen(false);
+  };
+
+
   const toggleBookmark = (id) =>
     setBookmarked((prev) => ({ ...prev, [id]: !prev[id] }));
 
@@ -109,20 +164,62 @@ function MeInner() {
           </button>
 
           {/* Top-right actions */}
-          <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 md:top-6 md:right-6 flex items-center gap-2">
+          <div className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 md:top-6 md:right-6 flex items-center gap-2 z-30">
             <button
+              onClick={handleShare}
               aria-label="Share profile"
               className="grid place-items-center size-11 rounded-full bg-white shadow-md ring-1 ring-black/5 hover:scale-105 active:scale-95 transition"
             >
               <Share2 className="size-[19px] text-slate-800" strokeWidth={2.2} />
             </button>
             <button
+              onClick={() => setMoreOpen((v) => !v)}
               aria-label="More options"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
               className="grid place-items-center size-11 rounded-full bg-white shadow-md ring-1 ring-black/5 hover:scale-105 active:scale-95 transition"
             >
               <MoreHorizontal className="size-5 text-slate-800" strokeWidth={2.2} />
             </button>
           </div>
+
+          {/* More menu — closes on outside tap / action select */}
+          {moreOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+              <div
+                role="menu"
+                className="absolute z-30 top-[calc(max(1rem,env(safe-area-inset-top))+3.25rem)] md:top-[4.75rem] right-4 md:right-6 w-52 rounded-2xl bg-white shadow-xl ring-1 ring-black/5 overflow-hidden py-1 origin-top-right"
+              >
+                {isOwner ? (
+                  <>
+                    <button
+                      role="menuitem"
+                      onClick={() => { setMoreOpen(false); setEditOpen(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition"
+                    >
+                      <Pencil className="size-[18px] text-slate-500" strokeWidth={2.2} /> Edit Profile
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={handleShare}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition"
+                    >
+                      <Share2 className="size-[18px] text-slate-500" strokeWidth={2.2} /> Share Profile
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    role="menuitem"
+                    onClick={handleShare}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-[14px] font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition"
+                  >
+                    <Share2 className="size-[18px] text-slate-500" strokeWidth={2.2} /> Share Profile
+                  </button>
+                )}
+              </div>
+            </>
+          )}
 
           {/* Cover edit button — small camera icon at bottom-right of cover */}
           <button
@@ -342,6 +439,40 @@ function MeInner() {
           onClose={() => setEditOpen(false)}
           onSave={(next) => { saveProfile(next); setEditOpen(false); }}
         />
+      )}
+
+      {/* Share fallback sheet — shown only when native Web Share is unavailable */}
+      {shareOpen && (
+        <div className="fixed inset-0 z-[96]" role="dialog" aria-modal="true" aria-label="Share profile">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={() => setShareOpen(false)} />
+          <div className="absolute left-1/2 bottom-0 md:bottom-auto md:top-1/2 -translate-x-1/2 md:-translate-y-1/2 w-full md:w-[420px] max-w-[480px] bg-white rounded-t-3xl md:rounded-3xl shadow-2xl ring-1 ring-black/5 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-extrabold text-slate-900 text-[18px]">Share profile</h3>
+              <button onClick={() => setShareOpen(false)} aria-label="Close" className="grid place-items-center size-9 rounded-full hover:bg-slate-100 active:scale-95 transition">
+                <X className="size-5 text-slate-600" strokeWidth={2.2} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={copyLink} className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 ring-1 ring-slate-100 hover:bg-slate-100 active:scale-[0.99] py-5 transition">
+                <span className="grid place-items-center size-11 rounded-full bg-white ring-1 ring-black/5 shadow-sm"><Copy className="size-5 text-slate-700" strokeWidth={2.2} /></span>
+                <span className="text-[13px] font-semibold text-slate-700">Copy Link</span>
+              </button>
+              <button onClick={shareWhatsApp} className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 hover:bg-emerald-100 active:scale-[0.99] py-5 transition">
+                <span className="grid place-items-center size-11 rounded-full bg-white ring-1 ring-black/5 shadow-sm"><MessageCircle className="size-5 text-emerald-600" strokeWidth={2.2} /></span>
+                <span className="text-[13px] font-semibold text-emerald-800">WhatsApp</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Premium auto-dismiss toast */}
+      {toastMsg && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-[max(6rem,calc(env(safe-area-inset-bottom)+6rem))] z-[120] pointer-events-none">
+          <div className="flex items-center gap-2 rounded-full bg-slate-900 text-white text-[13px] font-semibold px-4 py-2.5 shadow-xl ring-1 ring-white/10">
+            <BadgeCheck className="size-4 text-emerald-400" strokeWidth={2.6} /> {toastMsg}
+          </div>
+        </div>
       )}
     </Shell>
   );
