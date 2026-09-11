@@ -305,7 +305,23 @@ export default function ExploreHome() {
         </div>
       </section>
 
-      {/* Categories */}
+      {/* 🏡 Become a Safar Host / Service Provider — recruitment card */}
+      <section className="px-4 md:px-8 pb-4 md:pb-6">
+        <div className="max-w-6xl mx-auto">
+          <Link href="/explore/become-provider" className="group block relative overflow-hidden rounded-3xl bg-white border border-emerald-100 p-5 md:p-7 active:scale-[0.99] transition shadow-xl shadow-emerald-950/5">
+            <div className="absolute -top-14 -right-8 size-48 rounded-full bg-emerald-500/10 blur-3xl" aria-hidden="true" />
+            <div className="relative">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-[10.5px] font-bold tracking-wide text-emerald-800">🏡 HAVE A SERVICE TRAVELERS NEED?</span>
+              <h3 className="mt-3 font-display font-bold text-[21px] md:text-[26px] leading-tight tracking-tight text-slate-900">Become a Safar Host / Service Provider</h3>
+              <p className="mt-2 text-[13px] md:text-[14px] text-slate-600 leading-relaxed max-w-xl">List your homestay, houseboat, Shikara, car, bike, restaurant, guide service or other travel service and reach travelers on Safar.</p>
+              <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-5 py-2.5 text-[13px] font-extrabold shadow-lg shadow-emerald-600/25 group-active:scale-95 transition">
+                Become a Service Provider <ArrowRight className="size-4" strokeWidth={2.6} />
+              </span>
+            </div>
+          </Link>
+        </div>
+      </section>
+
       <section className="py-6 md:py-10 px-0 md:px-8">
         <div className="max-w-6xl mx-auto">
           <h2 className="px-4 md:px-0 font-display font-bold text-[20px] md:text-[24px] tracking-tight text-slate-900">Categories</h2>

@@ -24,6 +24,7 @@ import {
   sendEmail,
 } from '@/lib/email';
 import { verifyFirebaseToken } from '@/lib/firebase-admin';
+import { PROVIDER_CATEGORIES } from '@/lib/provider-categories';
 
 // Note: OpenAI SDK not used - using fetch API directly for Emergent LLM compatibility
 
@@ -914,6 +915,132 @@ async function route(request, { params }) {
     return ok({ user: publicUser(me) });
   }
 
+  // ---------- SERVICE PROVIDER / SAFAR HOST APPLICATION ----------
+  // Separate, user-scoped application flow that REUSES the existing `host`
+  // role + admin approval queue. Kept completely independent from the Trip
+  // Creator application. Stored in the `providerApplications` collection.
+
+  // GET /api/provider/categories — public structured categories (no "Hotel").
+  if (path === '/provider/categories' && method === 'GET') {
+    return ok({ categories: PROVIDER_CATEGORIES });
+  }
+
+  // GET /api/provider/me — the CURRENT user's OWN application + status only.
+  if (path === '/provider/me' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const apps = await getCollection('providerApplications');
+    const appDoc = await apps.findOne({ userId: me.id }, { projection: { _id: 0 } });
+    // Effective status derives approval from the existing host role so the
+    // applicant always sees the truth even without touching the admin flow.
+    let effectiveStatus = appDoc?.status || 'none';
+    if (me.role === 'host') effectiveStatus = appDoc?.status === 'live' ? 'live' : 'approved';
+    else if (me.hostApplicationStatus === 'rejected') effectiveStatus = 'rejected';
+    return ok({
+      application: appDoc ? { ...appDoc, effectiveStatus } : null,
+      isProvider: me.role === 'host',
+    });
+  }
+
+  // POST /api/provider/apply — create/update the CURRENT user's application.
+  // Body.submit === false saves a server-side draft; otherwise it submits.
+  if (path === '/provider/apply' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const body = await readBody(request);
+    const isSubmit = body.submit !== false;
+    const cat = PROVIDER_CATEGORIES.find((c) => c.slug === body.category);
+    if (isSubmit) {
+      if (!cat) return err('Please choose a valid service category');
+      if (!String(body.fullName || '').trim() || !String(body.phone || '').trim() || !String(body.email || '').trim())
+        return err('Please add your name, phone and email');
+    }
+    const apps = await getCollection('providerApplications');
+    const existing = await apps.findOne({ userId: me.id });
+    const now = new Date();
+    const clean = (v, n = 2000) => (v == null ? '' : String(v).slice(0, n));
+    const photos = Array.isArray(body.photos)
+      ? body.photos.filter((p) => typeof p === 'string').slice(0, 6)
+      : (existing?.photos || []);
+    const doc = {
+      id: existing?.id || uuid(),
+      userId: me.id,
+      status: isSubmit ? 'submitted' : 'draft',
+      category: cat?.slug || existing?.category || null,
+      categoryLabel: cat?.label || existing?.categoryLabel || null,
+      providerType: body.providerType === 'business' ? 'business' : 'individual',
+      fullName: clean(body.fullName, 120),
+      phone: clean(body.phone, 30),
+      email: clean(body.email, 160),
+      businessName: clean(body.businessName, 160),
+      description: clean(body.description, 600),
+      serviceName: clean(body.serviceName, 160),
+      serviceDescription: clean(body.serviceDescription, 2000),
+      location: clean(body.location, 160),
+      address: clean(body.address, 300),
+      experience: clean(body.experience, 1000),
+      pricing: clean(body.pricing, 300),
+      availability: clean(body.availability, 300),
+      photos,
+      // Verification status placeholders only — NO real KYC data stored here.
+      verification: existing?.verification || {
+        identity: 'pending', pan: 'not_started', bank: 'pending',
+        ownership: 'pending', license: 'not_started',
+      },
+      rejectionReason: existing?.rejectionReason || null,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      submittedAt: isSubmit ? (existing?.submittedAt || now) : (existing?.submittedAt || null),
+    };
+    await apps.updateOne({ userId: me.id }, { $set: doc }, { upsert: true });
+
+    // REUSE the existing host approval queue: flag a pending host application on
+    // the user (unless already an approved host/admin). This makes the applicant
+    // appear in the existing admin queue and lets the existing role→host
+    // approval promote them. Trip Creator state is never touched.
+    if (isSubmit && !['host', 'admin', 'super_admin'].includes(me.role)) {
+      const users = await getCollection('users');
+      await users.updateOne(
+        { id: me.id },
+        { $set: {
+            hostApplicationStatus: 'pending',
+            hostApplicationAt: me.hostApplicationAt || now,
+            providerApplicant: true,
+            providerCategory: cat?.slug || null,
+            providerCategoryLabel: cat?.label || null,
+            updatedAt: now,
+          } },
+      );
+      // Best-effort admin notification via the EXISTING notifications collection.
+      try {
+        const notifications = await getCollection('notifications');
+        const usersC = await getCollection('users');
+        const admins = await usersC.find(
+          { role: { $in: ['admin', 'super_admin'] } },
+          { projection: { id: 1 } },
+        ).toArray();
+        await Promise.all(admins.map((a) => notifications.insertOne({
+          id: uuid(), userId: a.id, type: 'provider_application',
+          title: 'New Service Provider application',
+          body: `${doc.fullName || me.name || 'A user'} applied as ${doc.categoryLabel || 'Service Provider'}.`,
+          link: '/admin?tab=users', meta: { applicantId: me.id, category: doc.category },
+          read: false, createdAt: now,
+        })));
+      } catch (e) { /* non-blocking */ }
+    }
+    const fresh = await apps.findOne({ userId: me.id }, { projection: { _id: 0 } });
+    return ok({ application: fresh });
+  }
+
+  // GET /api/provider/applications — admin review list (reuses admin auth).
+  if (path === '/provider/applications' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    const g = requireRole(me, 'admin'); if (!g.ok) return err(g.error, g.status);
+    const apps = await getCollection('providerApplications');
+    const list = await apps.find({}, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).limit(300).toArray();
+    return ok({ applications: list });
+  }
+
   // ---------- ADMIN USER MANAGEMENT ----------
   // POST /api/admin/users/:id/suspend
   if (segments[0] === 'admin' && segments[1] === 'users' && segments[2] && segments[3] === 'suspend' && method === 'POST') {
@@ -988,6 +1115,16 @@ async function route(request, { params }) {
       update.hostApplicationApprovedBy = me.id;
     }
     await users.updateOne({ id: userId }, { $set: update });
+    // Keep the provider application in sync when a provider is approved as host.
+    if (role === 'host') {
+      try {
+        const papps = await getCollection('providerApplications');
+        await papps.updateOne(
+          { userId: userId },
+          { $set: { status: 'approved', approvedAt: new Date(), updatedAt: new Date() } },
+        );
+      } catch (e) { /* non-blocking */ }
+    }
     // Send approval email — reuses the branded SafarEmailTemplate. Best-effort.
     if (role === 'host' && wasPendingHost) {
       try {
