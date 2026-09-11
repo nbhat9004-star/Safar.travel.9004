@@ -7,7 +7,8 @@ import { ArrowLeft, Share2, Bookmark, MapPin, Calendar, BadgeCheck, ShieldCheck,
 import Shell from '@/components/explore-v2/Shell';
 import TripRouteMap, { RouteList } from '@/components/explore-v2/TripRouteMap';
 import { MORE_TRIPS, FEATURED_TRIPS } from '@/lib/explore-v2-data';
-import { fetchTrip, requestToJoin } from '@/lib/explore-api';
+import { fetchTrip, requestToJoin, fetchTripMembers } from '@/lib/explore-api';
+import { PROVIDER_CATEGORIES } from '@/lib/provider-categories';
 import { useAuth } from '@/lib/auth-context';
 import AuthGate from '@/components/safar/AuthGate';
 import { toast } from 'sonner';
@@ -28,10 +29,24 @@ export default function TripDetail({ params }) {
   const [gateOpen, setGateOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null); // 'login' | 'register' | null
   const [pendingJoin, setPendingJoin] = useState(false);
+  const [fulfill, setFulfill] = useState(null); // { current, max, min, services[], status }
 
   useEffect(() => {
     let alive = true;
     fetchTrip(id).then(t => { if (alive && t) setTrip(t); }).catch(() => {});
+    // Phase 2: live traveler progress + required services + fulfillment status.
+    fetchTripMembers(id).then(d => {
+      if (!alive || !d) return;
+      const j = d.journey || {};
+      setFulfill({
+        current: Number.isFinite(d.acceptedSeats) ? d.acceptedSeats : 0,
+        max: Number(d.capacity ?? j.maxMembers ?? 0),
+        min: Number(j.minimumTravelers ?? 1),
+        services: Array.isArray(j.requiredServices) ? j.requiredServices : [],
+        status: j.fulfillmentStatus || 'accepting_travelers',
+        hostMode: j.hostMode || 'self',
+      });
+    }).catch(() => {});
     // Load persisted saved-state for this trip
     try {
       const raw = localStorage.getItem('safar_saved_trips');
@@ -183,10 +198,53 @@ export default function TripDetail({ params }) {
               </div>
             </div>
             <div className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-800">
-              <Users className="size-4 text-slate-500" /> {trip.joined || 8} / {trip.max || 12}
+              <Users className="size-4 text-slate-500" /> {fulfill ? fulfill.current : (trip.joined || 0)} / {fulfill ? fulfill.max : (trip.max || 0)}
             </div>
           </div>
         </div>
+
+        {/* Phase 2 — Traveler progress + Services Needed (real data when available) */}
+        {fulfill && (fulfill.hostMode === 'safar' || fulfill.services.length > 0 || fulfill.min > 1) && (
+          <section className="mt-5">
+            <div className="rounded-3xl border border-slate-100 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-1.5 text-[14px] font-bold text-slate-900"><Users className="size-4 text-emerald-600" /> {fulfill.current} / {fulfill.max} travelers</div>
+                <span className="text-[12px] font-semibold text-slate-500">Minimum: {fulfill.min}</span>
+              </div>
+              {/* Progress bar */}
+              <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-700 transition-all" style={{ width: `${Math.min(100, fulfill.max ? Math.round((fulfill.current / fulfill.max) * 100) : 0)}%` }} />
+              </div>
+              {/* Status line */}
+              <div className="mt-3 text-[13px] font-semibold">
+                {fulfill.max > 0 && fulfill.current >= fulfill.max ? (
+                  <span className="text-slate-600">Trip is full</span>
+                ) : fulfill.current >= fulfill.min ? (
+                  <span className="text-emerald-700 inline-flex items-center gap-1"><BadgeCheck className="size-4" /> Minimum reached — ready for Safar service fulfillment</span>
+                ) : (
+                  <span className="text-amber-700">Waiting for {Math.max(0, fulfill.min - fulfill.current)} more traveler{fulfill.min - fulfill.current === 1 ? '' : 's'} to unlock trip services.</span>
+                )}
+              </div>
+
+              {fulfill.services.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-[12.5px] font-bold text-slate-900">Services Needed</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {fulfill.services.map((slug) => {
+                      const c = PROVIDER_CATEGORIES.find((x) => x.slug === slug);
+                      return (
+                        <span key={slug} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1.5 text-[12.5px] font-semibold text-emerald-800">
+                          <span>{c?.icon || '•'}</span> {c?.label || slug}
+                        </span>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-400 leading-snug">Safar will match verified providers for these services once the trip is ready.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="mt-5">
           <h3 className="font-display font-bold text-[17px] tracking-tight">About Trip</h3>

@@ -9,6 +9,7 @@ import TripRouteMap, { RouteList } from '@/components/explore-v2/TripRouteMap';
 import AuthGate from '@/components/safar/AuthGate';
 import { useAuth } from '@/lib/auth-context';
 import { VERIFIED_SERVICES } from '@/lib/explore-v2-data';
+import { PROVIDER_CATEGORIES } from '@/lib/provider-categories';
 import { createTrip } from '@/lib/explore-api';
 import { toast } from 'sonner';
 
@@ -35,6 +36,10 @@ export default function CreateTrip() {
   const [mode, setMode] = useState(null);
   const [privacy, setPrivacy] = useState('public');
   const [addedSvc, setAddedSvc] = useState([]);
+  // Phase 2 — trip fulfillment foundation
+  const [minTravelers, setMinTravelers] = useState(2);
+  const [maxTravelers, setMaxTravelers] = useState(8);
+  const [requiredServices, setRequiredServices] = useState([]); // provider category slugs
   const [publishing, setPublishing] = useState(false);
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
@@ -62,6 +67,9 @@ export default function CreateTrip() {
         if (d.mode !== undefined) setMode(d.mode);
         if (d.privacy) setPrivacy(d.privacy);
         if (Array.isArray(d.addedSvc)) setAddedSvc(d.addedSvc);
+        if (Number.isFinite(d.minTravelers)) setMinTravelers(d.minTravelers);
+        if (Number.isFinite(d.maxTravelers)) setMaxTravelers(d.maxTravelers);
+        if (Array.isArray(d.requiredServices)) setRequiredServices(d.requiredServices);
         if (typeof d.title === 'string') setTitle(d.title);
         if (typeof d.destination === 'string') setDestination(d.destination);
         if (typeof d.startDate === 'string') setStartDate(d.startDate);
@@ -82,9 +90,10 @@ export default function CreateTrip() {
     try {
       window.localStorage.setItem(DRAFT_KEY, JSON.stringify({
         mode, privacy, addedSvc, title, destination, startDate, endDate, description, places, route, cover,
+        minTravelers, maxTravelers, requiredServices,
       }));
     } catch (e) { /* quota / unavailable — non-fatal */ }
-  }, [draftLoaded, mode, privacy, addedSvc, title, destination, startDate, endDate, description, places, route, cover]);
+  }, [draftLoaded, mode, privacy, addedSvc, title, destination, startDate, endDate, description, places, route, cover, minTravelers, maxTravelers, requiredServices]);
 
   const addPlace = () => setPlaces((p) => [...p, '']);
   const updatePlace = (i, v) => setPlaces((p) => p.map((x, idx) => (idx === i ? v : x)));
@@ -140,9 +149,15 @@ export default function CreateTrip() {
   };
 
   const toggleSvc = (id) => setAddedSvc(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleReqSvc = (slug) => setRequiredServices(p => p.includes(slug) ? p.filter(x => x !== slug) : [...p, slug]);
 
   const handlePublish = async () => {
     if (!title.trim() || title.trim().length < 3) { toast.error('Trip title must be at least 3 characters'); return; }
+    // Phase 2: validate group size + required services (server re-validates too).
+    const minT = Math.max(1, Number(minTravelers) || 1);
+    const maxT = Math.max(1, Number(maxTravelers) || 1);
+    if (maxT < minT) { toast.error('Maximum travelers must be greater than or equal to minimum travelers'); return; }
+    if (mode === 'safar' && requiredServices.length === 0) { toast.error('Select at least one service Safar should arrange'); return; }
     // AUTH GATE: never surface a red "sign in" error — show the premium prompt.
     // The draft is already persisted, so nothing is lost while the user signs in.
     if (!authLoading && !user) { setPendingPublish(true); setGateOpen(true); return; }
@@ -160,7 +175,9 @@ export default function CreateTrip() {
         destination: { name: destination.trim() || 'Kashmir', country: 'India' },
         startDate: startDate || null,
         endDate: endDate || null,
-        maxMembers: 8,
+        maxMembers: maxT,
+        minimumTravelers: Math.min(minT, maxT),
+        requiredServices, // provider category slugs only (Safar matches later)
         services,
         cover: cover || null,
         route,
@@ -327,6 +344,39 @@ export default function CreateTrip() {
               </label>
             )}
           </div>
+
+          {/* Phase 2 — Group size (min / max travelers) */}
+          <h3 className="mt-8 font-display font-bold text-[18px] tracking-tight text-slate-900">Group size</h3>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+              <label className="block text-[12px] font-semibold text-slate-500">Minimum Travelers</label>
+              <input type="number" min={1} value={minTravelers} onChange={(e) => setMinTravelers(Math.max(1, Number(e.target.value) || 1))} className="mt-1 w-full text-[20px] font-bold text-slate-900 outline-none bg-transparent" />
+              <p className="text-[11px] text-slate-400 leading-snug mt-0.5">Your trip can move forward once this number of travelers is reached.</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3.5">
+              <label className="block text-[12px] font-semibold text-slate-500">Maximum Travelers</label>
+              <input type="number" min={1} value={maxTravelers} onChange={(e) => setMaxTravelers(Math.max(1, Number(e.target.value) || 1))} className="mt-1 w-full text-[20px] font-bold text-slate-900 outline-none bg-transparent" />
+              <p className="text-[11px] text-slate-400 leading-snug mt-0.5">Once this limit is reached, no more travelers can join.</p>
+            </div>
+          </div>
+
+          {/* Phase 2 — Services Needed (Safar-hosted trips; category slugs only) */}
+          {mode === 'safar' && (
+            <>
+              <h3 className="mt-8 font-display font-bold text-[18px] tracking-tight text-slate-900">Services Needed</h3>
+              <p className="text-[12.5px] text-slate-500 mt-0.5">Select the services Safar should arrange for this trip. You choose the type of service — Safar matches verified providers.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {PROVIDER_CATEGORIES.map((c) => {
+                  const active = requiredServices.includes(c.slug);
+                  return (
+                    <button key={c.slug} type="button" onClick={() => toggleReqSvc(c.slug)} className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-semibold transition active:scale-95 ${active ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20' : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300'}`}>
+                      <span>{c.icon}</span> {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {/* Privacy */}
           <h3 className="mt-8 font-display font-bold text-[18px] tracking-tight text-slate-900">Privacy</h3>

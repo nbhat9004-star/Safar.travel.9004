@@ -10647,6 +10647,42 @@ Return ONLY valid JSON, no markdown.`;
     return { owner, coCurators, travelers, pending, acceptedCount: 1 + coCurators.length + travelers.length, acceptedSeats, capacity, seatsRemaining };
   }
 
+  // -------- Phase 2: Trip fulfillment foundation helpers --------
+  // Provider category slugs come from the SINGLE source of truth
+  // (lib/provider-categories.js). "Hotel" is intentionally absent there.
+  function sanitizeRequiredServices(arr) {
+    if (!Array.isArray(arr)) return [];
+    const valid = new Set(PROVIDER_CATEGORIES.map((c) => c.slug));
+    const out = [];
+    for (const s of arr) {
+      const slug = String(s || '').trim();
+      if (valid.has(slug) && !out.includes(slug)) out.push(slug);
+      if (out.length >= 16) break;
+    }
+    return out;
+  }
+  function computeFulfillmentStatus(journeyDoc, acceptedSeats) {
+    const min = Math.max(1, Number(journeyDoc?.minimumTravelers) || 1);
+    const hasServices = Array.isArray(journeyDoc?.requiredServices) && journeyDoc.requiredServices.length > 0;
+    if (acceptedSeats < min) return 'accepting_travelers';
+    return hasServices ? 'ready_for_fulfillment' : 'minimum_reached';
+  }
+  // Recompute + persist the fulfillment status after any membership change.
+  // Backend is the source of truth (never relies on frontend calculation).
+  async function refreshFulfillment(journeyId) {
+    try {
+      const col = await getCollection('circle_journeys');
+      const doc = await col.findOne({ id: journeyId });
+      if (!doc) return null;
+      const summary = await getJourneyMemberSummary(journeyId, doc);
+      const status = computeFulfillmentStatus(doc, summary.acceptedSeats);
+      if (status !== doc.fulfillmentStatus) {
+        await col.updateOne({ id: journeyId }, { $set: { fulfillmentStatus: status, updatedAt: new Date() } });
+      }
+      return status;
+    } catch (e) { return null; }
+  }
+
   // -------- Circle Timeline helpers (Module 6: activity feed) --------
   async function ensureCircleTimelineIndexes() {
     try {
@@ -11288,6 +11324,10 @@ Return ONLY valid JSON, no markdown.`;
         days = Math.max(1, Math.ceil((endDate - startDate) / 86400000));
       }
       const maxMembers = Math.max(1, Math.min(50, Number(b.maxMembers) || 6));
+      // Phase 2: minimum travelers (>=1, never above the maximum) + required
+      // service categories (slugs only — Safar matches providers later).
+      const minimumTravelers = Math.max(1, Math.min(maxMembers, Number(b.minimumTravelers) || 1));
+      const requiredServices = sanitizeRequiredServices(b.requiredServices);
       const estimate = computeEstimate(services, maxMembers, days);
       const baseSlug = slugify(name);
       const slug = await ensureUniqueSlug(baseSlug);
@@ -11319,6 +11359,9 @@ Return ONLY valid JSON, no markdown.`;
         startDate, endDate,
         isFlexibleDates: !!b.isFlexibleDates,
         maxMembers,
+        minimumTravelers,
+        requiredServices,
+        fulfillmentStatus: 'accepting_travelers',
         budget: Number(b.budget) || null,
         difficulty: b.difficulty || 'moderate',
         agePreference: b.agePreference || null,
@@ -11859,6 +11902,10 @@ Return ONLY valid JSON, no markdown.`;
           journey: {
             id: doc.id, slug: doc.slug, name: doc.name, cover: doc.cover,
             maxMembers: doc.maxMembers, visibility: doc.visibility,
+            minimumTravelers: doc.minimumTravelers || 1,
+            requiredServices: Array.isArray(doc.requiredServices) ? doc.requiredServices : [],
+            fulfillmentStatus: doc.fulfillmentStatus || 'accepting_travelers',
+            hostMode: doc.hostMode || 'self',
             registrationsClosed: !!doc.registrationsClosed,
             curatorId: doc.curatorId, curatorName: doc.curatorName, curatorAvatar: doc.curatorAvatar,
           },
@@ -11901,6 +11948,7 @@ Return ONLY valid JSON, no markdown.`;
 
         // Capacity check
         const summary = await getJourneyMemberSummary(jid, doc);
+        if (summary.seatsRemaining <= 0) return err('This trip has reached its maximum number of travelers.', 400);
         if (summary.seatsRemaining < seats) return err(`Only ${summary.seatsRemaining} seat(s) remaining`, 400);
 
         const now = new Date();
@@ -11965,6 +12013,7 @@ Return ONLY valid JSON, no markdown.`;
           if (existing.status === 'accepted') return err('You are already a member of this journey', 400);
         }
         const summary = await getJourneyMemberSummary(jid, doc);
+        if (summary.seatsRemaining <= 0) return err('This trip has reached its maximum number of travelers.', 400);
         if (summary.seatsRemaining < seats) return err(`Only ${summary.seatsRemaining} seat(s) remaining`, 400);
 
         // Verify payment record + signature
@@ -12020,6 +12069,9 @@ Return ONLY valid JSON, no markdown.`;
           await circleMembers.insertOne(memberDoc);
         }
 
+        // Phase 2: recompute + persist fulfillment status (backend truth).
+        await refreshFulfillment(jid);
+
         // Notify curator
         mkNotif({
           userId: doc.curatorId,
@@ -12062,6 +12114,7 @@ Return ONLY valid JSON, no markdown.`;
         const mem = await circleMembers.findOne({ journeyId: jid, userId: me.id, status: 'accepted' });
         if (!mem) return err('You are not a member of this journey', 404);
         await circleMembers.updateOne({ id: mem.id }, { $set: { status: 'left', updatedAt: new Date() } });
+        await refreshFulfillment(jid);
         await logCircleEvent({ journeyId: jid, journey: doc, type: 'member_left', actor: me, title: 'Member left', body: `${me.name} left the journey`, meta: { memberId: mem.id, userId: me.id } });
         // Notify curator
         await mkNotif({
@@ -12110,8 +12163,10 @@ Return ONLY valid JSON, no markdown.`;
           if (mem.status !== 'pending') return err('Request is not pending', 400);
           // Capacity re-check
           const summary = await getJourneyMemberSummary(jid, doc);
+          if (summary.seatsRemaining <= 0) return err('This trip has reached its maximum number of travelers.', 400);
           if (summary.seatsRemaining < (mem.seats || 1)) return err(`Not enough seats remaining (${summary.seatsRemaining})`, 400);
           await circleMembers.updateOne({ id: memberId }, { $set: { status: 'accepted', role: 'traveler', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          await refreshFulfillment(jid);
           await logCircleEvent({ journeyId: jid, journey: doc, type: 'request_approved', actor: me, title: 'Request approved', body: `${mem.userName} joined the journey`, meta: { memberId: mem.id, userId: mem.userId } });
           await mkNotif({
             userId: mem.userId,
@@ -12142,6 +12197,7 @@ Return ONLY valid JSON, no markdown.`;
         if (action === 'remove') {
           if (!['pending', 'accepted'].includes(mem.status)) return err('Cannot remove this member', 400);
           await circleMembers.updateOne({ id: memberId }, { $set: { status: 'removed', decidedAt: now, decidedBy: me.id, updatedAt: now } });
+          await refreshFulfillment(jid);
           await logCircleEvent({ journeyId: jid, journey: doc, type: 'member_removed', actor: me, title: 'Member removed', body: `${mem.userName} was removed`, meta: { memberId: mem.id, userId: mem.userId } });
           if (mem.status === 'accepted') {
             await mkNotif({
@@ -13615,7 +13671,7 @@ Return ONLY valid JSON, no markdown.`;
         if (method === 'PUT') {
           const b = await readBody(request);
           const set = { updatedAt: new Date() };
-          const allowed = ['name','description','cover','theme','destination','isFlexibleDates','maxMembers','budget','difficulty','agePreference','genderPreference','languages','services','startDate','endDate','visibility'];
+          const allowed = ['name','description','cover','theme','destination','isFlexibleDates','maxMembers','minimumTravelers','requiredServices','budget','difficulty','agePreference','genderPreference','languages','services','startDate','endDate','visibility'];
           for (const k of allowed) if (k in b) set[k] = b[k];
           if (set.startDate) set.startDate = new Date(set.startDate);
           if (set.endDate) set.endDate = new Date(set.endDate);
@@ -13649,6 +13705,16 @@ Return ONLY valid JSON, no markdown.`;
           if (startD && endD && endD > startD) days = Math.max(1, Math.ceil((endD - startD) / 86400000));
           const members = set.maxMembers || doc.maxMembers || 1;
           set.estimate = computeEstimate(services, members, days);
+          // Phase 2: sanitize/validate the fulfillment fields, then recompute
+          // fulfillment status from the CURRENT accepted travellers (backend truth).
+          const effMax = Math.max(1, Number(set.maxMembers != null ? set.maxMembers : doc.maxMembers) || 1);
+          if ('requiredServices' in set) set.requiredServices = sanitizeRequiredServices(set.requiredServices);
+          if ('minimumTravelers' in set) {
+            set.minimumTravelers = Math.max(1, Math.min(effMax, Number(set.minimumTravelers) || 1));
+          }
+          const mergedForStatus = { ...doc, ...set };
+          const summaryNow = await getJourneyMemberSummary(jid, mergedForStatus);
+          set.fulfillmentStatus = computeFulfillmentStatus(mergedForStatus, summaryNow.acceptedSeats);
           if (set.visibility === 'public' && !doc.publishedAt) set.publishedAt = new Date();
           await journeys.updateOne({ id: jid }, { $set: set });
           await logCircleEvent({ journeyId: jid, journey: { ...doc, ...set }, type: 'journey_updated', actor: me, title: 'Journey updated', body: Object.keys(set).filter(k => !['updatedAt','estimate'].includes(k)).slice(0, 6).join(', ') });
