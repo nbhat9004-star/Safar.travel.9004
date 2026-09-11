@@ -23,8 +23,10 @@ const AuthModal = dynamic(() => import('@/components/safar/AuthModal'), { ssr: f
 
 // Configurable partner model — single source of truth (NOT hardcoded across UI).
 const PARTNER_MODEL = { safarPct: 10, creatorPct: 10, examplePrice: 2000, exampleTravelers: 10 };
-const DRAFT_KEY = 'safar_creator_draft';
-const SUBMITTED_KEY = 'safar_creator_application';
+// User-scoped storage keys — application status & draft belong to the
+// currently authenticated Safar account, never to the browser globally.
+const draftKey = (uid) => `safar_creator_draft_${uid}`;
+const submittedKey = (uid) => `safar_creator_application_${uid}`;
 
 const STEPS = [
   { icon: FileText,   title: 'Apply',            desc: 'Tell us about your Kashmir knowledge and experience.' },
@@ -68,21 +70,34 @@ export default function BecomeTripCreator() {
   const [authMode, setAuthMode] = useState(null);
   const [pending, setPending] = useState(false);
 
-  // Restore draft + submitted state on mount.
+  // Load the application status + draft for the CURRENTLY authenticated user.
+  // Re-runs whenever the signed-in user changes (login / logout / switch) so
+  // one account can never see another account's submitted state or draft.
   useEffect(() => {
+    if (authLoading) return; // wait until we know who (if anyone) is signed in
+    const uid = user?.id;
     try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (raw) setForm(JSON.parse(raw));
-      if (window.localStorage.getItem(SUBMITTED_KEY) === '1') setSubmitted(true);
+      if (uid) {
+        setSubmitted(window.localStorage.getItem(submittedKey(uid)) === '1');
+        const raw = window.localStorage.getItem(draftKey(uid));
+        if (raw) setForm(JSON.parse(raw));
+        // else: keep any in-memory form typed before sign-in (resume flow).
+      } else {
+        // Logged out: never inherit another user's submitted state or draft.
+        setSubmitted(false);
+        setForm({});
+      }
     } catch (e) { /* ignore */ }
     setLoaded(true);
-  }, []);
+  }, [authLoading, user?.id]);
 
-  // Persist draft continuously (survives refresh + sign-in navigation).
+  // Persist draft continuously — scoped to the signed-in user only.
   useEffect(() => {
-    if (!loaded) return;
-    try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(form)); } catch (e) { /* noop */ }
-  }, [form, loaded]);
+    if (!loaded || authLoading) return;
+    const uid = user?.id;
+    if (!uid) return; // don't store drafts for logged-out visitors
+    try { window.localStorage.setItem(draftKey(uid), JSON.stringify(form)); } catch (e) { /* noop */ }
+  }, [form, loaded, authLoading, user?.id]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -93,11 +108,13 @@ export default function BecomeTripCreator() {
     }
     // Auth gate — premium prompt instead of a technical error. Draft is saved.
     if (!authLoading && !user) { setPending(true); setGateOpen(true); return; }
+    const uid = user?.id;
+    if (!uid) { setPending(true); setGateOpen(true); return; }
     setSubmitting(true);
     try {
-      // Frontend-only workflow state (no fake verification API).
-      window.localStorage.setItem(SUBMITTED_KEY, '1');
-      window.localStorage.removeItem(DRAFT_KEY);
+      // Frontend-only workflow state — scoped to THIS authenticated user.
+      window.localStorage.setItem(submittedKey(uid), '1');
+      window.localStorage.removeItem(draftKey(uid));
       setSubmitted(true);
       toast.success('Application submitted — pending verification');
     } catch (e) {
@@ -173,7 +190,11 @@ export default function BecomeTripCreator() {
           <p className="mt-4 text-[11.5px] text-slate-500 leading-relaxed">Illustrative example only — earnings are not guaranteed and depend on the trip, costs and Safar&rsquo;s partner terms.</p>
         </div>
 
-        {submitted ? (
+        {(!loaded || authLoading) ? (
+          <div className="mt-8 rounded-3xl border border-slate-100 bg-white p-10 flex items-center justify-center">
+            <Loader2 className="size-6 animate-spin text-emerald-600" />
+          </div>
+        ) : submitted ? (
           <div className="mt-8 rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-center">
             <div className="mx-auto size-12 grid place-items-center rounded-full bg-emerald-600 text-white"><CheckCircle2 className="size-7" /></div>
             <h3 className="mt-3 font-display font-bold text-[19px] text-emerald-900">Application submitted</h3>
