@@ -10674,14 +10674,274 @@ Return ONLY valid JSON, no markdown.`;
       const col = await getCollection('circle_journeys');
       const doc = await col.findOne({ id: journeyId });
       if (!doc) return null;
+      // Once the Phase-3 engine is running, its states are authoritative and
+      // must never be downgraded by a membership recount.
+      const ENGINE_STATES = ['service_fulfillment', 'confirmed', 'service_unavailable'];
+      if (ENGINE_STATES.includes(doc.fulfillmentStatus)) return doc.fulfillmentStatus;
       const summary = await getJourneyMemberSummary(journeyId, doc);
       const status = computeFulfillmentStatus(doc, summary.acceptedSeats);
       if (status !== doc.fulfillmentStatus) {
         await col.updateOne({ id: journeyId }, { $set: { fulfillmentStatus: status, updatedAt: new Date() } });
       }
+      // Kick off automatic service fulfillment ONLY for Safar-hosted trips that
+      // have reached the minimum and declared required services. Free/community
+      // trips (hostMode !== 'safar') never enter the engine.
+      if (
+        status === 'ready_for_fulfillment' &&
+        doc.hostMode === 'safar' &&
+        Array.isArray(doc.requiredServices) && doc.requiredServices.length > 0 &&
+        !Array.isArray(doc.serviceFulfillment)
+      ) {
+        await startCircleFulfillment(journeyId);
+      }
       return status;
     } catch (e) { return null; }
   }
+
+  // ======================= PHASE 3: FULFILLMENT ENGINE =======================
+  // Connects Phase-1 providers (providerApplications + host role) to Phase-2
+  // trips (circle_journeys). Reuses the existing `safar_provider_requests`
+  // collection + host requests UI + notifications. Category slug is the
+  // canonical matching key. Hotel can never match (absent from the source).
+
+  // Find the next eligible provider for a service category, excluding anyone
+  // already attempted for this trip+service. Deterministic (stable order).
+  async function findNextEligibleProvider(categorySlug, excludeUserIds, curatorId) {
+    const apps = await getCollection('providerApplications');
+    const users = await getCollection('users');
+    const excluded = new Set([...(excludeUserIds || []), curatorId]);
+    // Approved/live provider applications for this exact category slug.
+    const candidates = await apps
+      .find({ category: categorySlug, status: { $in: ['approved', 'live'] } })
+      .sort({ approvedAt: 1, createdAt: 1 })
+      .toArray();
+    for (const app of candidates) {
+      if (excluded.has(app.userId)) continue;
+      const u = await users.findOne({ id: app.userId }, { projection: { _id: 0, id: 1, name: 1, role: 1, status: 1 } });
+      // Real eligibility gate = existing host role + not suspended/blacklisted.
+      if (!u || u.role !== 'host') continue;
+      if (u.status === 'suspended' || u.status === 'blacklisted') continue;
+      return { userId: u.id, name: u.name || 'Safar Host', app };
+    }
+    return null;
+  }
+
+  // Create a provider service request (reuses safar_provider_requests) and
+  // notify the provider via the existing notification system.
+  async function createCircleServiceRequest(journey, categorySlug, provider, attemptNum) {
+    const preqs = await getCollection('safar_provider_requests');
+    const cat = PROVIDER_CATEGORIES.find((c) => c.slug === categorySlug);
+    const summary = await getJourneyMemberSummary(journey.id, journey);
+    const reqDoc = {
+      id: uuid(),
+      source: 'circle',                 // marks this as a Trip-Creator fulfillment request
+      journeyId: journey.id,
+      tripId: journey.id,
+      journeySlug: journey.slug,
+      serviceCategorySlug: categorySlug,
+      serviceLabel: cat?.label || categorySlug,
+      hostId: provider.userId,          // provider (host) — GET /host/provider-requests filters on this
+      providerName: provider.name,
+      travelerId: journey.curatorId,    // trip creator (for notifications)
+      travelerName: journey.curatorName || 'Trip Creator',
+      listingTitle: journey.name,
+      listingImage: journey.cover || null,
+      snapshot: {
+        destination: journey.destination?.name || 'Kashmir',
+        startDate: journey.startDate ? new Date(journey.startDate).toISOString().slice(0, 10) : '',
+        endDate: journey.endDate ? new Date(journey.endDate).toISOString().slice(0, 10) : '',
+        guests: summary.acceptedSeats,
+      },
+      price: 0,
+      attempt: attemptNum,
+      status: 'pending',
+      createdAt: new Date(),
+      respondedAt: null,
+    };
+    await preqs.insertOne(reqDoc);
+    await mkNotif({
+      userId: provider.userId,
+      type: 'provider_service_request',
+      category: 'booking',
+      title: 'You have a new Safar service request',
+      body: `${reqDoc.serviceLabel} for "${journey.name}" (${summary.acceptedSeats} traveler${summary.acceptedSeats === 1 ? '' : 's'}).`,
+      link: '/dashboard/host/requests',
+      meta: { providerRequestId: reqDoc.id, journeyId: journey.id, serviceCategorySlug: categorySlug },
+    });
+    return reqDoc;
+  }
+
+  // Attempt (or re-attempt) to place a request for one service entry. Mutates
+  // and persists the journey.serviceFulfillment entry. Returns the entry.
+  async function attemptServiceRequest(journeyId, categorySlug) {
+    const col = await getCollection('circle_journeys');
+    const journey = await col.findOne({ id: journeyId });
+    if (!journey) return null;
+    const sf = Array.isArray(journey.serviceFulfillment) ? journey.serviceFulfillment : [];
+    const entry = sf.find((e) => e.categorySlug === categorySlug);
+    if (!entry) return null;
+    if (entry.status === 'confirmed') return entry;
+    const attempted = (entry.attempts || []).map((a) => a.providerUserId);
+    const provider = await findNextEligibleProvider(categorySlug, attempted, journey.curatorId);
+    if (!provider) {
+      entry.status = 'unfulfilled';
+      entry.providerUserId = null;
+      entry.requestId = null;
+    } else {
+      const attemptNum = (entry.attempts || []).length + 1;
+      const reqDoc = await createCircleServiceRequest(journey, categorySlug, provider, attemptNum);
+      entry.status = 'pending';
+      entry.providerUserId = provider.userId;
+      entry.providerName = provider.name;
+      entry.requestId = reqDoc.id;
+      entry.attempts = [...(entry.attempts || []), { providerUserId: provider.userId, providerName: provider.name, requestId: reqDoc.id, status: 'pending', at: new Date() }];
+    }
+    await col.updateOne(
+      { id: journeyId, 'serviceFulfillment.categorySlug': categorySlug },
+      { $set: { 'serviceFulfillment.$': entry, updatedAt: new Date() } },
+    );
+    return entry;
+  }
+
+  // Initialise the serviceFulfillment array and place the first request for
+  // every required service. Idempotent (skips if already initialised).
+  async function startCircleFulfillment(journeyId) {
+    const col = await getCollection('circle_journeys');
+    const journey = await col.findOne({ id: journeyId });
+    if (!journey) return;
+    if (Array.isArray(journey.serviceFulfillment)) return; // already running
+    const slugs = sanitizeRequiredServices(journey.requiredServices);
+    if (slugs.length === 0) return;
+    const serviceFulfillment = slugs.map((slug) => ({
+      categorySlug: slug,
+      status: 'searching',
+      providerUserId: null,
+      providerName: null,
+      requestId: null,
+      attempts: [],
+    }));
+    await col.updateOne(
+      { id: journeyId },
+      { $set: { serviceFulfillment, fulfillmentStatus: 'service_fulfillment', updatedAt: new Date() } },
+    );
+    // Notify the Trip Creator that Safar is arranging the services.
+    await mkNotif({
+      userId: journey.curatorId,
+      type: 'trip_fulfillment_started',
+      category: 'circle',
+      title: 'Safar is arranging your trip services',
+      body: `We're finding verified providers for ${slugs.length} service${slugs.length === 1 ? '' : 's'} on "${journey.name}".`,
+      link: `/explore/trip/${journey.id}`,
+      meta: { journeyId },
+    });
+    for (const slug of slugs) {
+      await attemptServiceRequest(journeyId, slug);
+    }
+    await recomputeTripFulfillment(journeyId);
+  }
+
+  // Recompute the overall trip fulfillment status from the per-service entries
+  // and fire creator/admin notifications on terminal transitions.
+  async function recomputeTripFulfillment(journeyId) {
+    const col = await getCollection('circle_journeys');
+    const journey = await col.findOne({ id: journeyId });
+    if (!journey || !Array.isArray(journey.serviceFulfillment)) return null;
+    const sf = journey.serviceFulfillment;
+    const allConfirmed = sf.length > 0 && sf.every((e) => e.status === 'confirmed');
+    const anyActive = sf.some((e) => e.status === 'searching' || e.status === 'pending');
+    const anyUnfulfilled = sf.some((e) => e.status === 'unfulfilled');
+    let next = 'service_fulfillment';
+    if (allConfirmed) next = 'confirmed';
+    else if (!anyActive && anyUnfulfilled) next = 'service_unavailable';
+    if (next === journey.fulfillmentStatus) return next;
+    await col.updateOne({ id: journeyId }, { $set: { fulfillmentStatus: next, updatedAt: new Date() } });
+
+    if (next === 'confirmed') {
+      await mkNotif({
+        userId: journey.curatorId, type: 'trip_confirmed', category: 'circle',
+        title: 'Your Safar trip is confirmed',
+        body: `All required services have been arranged for "${journey.name}".`,
+        link: `/explore/trip/${journey.id}`, meta: { journeyId },
+      });
+      await notifyAdminsCircle('trip_fully_fulfilled', 'Safar trip fully fulfilled', `"${journey.name}" has all services confirmed.`, journey);
+    } else if (next === 'service_unavailable') {
+      await mkNotif({
+        userId: journey.curatorId, type: 'trip_service_unavailable', category: 'circle',
+        title: 'A service could not be arranged',
+        body: `We couldn't find a provider for one or more services on "${journey.name}". Our team has been notified.`,
+        link: `/explore/trip/${journey.id}`, meta: { journeyId },
+      });
+      await notifyAdminsCircle('trip_service_unavailable', 'Trip service unavailable', `"${journey.name}" has an unfulfilled service.`, journey);
+    }
+    return next;
+  }
+
+  async function notifyAdminsCircle(type, title, body, journey) {
+    try {
+      const users = await getCollection('users');
+      const admins = await users.find({ role: { $in: ['admin', 'super_admin'] } }, { projection: { id: 1 } }).toArray();
+      await Promise.all(admins.map((a) => mkNotif({
+        userId: a.id, type, category: 'circle', title, body,
+        link: '/admin/trips', meta: { journeyId: journey.id },
+      })));
+    } catch (e) { /* non-blocking */ }
+  }
+
+  // Handle a provider accept/decline for a circle service request. Enforces
+  // single-provider-per-service and drives the decline fallback.
+  async function advanceCircleFulfillment(journeyId, categorySlug, action, request, actor) {
+    const col = await getCollection('circle_journeys');
+    const preqs = await getCollection('safar_provider_requests');
+    const journey = await col.findOne({ id: journeyId });
+    if (!journey || !Array.isArray(journey.serviceFulfillment)) return;
+    const entry = (journey.serviceFulfillment || []).find((e) => e.categorySlug === categorySlug);
+    if (!entry) return;
+
+    if (action === 'accept') {
+      // Atomic guard — only the FIRST accept can confirm the service.
+      const guard = await col.updateOne(
+        { id: journeyId, serviceFulfillment: { $elemMatch: { categorySlug, status: { $ne: 'confirmed' } } } },
+        { $set: {
+            'serviceFulfillment.$.status': 'confirmed',
+            'serviceFulfillment.$.providerUserId': request.hostId,
+            'serviceFulfillment.$.providerName': request.providerName || actor?.name || 'Safar Host',
+            'serviceFulfillment.$.requestId': request.id,
+            updatedAt: new Date(),
+          } },
+      );
+      if (guard.modifiedCount === 0) {
+        // Someone else already confirmed — close this now-stale request.
+        await preqs.updateOne({ id: request.id }, { $set: { status: 'cancelled', respondedAt: new Date() } });
+        return;
+      }
+      // Cancel any OTHER pending requests for this trip+service.
+      await preqs.updateMany(
+        { journeyId, serviceCategorySlug: categorySlug, status: 'pending', id: { $ne: request.id } },
+        { $set: { status: 'cancelled', respondedAt: new Date() } },
+      );
+      await mkNotif({
+        userId: journey.curatorId, type: 'trip_service_confirmed', category: 'circle',
+        title: `${request.serviceLabel} confirmed`,
+        body: `${request.providerName || 'A verified provider'} accepted the ${request.serviceLabel} request for "${journey.name}".`,
+        link: `/explore/trip/${journey.id}`, meta: { journeyId, serviceCategorySlug: categorySlug },
+      });
+    } else {
+      // Decline → record on the attempt, then auto-fallback to next provider.
+      await col.updateOne(
+        { id: journeyId, 'serviceFulfillment.categorySlug': categorySlug },
+        { $set: { 'serviceFulfillment.$.status': 'searching', 'serviceFulfillment.$.providerUserId': null, 'serviceFulfillment.$.requestId': null, updatedAt: new Date() } },
+      );
+      // Mark the attempt as declined in history (so this provider is excluded).
+      await col.updateOne(
+        { id: journeyId, 'serviceFulfillment.categorySlug': categorySlug },
+        { $set: { 'serviceFulfillment.$[e].attempts.$[a].status': 'declined' } },
+        { arrayFilters: [{ 'e.categorySlug': categorySlug }, { 'a.requestId': request.id }] },
+      );
+      await attemptServiceRequest(journeyId, categorySlug);
+    }
+    await recomputeTripFulfillment(journeyId);
+  }
+
 
   // -------- Circle Timeline helpers (Module 6: activity feed) --------
   async function ensureCircleTimelineIndexes() {
@@ -11119,6 +11379,13 @@ Return ONLY valid JSON, no markdown.`;
       const action = m[2];
       const patch = { status: action === 'accept' ? 'accepted' : 'rejected', respondedAt: new Date(), respondedByHostId: me.id };
       await preqs.updateOne({ id: doc.id }, { $set: patch });
+      // Phase 3: Trip-Creator (circle) fulfillment requests drive their own
+      // engine (single-provider guard + automatic decline fallback).
+      if (doc.source === 'circle') {
+        await advanceCircleFulfillment(doc.journeyId, doc.serviceCategorySlug, action, doc, me);
+        const fresh = await preqs.findOne({ id: doc.id }, { projection: { _id: 0 } });
+        return ok({ providerRequest: fresh });
+      }
       if (action === 'accept') {
         await mkNotif({
           userId: doc.travelerId, type: 'trip_service_confirmed', category: 'booking',
@@ -11905,6 +12172,9 @@ Return ONLY valid JSON, no markdown.`;
             minimumTravelers: doc.minimumTravelers || 1,
             requiredServices: Array.isArray(doc.requiredServices) ? doc.requiredServices : [],
             fulfillmentStatus: doc.fulfillmentStatus || 'accepting_travelers',
+            serviceFulfillment: Array.isArray(doc.serviceFulfillment)
+              ? doc.serviceFulfillment.map((e) => ({ categorySlug: e.categorySlug, status: e.status, providerName: e.status === 'confirmed' ? (e.providerName || null) : null }))
+              : [],
             hostMode: doc.hostMode || 'self',
             registrationsClosed: !!doc.registrationsClosed,
             curatorId: doc.curatorId, curatorName: doc.curatorName, curatorAvatar: doc.curatorAvatar,

@@ -43,6 +43,7 @@ export default function TripDetail({ params }) {
         max: Number(d.capacity ?? j.maxMembers ?? 0),
         min: Number(j.minimumTravelers ?? 1),
         services: Array.isArray(j.requiredServices) ? j.requiredServices : [],
+        serviceFulfillment: Array.isArray(j.serviceFulfillment) ? j.serviceFulfillment : [],
         status: j.fulfillmentStatus || 'accepting_travelers',
         hostMode: j.hostMode || 'self',
       });
@@ -226,7 +227,32 @@ export default function TripDetail({ params }) {
                 )}
               </div>
 
-              {fulfill.services.length > 0 && (
+              {fulfill.serviceFulfillment.length > 0 ? (
+                <div className="mt-4">
+                  <div className="text-[12.5px] font-bold text-slate-900">Safar Services</div>
+                  <div className="mt-2 space-y-2">
+                    {fulfill.serviceFulfillment.map((e) => {
+                      const c = PROVIDER_CATEGORIES.find((x) => x.slug === e.categorySlug);
+                      const map = {
+                        confirmed:   { icon: '✓', tone: 'text-emerald-700', label: e.providerName ? `Confirmed · ${e.providerName}` : 'Confirmed' },
+                        pending:     { icon: '↻', tone: 'text-amber-700',   label: 'Finding a provider' },
+                        searching:   { icon: '↻', tone: 'text-amber-700',   label: 'Finding a provider' },
+                        unfulfilled: { icon: '⚠', tone: 'text-rose-600',    label: 'No provider available' },
+                      };
+                      const s = map[e.status] || { icon: '○', tone: 'text-slate-500', label: 'Waiting' };
+                      return (
+                        <div key={e.categorySlug} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-3.5 py-2.5">
+                          <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-800"><span>{c?.icon || '•'}</span> {c?.label || e.categorySlug}</span>
+                          <span className={`text-[12px] font-bold ${s.tone}`}>{s.icon} {s.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {fulfill.status === 'confirmed' && (
+                    <p className="mt-3 text-[12.5px] font-semibold text-emerald-700 inline-flex items-center gap-1"><BadgeCheck className="size-4" /> Your Safar trip is confirmed — all services arranged.</p>
+                  )}
+                </div>
+              ) : fulfill.services.length > 0 ? (
                 <div className="mt-4">
                   <div className="text-[12.5px] font-bold text-slate-900">Services Needed</div>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -241,7 +267,7 @@ export default function TripDetail({ params }) {
                   </div>
                   <p className="mt-2 text-[11px] text-slate-400 leading-snug">Safar will match verified providers for these services once the trip is ready.</p>
                 </div>
-              )}
+              ) : null}
             </div>
           </section>
         )}
