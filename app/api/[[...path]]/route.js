@@ -1041,6 +1041,91 @@ async function route(request, { params }) {
     return ok({ applications: list });
   }
 
+  // ---------- PHASE 4: PROVIDER SERVICE OFFERINGS + AVAILABILITY ----------
+  // Embedded on the existing providerApplications record (no new collection).
+  // All scoped to the authenticated owner (me.id). Category slug is canonical.
+  const PROVIDER_PRICING_UNITS = ['per_night','per_day','per_ride','per_vehicle','per_person','per_group','custom'];
+
+  const sanitizeOffering = (body, existing = {}) => {
+    const cat = PROVIDER_CATEGORIES.find((c) => c.slug === body.categorySlug);
+    const clean = (v, n) => (v == null ? '' : String(v).slice(0, n).trim());
+    let basePrice = existing.basePrice ?? null;
+    if (body.basePrice !== undefined) {
+      const n = Number(body.basePrice);
+      basePrice = Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+    }
+    const unit = PROVIDER_PRICING_UNITS.includes(body.pricingUnit) ? body.pricingUnit : (existing.pricingUnit || 'custom');
+    return {
+      categorySlug: cat?.slug || existing.categorySlug || null,
+      categoryLabel: cat?.label || existing.categoryLabel || null,
+      serviceName: body.serviceName !== undefined ? clean(body.serviceName, 120) : (existing.serviceName || ''),
+      description: body.description !== undefined ? clean(body.description, 800) : (existing.description || ''),
+      serviceArea: body.serviceArea !== undefined ? clean(body.serviceArea, 200) : (existing.serviceArea || ''),
+      basePrice,
+      pricingUnit: unit,
+      active: body.active !== undefined ? !!body.active : (existing.active !== false),
+      available: body.available !== undefined ? !!body.available : (existing.available !== false),
+      availableFrom: body.availableFrom !== undefined ? (body.availableFrom ? new Date(body.availableFrom) : null) : (existing.availableFrom || null),
+      availableUntil: body.availableUntil !== undefined ? (body.availableUntil ? new Date(body.availableUntil) : null) : (existing.availableUntil || null),
+    };
+  };
+
+  // GET /api/provider/services — current provider's own service offerings.
+  if (path === '/provider/services' && method === 'GET') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const apps = await getCollection('providerApplications');
+    const app = await apps.findOne({ userId: me.id }, { projection: { _id: 0 } });
+    return ok({ services: Array.isArray(app?.services) ? app.services : [], approved: me.role === 'host', hasApplication: !!app });
+  }
+
+  // POST /api/provider/services — add a new service offering.
+  if (path === '/provider/services' && method === 'POST') {
+    const me = await getCurrentUser(request);
+    if (!me) return err('Authentication required', 401);
+    const apps = await getCollection('providerApplications');
+    const app = await apps.findOne({ userId: me.id });
+    if (!app) return err('Apply as a Safar Service Provider first', 400);
+    const body = await readBody(request);
+    if (!PROVIDER_CATEGORIES.find((c) => c.slug === body.categorySlug)) return err('Please choose a valid service category');
+    if (!String(body.serviceName || '').trim()) return err('Please add a service name');
+    const offering = { id: uuid(), ...sanitizeOffering(body), createdAt: new Date(), updatedAt: new Date() };
+    await apps.updateOne({ userId: me.id }, { $push: { services: offering }, $set: { updatedAt: new Date() } });
+    return ok({ service: offering }, 201);
+  }
+
+  // PUT/PATCH /api/provider/services/:sid — edit / toggle a service offering.
+  {
+    const m = path.match(/^\/provider\/services\/([\w-]+)$/);
+    if (m && (method === 'PUT' || method === 'PATCH')) {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const apps = await getCollection('providerApplications');
+      const app = await apps.findOne({ userId: me.id });
+      if (!app) return err('Provider application not found', 404);
+      const list = Array.isArray(app.services) ? app.services : [];
+      const idx = list.findIndex((s) => s.id === m[1]);
+      if (idx === -1) return err('Service not found', 404);
+      const body = await readBody(request);
+      if (body.categorySlug !== undefined && !PROVIDER_CATEGORIES.find((c) => c.slug === body.categorySlug)) return err('Invalid service category');
+      const updated = { ...list[idx], ...sanitizeOffering(body, list[idx]), id: list[idx].id, createdAt: list[idx].createdAt, updatedAt: new Date() };
+      list[idx] = updated;
+      await apps.updateOne({ userId: me.id }, { $set: { services: list, updatedAt: new Date() } });
+      return ok({ service: updated });
+    }
+    // DELETE /api/provider/services/:sid — remove a service offering.
+    if (m && method === 'DELETE') {
+      const me = await getCurrentUser(request);
+      if (!me) return err('Authentication required', 401);
+      const apps = await getCollection('providerApplications');
+      const app = await apps.findOne({ userId: me.id });
+      if (!app) return err('Provider application not found', 404);
+      const list = (Array.isArray(app.services) ? app.services : []).filter((s) => s.id !== m[1]);
+      await apps.updateOne({ userId: me.id }, { $set: { services: list, updatedAt: new Date() } });
+      return ok({ deleted: true });
+    }
+  }
+
   // ---------- ADMIN USER MANAGEMENT ----------
   // POST /api/admin/users/:id/suspend
   if (segments[0] === 'admin' && segments[1] === 'users' && segments[2] && segments[3] === 'suspend' && method === 'POST') {
@@ -10706,22 +10791,39 @@ Return ONLY valid JSON, no markdown.`;
 
   // Find the next eligible provider for a service category, excluding anyone
   // already attempted for this trip+service. Deterministic (stable order).
+  // Phase 4: a provider is eligible only when they OFFER the category via an
+  // ACTIVE + AVAILABLE service offering. Legacy providers with no explicit
+  // offerings fall back to their primary application category (backward compat).
+  function providerOffersCategory(app, categorySlug) {
+    const svcs = Array.isArray(app?.services) ? app.services : [];
+    if (svcs.length === 0) return app?.category === categorySlug; // legacy fallback
+    return svcs.some((s) => s.categorySlug === categorySlug && s.active !== false && s.available !== false);
+  }
+  function matchedOffering(app, categorySlug) {
+    const svcs = Array.isArray(app?.services) ? app.services : [];
+    return svcs.find((s) => s.categorySlug === categorySlug && s.active !== false && s.available !== false) || null;
+  }
   async function findNextEligibleProvider(categorySlug, excludeUserIds, curatorId) {
     const apps = await getCollection('providerApplications');
     const users = await getCollection('users');
     const excluded = new Set([...(excludeUserIds || []), curatorId]);
-    // Approved/live provider applications for this exact category slug.
+    // Approved/live providers that either declare this category OR have a
+    // service offering for it. Final eligibility is refined below.
     const candidates = await apps
-      .find({ category: categorySlug, status: { $in: ['approved', 'live'] } })
+      .find({
+        status: { $in: ['approved', 'live'] },
+        $or: [{ category: categorySlug }, { services: { $elemMatch: { categorySlug } } }],
+      })
       .sort({ approvedAt: 1, createdAt: 1 })
       .toArray();
     for (const app of candidates) {
       if (excluded.has(app.userId)) continue;
+      if (!providerOffersCategory(app, categorySlug)) continue; // active offering required
       const u = await users.findOne({ id: app.userId }, { projection: { _id: 0, id: 1, name: 1, role: 1, status: 1 } });
       // Real eligibility gate = existing host role + not suspended/blacklisted.
       if (!u || u.role !== 'host') continue;
       if (u.status === 'suspended' || u.status === 'blacklisted') continue;
-      return { userId: u.id, name: u.name || 'Safar Host', app };
+      return { userId: u.id, name: u.name || 'Safar Host', app, offering: matchedOffering(app, categorySlug) };
     }
     return null;
   }
@@ -10740,6 +10842,7 @@ Return ONLY valid JSON, no markdown.`;
       journeySlug: journey.slug,
       serviceCategorySlug: categorySlug,
       serviceLabel: cat?.label || categorySlug,
+      serviceName: provider.offering?.serviceName || cat?.label || categorySlug,
       hostId: provider.userId,          // provider (host) — GET /host/provider-requests filters on this
       providerName: provider.name,
       travelerId: journey.curatorId,    // trip creator (for notifications)
@@ -10751,6 +10854,8 @@ Return ONLY valid JSON, no markdown.`;
         startDate: journey.startDate ? new Date(journey.startDate).toISOString().slice(0, 10) : '',
         endDate: journey.endDate ? new Date(journey.endDate).toISOString().slice(0, 10) : '',
         guests: summary.acceptedSeats,
+        category: cat?.label || categorySlug,
+        serviceName: provider.offering?.serviceName || null,
       },
       price: 0,
       attempt: attemptNum,

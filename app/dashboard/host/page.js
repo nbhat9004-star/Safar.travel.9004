@@ -278,7 +278,10 @@ function HostDashboardInner() {
             <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Host Studio</div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mt-2">Salaam, {user?.name?.split(' ')[0] || 'Host'} 👋</h1>
           </div>
-          <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold"><Link href="/add-listing"><Plus className="size-4 mr-2" /> Add new listing</Link></Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" className="rounded-full font-semibold"><Link href="/dashboard/host/services"><Building2 className="size-4 mr-2" /> My Services</Link></Button>
+            <Button asChild className="rounded-full bg-emerald2 hover:bg-emerald2-deep font-semibold"><Link href="/add-listing"><Plus className="size-4 mr-2" /> Add new listing</Link></Button>
+          </div>
         </div>
 
         <Tabs defaultValue="dashboard" className="mt-8">

@@ -137,6 +137,9 @@ function RequestsInner() {
                         <StatusPill status={r.status} />
                       </div>
                       <div className="font-display font-bold mt-1.5 truncate">{r.listingTitle}</div>
+                      {r.serviceName && r.serviceName !== r.serviceLabel ? (
+                        <div className="text-[11px] text-charcoal/80 truncate">Service: <span className="font-semibold">{r.serviceName}</span></div>
+                      ) : null}
                       <div className="text-[11px] text-muted-foreground truncate">Requested by <span className="font-semibold text-charcoal">{r.travelerName}</span></div>
 
                       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
