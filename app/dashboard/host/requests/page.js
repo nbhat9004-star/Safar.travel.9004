@@ -42,6 +42,7 @@ function RequestsInner() {
   const [tab, setTab] = useState('pending'); // pending | accepted | rejected | all
   const [data, setData] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [quoteState, setQuoteState] = useState({}); // { [reqId]: { unitPrice, quantity } }
 
   const load = useCallback(async () => {
     try {
@@ -59,10 +60,15 @@ function RequestsInner() {
     return () => clearInterval(t);
   }, [tab, load]);
 
-  const act = async (id, action) => {
+  const act = async (id, action, quote) => {
     setBusyId(id + ':' + action);
     try {
-      const res = await fetch(`/api/provider-requests/${id}/${action}`, { method: 'POST', credentials: 'include' });
+      const res = await fetch(`/api/provider-requests/${id}/${action}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: action === 'accept' && quote ? JSON.stringify(quote) : undefined,
+      });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || `Failed to ${action}`);
       toast.success(action === 'accept' ? 'Request accepted — traveler notified' : 'Request declined');
@@ -163,9 +169,39 @@ function RequestsInner() {
                     </div>
                   </div>
 
+                  {r.status === 'pending' && r.source === 'circle' && (
+                    <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-2.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald2">Your quote</div>
+                      {(() => {
+                        const q = quoteState[r.id] || {};
+                        const unitPrice = q.unitPrice ?? (r.unitPrice ?? '');
+                        const quantity = q.quantity ?? (r.suggestedQuantity ?? 1);
+                        const total = (Number(unitPrice) || 0) * (Number(quantity) || 0);
+                        const setQ = (patch) => setQuoteState((s) => ({ ...s, [r.id]: { unitPrice, quantity, ...s[r.id], ...patch } }));
+                        return (
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[12px] text-muted-foreground">₹</span>
+                              <input type="number" min={0} value={unitPrice} onChange={(e) => setQ({ unitPrice: e.target.value })} placeholder="Unit price" className="w-24 rounded-lg border border-slate-200 px-2 h-9 text-[13px] outline-none focus:border-emerald2" />
+                            </div>
+                            <span className="text-[12px] text-muted-foreground">×</span>
+                            <input type="number" min={1} value={quantity} onChange={(e) => setQ({ quantity: e.target.value })} className="w-16 rounded-lg border border-slate-200 px-2 h-9 text-[13px] outline-none focus:border-emerald2" />
+                            <span className="text-[11px] text-muted-foreground">{(r.pricingUnit || 'custom').replace('per_', '/ ').replace('_', ' ')}</span>
+                            <span className="ml-auto text-[13px] font-bold text-charcoal">₹{total.toLocaleString('en-IN')}</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   {r.status === 'pending' && (
                     <div className="mt-4 grid grid-cols-2 gap-2">
-                      <Button size="sm" onClick={() => act(r.id, 'accept')} disabled={!!busyId} className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white font-semibold">
+                      <Button size="sm" onClick={() => {
+                        const q = quoteState[r.id] || {};
+                        const unitPrice = Number(q.unitPrice ?? r.unitPrice ?? 0) || 0;
+                        const quantity = Number(q.quantity ?? r.suggestedQuantity ?? 1) || 1;
+                        act(r.id, 'accept', r.source === 'circle' ? { unitPrice, quantity, pricingUnit: r.pricingUnit } : undefined);
+                      }} disabled={!!busyId} className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white font-semibold">
                         {busyId === r.id + ':accept' ? <Loader2 className="size-4 animate-spin" /> : <><Check className="size-4 mr-1" /> Accept</>}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => act(r.id, 'reject')} disabled={!!busyId} className="rounded-full font-semibold">

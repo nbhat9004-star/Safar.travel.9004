@@ -10752,6 +10752,45 @@ Return ONLY valid JSON, no markdown.`;
     if (acceptedSeats < min) return 'accepting_travelers';
     return hasServices ? 'ready_for_fulfillment' : 'minimum_reached';
   }
+  // Phase 5: number of nights/days between the trip dates (min 1).
+  function tripNights(journeyDoc) {
+    const s = journeyDoc?.startDate ? new Date(journeyDoc.startDate) : null;
+    const e = journeyDoc?.endDate ? new Date(journeyDoc.endDate) : null;
+    if (s && e && e > s) return Math.max(1, Math.ceil((e - s) / 86400000));
+    return 1;
+  }
+  // Phase 5: a sensible default quantity per pricing unit (never invented —
+  // derived from real trip dates / traveler count, defaulting to 1).
+  function defaultQuantity(pricingUnit, journeyDoc, acceptedSeats) {
+    switch (pricingUnit) {
+      case 'per_night':
+      case 'per_day': return tripNights(journeyDoc);
+      case 'per_person': return Math.max(1, Number(acceptedSeats) || 1);
+      default: return 1; // per_ride, per_vehicle, per_group, custom
+    }
+  }
+  // Phase 5: build an immutable quote snapshot for a confirmed service.
+  function buildQuoteSnapshot({ offering, categorySlug, pricingUnit, unitPrice, quantity, providerUserId, providerName, notes }) {
+    const cat = PROVIDER_CATEGORIES.find((c) => c.slug === categorySlug);
+    const up = Number.isFinite(Number(unitPrice)) && Number(unitPrice) >= 0 ? Math.round(Number(unitPrice)) : 0;
+    const qty = Math.max(1, Math.round(Number(quantity) || 1));
+    const unit = pricingUnit || offering?.pricingUnit || 'custom';
+    return {
+      providerUserId: providerUserId || null,
+      providerName: providerName || null,
+      serviceName: offering?.serviceName || cat?.label || categorySlug,
+      categorySlug,
+      categoryLabel: cat?.label || categorySlug,
+      pricingUnit: unit,
+      unitPrice: up,
+      quantity: qty,
+      totalPrice: up * qty,
+      currency: 'INR',
+      notes: notes ? String(notes).slice(0, 500) : '',
+      quotedAt: new Date(),
+      quoteStatus: 'accepted',
+    };
+  }
   // Recompute + persist the fulfillment status after any membership change.
   // Backend is the source of truth (never relies on frontend calculation).
   async function refreshFulfillment(journeyId) {
@@ -10849,6 +10888,11 @@ Return ONLY valid JSON, no markdown.`;
       travelerName: journey.curatorName || 'Trip Creator',
       listingTitle: journey.name,
       listingImage: journey.cover || null,
+      // Phase 5: reference pricing pulled from the provider's own offering so
+      // the provider can quote quickly (editable before Accept). Not a payment.
+      pricingUnit: provider.offering?.pricingUnit || 'custom',
+      unitPrice: Number.isFinite(Number(provider.offering?.basePrice)) ? Number(provider.offering.basePrice) : null,
+      suggestedQuantity: defaultQuantity(provider.offering?.pricingUnit, journey, summary.acceptedSeats),
       snapshot: {
         destination: journey.destination?.name || 'Kashmir',
         startDate: journey.startDate ? new Date(journey.startDate).toISOString().slice(0, 10) : '',
@@ -10856,6 +10900,8 @@ Return ONLY valid JSON, no markdown.`;
         guests: summary.acceptedSeats,
         category: cat?.label || categorySlug,
         serviceName: provider.offering?.serviceName || null,
+        pricingUnit: provider.offering?.pricingUnit || 'custom',
+        unitPrice: Number.isFinite(Number(provider.offering?.basePrice)) ? Number(provider.offering.basePrice) : null,
       },
       price: 0,
       attempt: attemptNum,
@@ -10994,7 +11040,7 @@ Return ONLY valid JSON, no markdown.`;
 
   // Handle a provider accept/decline for a circle service request. Enforces
   // single-provider-per-service and drives the decline fallback.
-  async function advanceCircleFulfillment(journeyId, categorySlug, action, request, actor) {
+  async function advanceCircleFulfillment(journeyId, categorySlug, action, request, actor, quoteInput = {}) {
     const col = await getCollection('circle_journeys');
     const preqs = await getCollection('safar_provider_requests');
     const journey = await col.findOne({ id: journeyId });
@@ -11003,14 +11049,47 @@ Return ONLY valid JSON, no markdown.`;
     if (!entry) return;
 
     if (action === 'accept') {
+      const summary = await getJourneyMemberSummary(journeyId, journey);
+      // Immutable quote snapshot — provider may override unit price / quantity,
+      // otherwise falls back to the reference price captured on the request.
+      const unitPrice = quoteInput.unitPrice != null ? quoteInput.unitPrice : request.unitPrice;
+      const pricingUnit = quoteInput.pricingUnit || request.pricingUnit || 'custom';
+      const quantity = quoteInput.quantity != null ? quoteInput.quantity : (request.suggestedQuantity || defaultQuantity(pricingUnit, journey, summary.acceptedSeats));
+      const quote = buildQuoteSnapshot({
+        offering: { serviceName: request.serviceName, pricingUnit },
+        categorySlug,
+        pricingUnit,
+        unitPrice: unitPrice != null ? unitPrice : 0,
+        quantity,
+        providerUserId: request.hostId,
+        providerName: request.providerName || actor?.name || 'Safar Host',
+        notes: quoteInput.notes,
+      });
+      // Booking / reservation snapshot (NOT a payment).
+      const booking = {
+        journeyId,
+        categorySlug,
+        serviceName: quote.serviceName,
+        providerUserId: request.hostId,
+        providerName: quote.providerName,
+        quote,
+        travelerCount: summary.acceptedSeats,
+        startDate: journey.startDate || null,
+        endDate: journey.endDate || null,
+        status: 'reserved',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       // Atomic guard — only the FIRST accept can confirm the service.
       const guard = await col.updateOne(
         { id: journeyId, serviceFulfillment: { $elemMatch: { categorySlug, status: { $ne: 'confirmed' } } } },
         { $set: {
             'serviceFulfillment.$.status': 'confirmed',
             'serviceFulfillment.$.providerUserId': request.hostId,
-            'serviceFulfillment.$.providerName': request.providerName || actor?.name || 'Safar Host',
+            'serviceFulfillment.$.providerName': quote.providerName,
             'serviceFulfillment.$.requestId': request.id,
+            'serviceFulfillment.$.quote': quote,
+            'serviceFulfillment.$.booking': booking,
             updatedAt: new Date(),
           } },
       );
@@ -11019,6 +11098,8 @@ Return ONLY valid JSON, no markdown.`;
         await preqs.updateOne({ id: request.id }, { $set: { status: 'cancelled', respondedAt: new Date() } });
         return;
       }
+      // Persist the immutable quote onto the request too.
+      await preqs.updateOne({ id: request.id }, { $set: { quote, quoteStatus: 'accepted', bookingStatus: 'reserved' } });
       // Cancel any OTHER pending requests for this trip+service.
       await preqs.updateMany(
         { journeyId, serviceCategorySlug: categorySlug, status: 'pending', id: { $ne: request.id } },
@@ -11027,7 +11108,7 @@ Return ONLY valid JSON, no markdown.`;
       await mkNotif({
         userId: journey.curatorId, type: 'trip_service_confirmed', category: 'circle',
         title: `${request.serviceLabel} confirmed`,
-        body: `${request.providerName || 'A verified provider'} accepted the ${request.serviceLabel} request for "${journey.name}".`,
+        body: `${quote.providerName} accepted the ${request.serviceLabel} request for "${journey.name}"${quote.totalPrice ? ` · ₹${quote.totalPrice.toLocaleString('en-IN')}` : ''}.`,
         link: `/explore/trip/${journey.id}`, meta: { journeyId, serviceCategorySlug: categorySlug },
       });
     } else {
@@ -11486,8 +11567,10 @@ Return ONLY valid JSON, no markdown.`;
       await preqs.updateOne({ id: doc.id }, { $set: patch });
       // Phase 3: Trip-Creator (circle) fulfillment requests drive their own
       // engine (single-provider guard + automatic decline fallback).
+      // Phase 5: an optional quote may be supplied on accept.
       if (doc.source === 'circle') {
-        await advanceCircleFulfillment(doc.journeyId, doc.serviceCategorySlug, action, doc, me);
+        const body = action === 'accept' ? await readBody(request) : {};
+        await advanceCircleFulfillment(doc.journeyId, doc.serviceCategorySlug, action, doc, me, body || {});
         const fresh = await preqs.findOne({ id: doc.id }, { projection: { _id: 0 } });
         return ok({ providerRequest: fresh });
       }
@@ -12278,8 +12361,23 @@ Return ONLY valid JSON, no markdown.`;
             requiredServices: Array.isArray(doc.requiredServices) ? doc.requiredServices : [],
             fulfillmentStatus: doc.fulfillmentStatus || 'accepting_travelers',
             serviceFulfillment: Array.isArray(doc.serviceFulfillment)
-              ? doc.serviceFulfillment.map((e) => ({ categorySlug: e.categorySlug, status: e.status, providerName: e.status === 'confirmed' ? (e.providerName || null) : null }))
+              ? doc.serviceFulfillment.map((e) => ({
+                  categorySlug: e.categorySlug,
+                  status: e.status,
+                  providerName: e.status === 'confirmed' ? (e.providerName || null) : null,
+                  quote: e.status === 'confirmed' && e.quote ? {
+                    serviceName: e.quote.serviceName,
+                    pricingUnit: e.quote.pricingUnit,
+                    unitPrice: e.quote.unitPrice,
+                    quantity: e.quote.quantity,
+                    totalPrice: e.quote.totalPrice,
+                    currency: e.quote.currency || 'INR',
+                  } : null,
+                }))
               : [],
+            servicesTotal: Array.isArray(doc.serviceFulfillment)
+              ? doc.serviceFulfillment.reduce((sum, e) => sum + (e.status === 'confirmed' && e.quote ? Number(e.quote.totalPrice) || 0 : 0), 0)
+              : 0,
             hostMode: doc.hostMode || 'self',
             registrationsClosed: !!doc.registrationsClosed,
             curatorId: doc.curatorId, curatorName: doc.curatorName, curatorAvatar: doc.curatorAvatar,

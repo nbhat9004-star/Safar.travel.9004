@@ -44,6 +44,7 @@ export default function TripDetail({ params }) {
         min: Number(j.minimumTravelers ?? 1),
         services: Array.isArray(j.requiredServices) ? j.requiredServices : [],
         serviceFulfillment: Array.isArray(j.serviceFulfillment) ? j.serviceFulfillment : [],
+        servicesTotal: Number(j.servicesTotal || 0),
         status: j.fulfillmentStatus || 'accepting_travelers',
         hostMode: j.hostMode || 'self',
       });
@@ -241,13 +242,27 @@ export default function TripDetail({ params }) {
                       };
                       const s = map[e.status] || { icon: '○', tone: 'text-slate-500', label: 'Waiting' };
                       return (
-                        <div key={e.categorySlug} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-3.5 py-2.5">
-                          <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-800"><span>{c?.icon || '•'}</span> {c?.label || e.categorySlug}</span>
-                          <span className={`text-[12px] font-bold ${s.tone}`}>{s.icon} {s.label}</span>
+                        <div key={e.categorySlug} className="rounded-2xl border border-slate-100 bg-white px-3.5 py-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-800"><span>{c?.icon || '•'}</span> {c?.label || e.categorySlug}</span>
+                            <span className={`text-[12px] font-bold ${s.tone}`}>{s.icon} {s.label}</span>
+                          </div>
+                          {e.status === 'confirmed' && e.quote ? (
+                            <div className="mt-1.5 flex items-center justify-between text-[12px]">
+                              <span className="text-slate-500 truncate">{e.quote.serviceName}</span>
+                              <span className="font-bold text-slate-900 shrink-0 ml-2">₹{Number(e.quote.totalPrice || 0).toLocaleString('en-IN')}</span>
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}
                   </div>
+                  {fulfill.servicesTotal > 0 && (
+                    <div className="mt-3 flex items-center justify-between rounded-2xl bg-slate-50 border border-slate-100 px-3.5 py-2.5">
+                      <span className="text-[12.5px] font-semibold text-slate-600">Estimated Services Total</span>
+                      <span className="text-[15px] font-bold text-slate-900">₹{Number(fulfill.servicesTotal).toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
                   {fulfill.status === 'confirmed' && (
                     <p className="mt-3 text-[12.5px] font-semibold text-emerald-700 inline-flex items-center gap-1"><BadgeCheck className="size-4" /> Your Safar trip is confirmed — all services arranged.</p>
                   )}
