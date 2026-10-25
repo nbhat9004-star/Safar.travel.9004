@@ -1,8 +1,10 @@
 class AppConstants {
   // API Configuration
+  // Use the production Safar Curated domain by default. CI/local builds can
+  // override this with --dart-define=SAFAR_API_BASE_URL=https://.../api.
   static const String baseUrl = String.fromEnvironment(
     'SAFAR_API_BASE_URL',
-    defaultValue: 'https://safar-travel-9004-fn0kytt6t-muhammad-shahnawaz-s-projects1.vercel.app/api',
+    defaultValue: 'https://safarcurated.com/api',
   );
   
   // App Branding
