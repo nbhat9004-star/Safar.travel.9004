@@ -50,7 +50,7 @@ export default function CommunityWebAppPage() {
             <p className="mt-5 max-w-xl text-sm leading-6 text-white/80 sm:text-base">Meet thoughtful travellers, join locally-led journeys and discover the valley beyond the usual itinerary.</p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a href="#discover" className="inline-flex h-11 items-center gap-2 rounded-full bg-lime-300 px-5 text-sm font-bold text-[#14231d] transition hover:bg-lime-200">Discover trips <ArrowRight className="h-4 w-4" /></a>
-              <Link href={user ? '/trip/create' : '/?auth=signup&returnUrl=%2Fcommunity'} className="inline-flex h-11 items-center gap-2 rounded-full border border-white/35 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"><Plus className="h-4 w-4" /> Create a trip</Link>
+              <Link href={user ? '/build-trip' : '/?auth=1&returnUrl=%2Fcommunity'} className="inline-flex h-11 items-center gap-2 rounded-full border border-white/35 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"><Plus className="h-4 w-4" /> Create a trip</Link>
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-white/75">
               <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-lime-300"/> Community-first travel</span>
@@ -79,11 +79,11 @@ export default function CommunityWebAppPage() {
         <div className="mt-7 flex flex-wrap items-center gap-2">
           {['Discover', 'My trips', 'Saved'].map((item) => <button key={item} onClick={() => setTab(item)} className={`rounded-full px-4 py-2 text-sm font-semibold transition ${tab === item ? 'bg-[#173e30] text-white' : 'border border-slate-200 bg-white text-slate-600 hover:border-emerald-800'}`}>{item}{item === 'Saved' && saved.length > 0 ? ` · ${saved.length}` : ''}</button>)}
           <div className="flex-1" />
-          <Link href={user ? '/trip/create' : '/?auth=signup&returnUrl=%2Fcommunity'} className="inline-flex items-center gap-2 rounded-full bg-[#c9f17d] px-4 py-2 text-sm font-bold text-[#183326] hover:bg-[#b9e969]"><Plus className="h-4 w-4"/> Create trip</Link>
+          <Link href={user ? '/build-trip' : '/?auth=1&returnUrl=%2Fcommunity'} className="inline-flex items-center gap-2 rounded-full bg-[#c9f17d] px-4 py-2 text-sm font-bold text-[#183326] hover:bg-[#b9e969]"><Plus className="h-4 w-4"/> Create trip</Link>
         </div>
 
         {tab === 'My trips' ? (
-          <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-8 text-center sm:p-12"><CalendarDays className="mx-auto h-9 w-9 text-emerald-800"/><h3 className="mt-4 text-xl font-bold">Your journeys, all in one place</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">{user ? 'Open your account dashboard to manage your bookings and upcoming journeys.' : 'Sign in to see trips you host or have joined.'}</p><Link href={user ? '/dashboard' : '/?auth=login&returnUrl=%2Fcommunity'} className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#173e30] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#235743]">{user ? 'Open dashboard' : 'Sign in to continue'} <ArrowRight className="h-4 w-4"/></Link></div>
+          <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-8 text-center sm:p-12"><CalendarDays className="mx-auto h-9 w-9 text-emerald-800"/><h3 className="mt-4 text-xl font-bold">Your journeys, all in one place</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">{user ? 'Open your account dashboard to manage your bookings and upcoming journeys.' : 'Sign in to see trips you host or have joined.'}</p><Link href={user ? '/dashboard' : '/?auth=1&returnUrl=%2Fcommunity'} className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#173e30] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#235743]">{user ? 'Open dashboard' : 'Sign in to continue'} <ArrowRight className="h-4 w-4"/></Link></div>
         ) : (
           <div className="mt-6 flex flex-wrap gap-2">{categories.map((item) => <button key={item} onClick={() => setCategory(item)} className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${category === item ? 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'}`}>{item}</button>)}</div>
         )}
@@ -106,7 +106,7 @@ export default function CommunityWebAppPage() {
                     <div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-full bg-[#e7eee7] text-xs font-bold text-[#234b37]">{trip.initials}</span><div><div className="flex items-center gap-1 text-xs font-semibold">{trip.host}{trip.verified && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700"/>}</div><div className="mt-0.5 text-[11px] text-slate-500">{trip.date} · {trip.days}</div></div></div>
                     <span className="text-[11px] text-slate-500">{trip.people}</span>
                   </div>
-                  <div className="mt-4 flex gap-2"><Link href={user ? `/trip/${trip.id}` : `/?auth=login&returnUrl=%2Fcommunity`} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-[#173e30] px-4 text-sm font-semibold text-white transition hover:bg-[#235743]">View trip <ArrowRight className="h-4 w-4"/></Link><button onClick={() => setSaved((items) => items.includes(trip.id) ? items.filter((id) => id !== trip.id) : [...items, trip.id])} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Save trip"><Heart className={`h-4 w-4 ${saved.includes(trip.id) ? 'fill-rose-500 text-rose-500' : ''}`}/></button></div>
+                  <div className="mt-4 flex gap-2"><Link href={user ? `/trip/${trip.id}` : `/?auth=1&returnUrl=%2Fcommunity`} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-[#173e30] px-4 text-sm font-semibold text-white transition hover:bg-[#235743]">View trip <ArrowRight className="h-4 w-4"/></Link><button onClick={() => setSaved((items) => items.includes(trip.id) ? items.filter((id) => id !== trip.id) : [...items, trip.id])} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Save trip"><Heart className={`h-4 w-4 ${saved.includes(trip.id) ? 'fill-rose-500 text-rose-500' : ''}`}/></button></div>
                 </div>
               </article>
             ))}
@@ -118,7 +118,7 @@ export default function CommunityWebAppPage() {
       <section className="mx-auto max-w-7xl px-4 pb-14 sm:px-8">
         <div className="grid gap-4 rounded-[2rem] bg-[#e7efe7] p-6 sm:p-8 md:grid-cols-[1fr_auto] md:items-center">
           <div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.18em] text-emerald-900"><MessageCircle className="h-4 w-4"/> More than a destination</div><h2 className="mt-2 text-2xl font-bold">Travel with people who make the place feel closer.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Create a plan, find a small group and share the kind of local moments that stay with you.</p></div>
-          <Link href={user ? '/trip/create' : '/?auth=signup&returnUrl=%2Fcommunity'} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#173e30] px-5 text-sm font-semibold text-white hover:bg-[#235743]">Start a journey <ArrowRight className="h-4 w-4"/></Link>
+          <Link href={user ? '/build-trip' : '/?auth=1&returnUrl=%2Fcommunity'} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#173e30] px-5 text-sm font-semibold text-white hover:bg-[#235743]">Start a journey <ArrowRight className="h-4 w-4"/></Link>
         </div>
       </section>
       <Footer />
