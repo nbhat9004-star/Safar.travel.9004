@@ -1,0 +1,59 @@
+name: Build Safar Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - mobile/android-apk-ci
+    paths:
+      - "safar_app/**"
+      - ".github/workflows/safar-android-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    name: Build installable test APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: safar_app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-dependency-path: safar_app/pubspec.lock
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build debug APK
+        env:
+          SAFAR_API_BASE_URL: ${{ vars.SAFAR_API_BASE_URL }}
+        run: |
+          if [ -n "$SAFAR_API_BASE_URL" ]; then
+            flutter build apk --debug --dart-define=SAFAR_API_BASE_URL="$SAFAR_API_BASE_URL"
+          else
+            echo "::warning::Repository variable SAFAR_API_BASE_URL is not configured. This APK will use the app's development fallback URL and won't connect to a live backend from a phone."
+            flutter build apk --debug
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safar-android-debug-apk
+          path: safar_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
