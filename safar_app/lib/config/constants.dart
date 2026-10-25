@@ -1,6 +1,9 @@
 class AppConstants {
   // API Configuration
-  static const String baseUrl = 'http://localhost:3000/api';
+  static const String baseUrl = String.fromEnvironment(
+    'SAFAR_API_BASE_URL',
+    defaultValue: 'http://localhost:3000/api',
+  );
   
   // App Branding
   static const String appName = 'Safar';
