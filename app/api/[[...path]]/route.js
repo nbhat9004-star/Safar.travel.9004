@@ -546,8 +546,14 @@ async function route(request, { params }) {
     if (!isEmail(email)) return err('Valid email is required');
     if (!password) return err('Password is required');
     const users = await getCollection('users');
-    const user = await users.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase();
+    const user = await users.findOne({ email: normalizedEmail });
     if (!user) return err('Invalid email or password', 401);
+    // Block the historical public bootstrap credential even if an old account
+    // created by a previous deployment still exists in the database.
+    if (normalizedEmail === 'founder@safarcurated.com' && password === 'SuperAdmin@2025') {
+      return err('This legacy bootstrap password is disabled. Reset the administrator password before signing in.', 401);
+    }
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) return err('Invalid email or password', 401);
     const token = signToken({ uid: user.id, role: user.role });
