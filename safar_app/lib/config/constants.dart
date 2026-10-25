@@ -2,7 +2,7 @@ class AppConstants {
   // API Configuration
   static const String baseUrl = String.fromEnvironment(
     'SAFAR_API_BASE_URL',
-    defaultValue: 'http://localhost:3000/api',
+    defaultValue: 'https://safar-travel-9004-fn0kytt6t-muhammad-shahnawaz-s-projects1.vercel.app/api',
   );
   
   // App Branding
