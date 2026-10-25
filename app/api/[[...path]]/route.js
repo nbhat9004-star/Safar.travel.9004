@@ -471,28 +471,8 @@ async function route(request, { params }) {
   await ensureIndexes();
   await seedDemoListings();
   
-  // AUTO-INITIALIZE SUPER ADMIN ON ANY REQUEST (if not exists)
-  try {
-    const users = await getCollection('users');
-    const superAdmin = await users.findOne({ email: 'founder@safarcurated.com' });
-    if (!superAdmin) {
-      console.log('🔧 Auto-creating Super Admin account...');
-      await users.insertOne({
-        id: uuid(),
-        name: 'Founder',
-        email: 'founder@safarcurated.com',
-        passwordHash: await hashPassword('SuperAdmin@2025'),
-        role: 'super_admin',
-        status: 'active',
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      console.log('✅ Super Admin created: founder@safarcurated.com');
-    }
-  } catch (error) {
-    console.error('Failed to auto-create super admin:', error);
-  }
+  // Admin accounts must be provisioned through a secure, out-of-band process.
+  // Never create a privileged account or credential automatically on public requests.
   
   const segments = params?.path || [];
   const path = '/' + segments.join('/');
@@ -505,7 +485,7 @@ async function route(request, { params }) {
     if (!name || typeof name !== 'string' || name.trim().length < 2) return err('Name is required (min 2 chars)');
     if (!isEmail(email)) return err('Valid email is required');
     if (!password || password.length < 6) return err('Password must be at least 6 characters');
-    const userRole = ROLES.includes(role) && role !== 'admin' ? role : 'traveler';
+    const userRole = 'traveler'; // Public registration can never assign privileged roles.
     const users = await getCollection('users');
     const existing = await users.findOne({ email: email.toLowerCase() });
     if (existing) return err('An account with this email already exists', 409);
