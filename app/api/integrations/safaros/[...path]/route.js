@@ -142,12 +142,25 @@ async function handleAgency(request, path, method) {
     let body = {};
     try { body = await request.json(); } catch { /* empty */ }
     const t = verifyTicket(body.ticket);
-    if (!t) return fail('This sign-in link is invalid or has expired. Open it again from SafarOS.', 401);
+    // Tickets are minted by the authenticated SafarOS API. Require complete identity
+    // claims and a known agency role before creating a browser session.
+    if (!t || typeof t.agencyId !== 'string' || !/^[A-Za-z0-9-]{8,80}$/.test(t.agencyId)
+      || typeof t.userId !== 'string' || !t.userId || typeof t.role !== 'string'
+      || !['owner', 'manager', 'staff', 'member'].includes(t.role)) {
+      return fail('This sign-in link is invalid or has expired. Open it again from SafarOS.', 401);
+    }
     if (!(await getState()).connected) return fail('The SafarOS connection is currently disabled.', 409);
+    const link = await linkFor(t.agencyId);
+    if (!link || !['linked', 'pending_confirmation'].includes(link.status)) {
+      return fail('Agency is not linked to SafarCurated', 403);
+    }
+    // An existing SafarCurated account awaiting proof of ownership can only be
+    // confirmed by the SafarOS agency owner, never by a manager or staff member.
+    if (link.status === 'pending_confirmation' && t.role !== 'owner') {
+      return fail('Only the agency owner can complete this account link.', 403);
+    }
     const claim = await claimEvent(`sso:${t.jti}`, 'sso');
     if (!claim.fresh) return fail('This sign-in link has already been used. Open it again from SafarOS.', 401);
-    const link = await linkFor(t.agencyId);
-    if (!link) { await completeEvent(`sso:${t.jti}`, 403, {}); return fail('Agency is not linked to SafarCurated', 403); }
     await completeEvent(`sso:${t.jti}`, 200, { ok: true });
     return setAgencyCookie(json({ ok: true }), signAgencySession(t));
   }
@@ -158,7 +171,12 @@ async function handleAgency(request, path, method) {
     const res = json({ ok: true }); res.cookies.set(AGENCY_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 }); return res;
   }
   const link = await linkFor(s.agencyId);
-  if (!link) return fail('Agency is not linked to SafarCurated', 403);
+  if (!link || !['linked', 'pending_confirmation'].includes(link.status)) {
+    return fail('Agency is not linked to SafarCurated', 403);
+  }
+  if (link.status === 'pending_confirmation' && s.role !== 'owner') {
+    return fail('Only the agency owner can complete this account link.', 403);
+  }
   const state = await getState();
   const listings = await getCollection('listings');
   // Tenant scope for everything below: this agency's own SafarOS listings on its linked host account only.
