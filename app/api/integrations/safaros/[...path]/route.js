@@ -17,7 +17,7 @@ const json = (data, status = 200) => NextResponse.json(data, { status, headers: 
 const fail = (error, status = 400) => json({ error }, status);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Content changes that must go back through SafarCurated moderation when a listing is already approved.
-const MODERATED_FIELDS = ['title', 'description', 'location', 'images'];
+const MODERATED_FIELDS = ['title', 'description', 'location', 'images', 'price', 'duration', 'categoryDetails'];
 
 function listingStatusView(l) {
   return { id: l.id, externalId: l.source?.externalId || '', status: l.status, rejectionReason: l.rejectionReason || '', publicUrl: l.status === 'approved' ? publicListingUrl(l.id) : '' };
@@ -75,7 +75,18 @@ async function handleSigned(path, body) {
       emailVerified: false, createdAt: now, updatedAt: now,
     };
     try { await users.insertOne(hostUser); } catch (e) { if (e?.code === 11000) return [409, { error: 'Account creation conflict, please retry' }]; throw e; }
-    await links.insertOne({ id: uuid(), safarosAgencyId: agencyId, agencyName, hostUserId: hostUser.id, email, status: 'linked', createdAt: now, updatedAt: now, linkedAt: now });
+    try {
+      await links.insertOne({ id: uuid(), safarosAgencyId: agencyId, agencyName, hostUserId: hostUser.id, email, status: 'linked', createdAt: now, updatedAt: now, linkedAt: now });
+    } catch (e) {
+      // Do not leave a password-less orphan account if the agency link loses a race.
+      await users.deleteOne({ id: hostUser.id, authProvider: 'safaros', safarosAgencyId: agencyId });
+      if (e?.code === 11000) {
+        const raced = await linkFor(agencyId);
+        if (raced) return [200, { link: { status: raced.status, profileUrl: '' } }];
+        return [409, { error: 'This SafarCurated account is already linked to another agency' }];
+      }
+      throw e;
+    }
     return [200, { link: { status: 'linked', profileUrl: '' } }];
   }
 
