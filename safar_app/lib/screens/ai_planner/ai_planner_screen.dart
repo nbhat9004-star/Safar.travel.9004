@@ -178,36 +178,19 @@ class _AIPlannerScreenState extends ConsumerState<AIPlannerScreen> {
   }
 
   List<Widget> _buildItinerary() {
-    final itinerary = _generatedPlan!['plan']!['itinerary'] as List;
-    return itinerary.map<Widget>((day) {
-      return Card(
+    final plan = _generatedPlan!['plan'] as Map<String, dynamic>;
+    final summary = plan['summary']?.toString() ?? '';
+    return [
+      Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Day ${day['day']}',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
-              ),
-              const SizedBox(height: 8),
-              ...(day['activities'] as List).map((activity) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, size: 16, color: AppTheme.primaryColor),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(activity.toString())),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ],
+          padding: const EdgeInsets.all(18),
+          child: SelectableText(
+            summary,
+            style: const TextStyle(fontSize: 14, height: 1.55),
           ),
         ),
-      );
-    }).toList();
+      ),
+    ];
   }
 }
