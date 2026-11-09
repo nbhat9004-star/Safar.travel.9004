@@ -1,0 +1,53 @@
+name: Safar Curated Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/safar-curated-mobile-approved-design
+    paths:
+      - "safar_app/**"
+      - ".github/workflows/safar-android-apk.yml"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: safar_app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate production API configuration
+        run: |
+          if [ -z "${{ vars.SAFAR_API_BASE_URL }}" ]; then
+            echo "::error::Set the repository Actions variable SAFAR_API_BASE_URL to the deployed API base URL ending in /api."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze Flutter project
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build installable Android test APK
+        run: flutter build apk --debug --dart-define=SAFAR_API_BASE_URL="${{ vars.SAFAR_API_BASE_URL }}"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safar-curated-android-debug-apk
+          path: safar_app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
