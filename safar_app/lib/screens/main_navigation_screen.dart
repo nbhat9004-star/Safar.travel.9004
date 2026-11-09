@@ -4,56 +4,53 @@ import '../config/theme.dart';
 
 class MainNavigationScreen extends StatelessWidget {
   final Widget child;
-
   const MainNavigationScreen({super.key, required this.child});
 
-  void _onItemTapped(BuildContext context, int index) {
-    switch (index) {
-      case 0:
-        context.go('/home');
-        break;
-      case 1:
-        context.go('/explore');
-        break;
-      case 2:
-        context.go('/wishlist');
-        break;
-      case 3:
-        context.go('/dashboard');
-        break;
-      case 4:
-        context.go('/profile');
-        break;
-    }
-  }
+  static const _destinations = <({String path, String label, IconData icon, IconData selected})>[
+    (path: '/home', label: 'Home', icon: Icons.home_outlined, selected: Icons.home_rounded),
+    (path: '/explore', label: 'Explore', icon: Icons.explore_outlined, selected: Icons.explore_rounded),
+    (path: '/wishlist', label: 'Saved', icon: Icons.favorite_border_rounded, selected: Icons.favorite_rounded),
+    (path: '/dashboard', label: 'Bookings', icon: Icons.luggage_outlined, selected: Icons.luggage_rounded),
+    (path: '/profile', label: 'Profile', icon: Icons.person_outline_rounded, selected: Icons.person_rounded),
+  ];
 
-  int _calculateSelectedIndex(BuildContext context) {
-    final String location = GoRouterState.of(context).uri.toString();
-    if (location.startsWith('/home')) return 0;
-    if (location.startsWith('/explore')) return 1;
-    if (location.startsWith('/wishlist')) return 2;
-    if (location.startsWith('/dashboard')) return 3;
-    if (location.startsWith('/profile')) return 4;
-    return 0;
+  int _selectedIndex(BuildContext context) {
+    final location = GoRouterState.of(context).uri.toString();
+    final index = _destinations.indexWhere((item) => location.startsWith(item.path));
+    return index < 0 ? 0 : index;
   }
 
   @override
   Widget build(BuildContext context) {
+    final selected = _selectedIndex(context);
     return Scaffold(
       body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppTheme.primaryColor,
-        unselectedItemColor: Colors.grey,
-        currentIndex: _calculateSelectedIndex(context),
-        onTap: (index) => _onItemTapped(context, index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Wishlist'),
-          BottomNavigationBarItem(icon: Icon(Icons.book_online), label: 'Bookings'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: AppTheme.line)),
+          ),
+          child: NavigationBar(
+            height: 70,
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            selectedIndex: selected,
+            onDestinationSelected: (index) => context.go(_destinations[index].path),
+            indicatorColor: AppTheme.primary.withValues(alpha: .10),
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: [
+              for (final item in _destinations)
+                NavigationDestination(
+                  icon: Icon(item.icon, size: 22),
+                  selectedIcon: Icon(item.selected, size: 22, color: AppTheme.primary),
+                  label: item.label,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
