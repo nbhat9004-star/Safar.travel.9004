@@ -36,17 +36,6 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: canvas,
       fontFamily: 'Inter',
-      appBarTheme: const AppBarTheme(
-        backgroundColor: canvas,
-        foregroundColor: ink,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        titleTextStyle: TextStyle(
-          color: ink, fontSize: 21, fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
-        ),
-      ),
       textTheme: const TextTheme(
         headlineLarge: TextStyle(color: ink, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -1.0),
         headlineMedium: TextStyle(color: ink, fontSize: 26, fontWeight: FontWeight.w750, letterSpacing: -0.6),
