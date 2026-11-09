@@ -22,35 +22,6 @@ class _BookingFlowScreenState extends ConsumerState<BookingFlowScreen> {
   int guests = 2;
   bool isLoading = false;
 
-  Future<void> _createBooking(String? paymentId) async {
-    if (checkIn == null || checkOut == null) return;
-
-    setState(() => isLoading = true);
-
-    try {
-      await ref.read(bookingNotifierProvider.notifier).createBooking(
-            listingId: widget.listingId,
-            checkIn: checkIn!,
-            checkOut: checkOut!,
-            guests: guests,
-          );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Booking created successfully!')),
-        );
-        context.go('/booking-history');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Booking failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
-
   void _openPayment(double amount) {
     // Payment integration is not yet configured; do not simulate successful payment.
     showDialog(
