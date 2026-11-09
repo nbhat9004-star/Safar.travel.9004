@@ -44,7 +44,7 @@ jobs:
         run: flutter analyze --no-fatal-infos
 
       - name: Run tests
-        run: flutter test
+        run: flutter test --dart-define=SAFAR_API_BASE_URL="$SAFAR_API_BASE_URL"
 
       - name: Build installable Android test APK
         run: flutter build apk --debug --dart-define=SAFAR_API_BASE_URL="$SAFAR_API_BASE_URL"
