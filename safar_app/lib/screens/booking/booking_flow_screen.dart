@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../providers/listings_provider.dart';
 import '../../providers/booking_provider.dart';
 import '../../widgets/safar_button.dart';
-import '../../config/constants.dart';
 import '../../config/theme.dart';
 
 class BookingFlowScreen extends ConsumerStatefulWidget {
@@ -22,35 +21,6 @@ class _BookingFlowScreenState extends ConsumerState<BookingFlowScreen> {
   DateTime? checkOut;
   int guests = 2;
   bool isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Razorpay SDK initialization removed to avoid build conflicts
-    // In production, initialize Razorpay here
-  }
-
-  @override
-  void dispose() {
-    // Razorpay cleanup
-    super.dispose();
-  }
-
-  void _handlePaymentSuccess(dynamic response) {
-    _createBooking(null);
-  }
-
-  void _handlePaymentError(dynamic response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Payment cancelled')),
-    );
-  }
-
-  void _handleExternalWallet(dynamic response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('External wallet selected')),
-    );
-  }
 
   Future<void> _createBooking(String? paymentId) async {
     if (checkIn == null || checkOut == null) return;
@@ -82,24 +52,16 @@ class _BookingFlowScreenState extends ConsumerState<BookingFlowScreen> {
   }
 
   void _openPayment(double amount) {
-    // Razorpay integration placeholder
-    // In production, integrate Razorpay SDK here
+    // Payment integration is not yet configured; do not simulate successful payment.
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Payment'),
-        content: Text('Amount: \u20b9${amount.toStringAsFixed(0)}\n\nRazorpay integration placeholder. In production, this will open the Razorpay payment gateway.'),
+        title: const Text('Payment not available yet'),
+        content: Text('Online payment is not configured for this app yet. Amount: ₹${amount.toStringAsFixed(0)}'),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _handlePaymentSuccess(null);
-            },
-            child: const Text('Simulate Success'),
-          ),
-          TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -109,7 +71,7 @@ class _BookingFlowScreenState extends ConsumerState<BookingFlowScreen> {
   @override
   Widget build(BuildContext context) {
     final listingAsync = ref.watch(listingDetailProvider(widget.listingId));
-    final formatter = NumberFormat.currency(symbol: '\u20b9', decimalDigits: 0);
+    final formatter = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Book Your Stay')),
