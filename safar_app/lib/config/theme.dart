@@ -38,9 +38,9 @@ class AppTheme {
       fontFamily: 'Inter',
       textTheme: const TextTheme(
         headlineLarge: TextStyle(color: ink, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -1.0),
-        headlineMedium: TextStyle(color: ink, fontSize: 26, fontWeight: FontWeight.w750, letterSpacing: -0.6),
+        headlineMedium: TextStyle(color: ink, fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.6),
         titleLarge: TextStyle(color: ink, fontSize: 20, fontWeight: FontWeight.w700),
-        titleMedium: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w650),
+        titleMedium: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w600),
         bodyLarge: TextStyle(color: ink, fontSize: 15, height: 1.45),
         bodyMedium: TextStyle(color: muted, fontSize: 14, height: 1.4),
         labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
