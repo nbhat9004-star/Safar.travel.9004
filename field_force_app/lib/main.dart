@@ -44,7 +44,7 @@ class _EmployeeLoginState extends State<EmployeeLogin> {
   bool busy=false, obscure=true;
   String? error;
   Future<void> login() async {
-    setState(()=>{busy=true,error=null});
+    setState(() { busy=true; error=null; });
     try {
       final r=await dio.post('/auth/login',data:{'email':email.text.trim(),'password':password.text});
       final data=Map<String,dynamic>.from(r.data);
