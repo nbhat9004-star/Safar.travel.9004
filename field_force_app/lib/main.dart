@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-const apiBase = String.fromEnvironment('SAFAR_API_BASE', defaultValue: 'https://safarcurated.com/api');
+const apiBase = String.fromEnvironment('SAFAR_API_BASE', defaultValue: 'https://safarcurated.com/api/');
 void main() => runApp(const FieldForceApp());
 
 class FieldForceApp extends StatelessWidget {
@@ -46,7 +46,7 @@ class _EmployeeLoginState extends State<EmployeeLogin> {
   Future<void> login() async {
     setState(() { busy=true; error=null; });
     try {
-      final r=await dio.post('/auth/login',data:{'email':email.text.trim(),'password':password.text});
+      final r=await dio.post('auth/login',data:{'email':email.text.trim(),'password':password.text});
       final data=Map<String,dynamic>.from(r.data);
       final user=Map<String,dynamic>.from(data['user']??{});
       if(data['ok']!=true || user['role']!='employee' || user['employeeStatus']=='suspended') {
@@ -92,7 +92,7 @@ class _EmployeeHomeState extends State<EmployeeHome>{
  late final Dio dio;
  List<dynamic> visits=[]; bool loading=true,saving=false;
  @override void initState(){super.initState();dio=Dio(BaseOptions(baseUrl:apiBase,headers:{'Authorization':'Bearer ${widget.token}'},connectTimeout:const Duration(seconds:20)));load();}
- Future<void> load()async{try{final r=await dio.get('/employee/visits');if(r.data['ok']==true)visits=List<dynamic>.from(r.data['visits']??[]);}catch(_){}if(mounted)setState(()=>loading=false);}
+ Future<void> load()async{try{final r=await dio.get('employee/visits');if(r.data['ok']==true)visits=List<dynamic>.from(r.data['visits']??[]);}catch(_){}if(mounted)setState(()=>loading=false);}
  Future<Position> position()async{
   if(!await Geolocator.isLocationServiceEnabled())throw Exception('Please enable device location.');
   var p=await Geolocator.checkPermission();
@@ -103,7 +103,7 @@ class _EmployeeHomeState extends State<EmployeeHome>{
  Future<void> submit()async{
   if(host.text.trim().length<2||phone.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter host name and phone number.')));return;}
   setState(()=>saving=true);
-  try{final p=await position();final r=await dio.post('/employee/visits',data:{'hostName':host.text.trim(),'phone':phone.text.trim(),'address':address.text.trim(),'notes':notes.text.trim(),'latitude':p.latitude,'longitude':p.longitude});
+  try{final p=await position();final r=await dio.post('employee/visits',data:{'hostName':host.text.trim(),'phone':phone.text.trim(),'address':address.text.trim(),'notes':notes.text.trim(),'latitude':p.latitude,'longitude':p.longitude});
    if(r.data['ok']!=true)throw Exception(r.data['error']??'Could not submit visit');
    host.clear();phone.clear();address.clear();notes.clear();await load();
    if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('GPS-verified onboarding visit submitted.')));
