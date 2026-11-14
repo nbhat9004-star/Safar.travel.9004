@@ -25,7 +25,7 @@ export async function POST(request) {
   const password = String(body.password||'');
   const phone = String(body.phone||'').trim();
   const territory = String(body.territory||'').trim();
-  if (name.length<2 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || password.length<8) {
+  if (name.length<2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length<8) {
     return json({ok:false,error:'Enter a name, valid email and password of at least 8 characters.'},400);
   }
   const users = await getCollection('users');
