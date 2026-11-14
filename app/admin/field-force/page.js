@@ -1,0 +1,31 @@
+'use client';
+import {useEffect,useState} from 'react';
+import Link from 'next/link';
+import {ArrowLeft, Users, UserPlus, RefreshCw, ShieldCheck, MapPinned} from 'lucide-react';
+import {toast} from 'sonner';
+import {useAuth} from '@/lib/auth-context';
+import ProtectedRoute from '@/components/safar/ProtectedRoute';
+
+function FieldForceContent(){
+ const {user}=useAuth();
+ const [employees,setEmployees]=useState([]);
+ const [loading,setLoading]=useState(true);
+ const [form,setForm]=useState({name:'',email:'',password:'',phone:'',territory:''});
+ const [saving,setSaving]=useState(false);
+ const load=async()=>{setLoading(true);try{const r=await fetch('/api/admin/field-force',{credentials:'include'});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Could not load employees');setEmployees(d.employees||[]);}catch(e){toast.error(e.message);}finally{setLoading(false);}};
+ useEffect(()=>{load();},[]);
+ const create=async(e)=>{e.preventDefault();setSaving(true);try{const r=await fetch('/api/admin/field-force',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Could not create employee');toast.success('Employee account created');setForm({name:'',email:'',password:'',phone:'',territory:''});load();}catch(e){toast.error(e.message);}finally{setSaving(false);}};
+ const toggle=async(emp)=>{const employeeStatus=emp.employeeStatus==='suspended'?'active':'suspended';try{const r=await fetch('/api/admin/field-force',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:emp.id,employeeStatus})});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Update failed');toast.success('Employee status updated');load();}catch(e){toast.error(e.message);}};
+ return <main className="min-h-screen bg-slate-50 p-4 md:p-8"><div className="mx-auto max-w-6xl space-y-6">
+ <div className="flex items-center justify-between"><div><Link href="/admin" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900"><ArrowLeft size={16}/> Super Admin</Link><h1 className="mt-3 text-3xl font-bold text-slate-900">Field Force Management</h1><p className="mt-1 text-slate-500">Create employee access and manage ground onboarding teams.</p></div><button onClick={load} className="rounded-xl border bg-white p-3"><RefreshCw size={18}/></button></div>
+ <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
+ <form onSubmit={create} className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold"><UserPlus size={19}/> Create employee account</div>
+ {['name','email','password','phone','territory'].map(k=><label key={k} className="block text-sm font-medium capitalize text-slate-700">{k==='password'?'Temporary password':k}<input required={['name','email','password'].includes(k)} type={k==='password'?'password':k==='email'?'email':'text'} minLength={k==='password'?8:undefined} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})} className="mt-1 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-emerald-600" placeholder={k==='territory'?'e.g. Srinagar / Downtown':''}/></label>)}
+ <button disabled={saving} className="w-full rounded-xl bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-50">{saving?'Creating…':'Create employee'}</button><p className="text-xs text-slate-500">Accounts are created by an administrator. Employees sign in through the dedicated app using SafarCurated authentication.</p></form>
+ <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="mb-4 flex items-center justify-between"><div className="flex items-center gap-2 font-semibold"><Users size={19}/> Employees ({employees.length})</div><span className="text-xs text-slate-500">Latest first</span></div>
+ {loading?<p className="py-10 text-center text-slate-500">Loading employees…</p>:employees.length===0?<p className="py-10 text-center text-slate-500">No employees created yet.</p>:<div className="space-y-3">{employees.map(emp=><div key={emp.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3"><div><div className="font-semibold">{emp.name}</div><div className="text-sm text-slate-500">{emp.email} · {emp.territory||'No territory'}</div><div className="mt-1 text-xs text-slate-500">{emp.phone||'No phone'} · {emp.employeeStatus||'active'}</div></div><button onClick={()=>toggle(emp)} className="rounded-lg border px-3 py-2 text-sm">{emp.employeeStatus==='suspended'?'Reactivate':'Suspend'}</button></div>)}</div>}
+ </section></div>
+ <div className="grid gap-4 md:grid-cols-2"><div className="rounded-2xl border bg-white p-4"><div className="flex items-center gap-2 font-semibold"><ShieldCheck size={18}/> Controlled employee access</div><p className="mt-2 text-sm text-slate-500">Employee accounts are separate from host and traveler roles. The employee API rejects non-employee sessions.</p></div><div className="rounded-2xl border bg-white p-4"><div className="flex items-center gap-2 font-semibold"><MapPinned size={18}/> Ground onboarding</div><p className="mt-2 text-sm text-slate-500">Submitted visits include GPS coordinates and host contact details for administrator review.</p></div></div>
+ </div></main>;
+}
+export default function FieldForcePage(){return <ProtectedRoute><FieldForceContent/></ProtectedRoute>;}
