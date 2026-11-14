@@ -28,4 +28,4 @@ function FieldForceContent(){
  <div className="grid gap-4 md:grid-cols-2"><div className="rounded-2xl border bg-white p-4"><div className="flex items-center gap-2 font-semibold"><ShieldCheck size={18}/> Controlled employee access</div><p className="mt-2 text-sm text-slate-500">Employee accounts are separate from host and traveler roles. The employee API rejects non-employee sessions.</p></div><div className="rounded-2xl border bg-white p-4"><div className="flex items-center gap-2 font-semibold"><MapPinned size={18}/> Ground onboarding</div><p className="mt-2 text-sm text-slate-500">Submitted visits include GPS coordinates and host contact details for administrator review.</p></div></div>
  </div></main>;
 }
-export default function FieldForcePage(){return <ProtectedRoute><FieldForceContent/></ProtectedRoute>;}
+export default function FieldForcePage(){return <ProtectedRoute roles={['super_admin']}><FieldForceContent/></ProtectedRoute>;}
