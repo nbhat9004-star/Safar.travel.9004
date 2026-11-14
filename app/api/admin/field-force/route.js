@@ -8,7 +8,7 @@ const deny = (auth) => json({ok:false,error:auth.error}, auth.status);
 
 export async function GET(request) {
   const me = await getCurrentUser(request);
-  const auth = requireRole(me, ['admin','super_admin']);
+  const auth = requireRole(me, ['super_admin']);
   if (!auth.ok) return deny(auth);
   const employees = await getCollection('users');
   const rows = await employees.find({ role:'employee' }, {projection:{passwordHash:0}}).sort({createdAt:-1}).limit(500).toArray();
@@ -17,7 +17,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   const me = await getCurrentUser(request);
-  const auth = requireRole(me, ['admin','super_admin']);
+  const auth = requireRole(me, ['super_admin']);
   if (!auth.ok) return deny(auth);
   const body = await request.json().catch(()=>({}));
   const name = String(body.name||'').trim();
@@ -43,7 +43,7 @@ export async function POST(request) {
 
 export async function PATCH(request) {
   const me = await getCurrentUser(request);
-  const auth = requireRole(me, ['admin','super_admin']);
+  const auth = requireRole(me, ['super_admin']);
   if (!auth.ok) return deny(auth);
   const body = await request.json().catch(()=>({}));
   if (!body.id || !['active','suspended'].includes(body.employeeStatus)) return json({ok:false,error:'Employee id and valid status are required.'},400);
