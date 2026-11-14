@@ -660,6 +660,7 @@ function AdminInner() {
                   { section: 'People', items: [
                     { label: 'Users', tab: 'users', icon: Users },
                     { label: 'Hosts', tab: 'hosts', icon: Home },
+                    { label: 'Field Force', tab: 'field-force', icon: Users },
                     { label: 'Travelers', tab: 'travelers', icon: Users },
                     { label: 'Admins', tab: 'admins', icon: Shield },
                   ]},
@@ -722,7 +723,7 @@ function AdminInner() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 md:mt-8">
-          <TabsList className="hidden md:grid w-full md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-14 h-auto gap-1">
+          <TabsList className="hidden md:grid w-full md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-15 h-auto gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="listings">Listings</TabsTrigger>
             <TabsTrigger value="bookings">Bookings</TabsTrigger>
