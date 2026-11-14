@@ -1,0 +1,34 @@
+name: Build SafarCurated Field Force APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/field-force-onboarding]
+    paths:
+      - 'field_force_app/**'
+      - '.github/workflows/field-force-android.yml'
+permissions:
+  contents: read
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Generate Android platform scaffolding
+        working-directory: field_force_app
+        run: flutter create --platforms=android .
+      - name: Resolve dependencies
+        working-directory: field_force_app
+        run: flutter pub get
+      - name: Build release APK
+        working-directory: field_force_app
+        run: flutter build apk --release --dart-define=SAFAR_API_BASE=https://safarcurated.com/api
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: safarcurated-field-force-android
+          path: field_force_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
