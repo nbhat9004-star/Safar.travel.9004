@@ -729,6 +729,7 @@ function AdminInner() {
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
             <TabsTrigger value="promotions">Promos</TabsTrigger>
             <TabsTrigger value="hosts">Hosts</TabsTrigger>
+            <TabsTrigger value="field-force">Field Force</TabsTrigger>
             <TabsTrigger value="travelers">Travelers</TabsTrigger>
             <TabsTrigger value="users">All Users</TabsTrigger>
             <TabsTrigger value="support">Support</TabsTrigger>
@@ -1867,6 +1868,21 @@ function AdminInner() {
                 </div>
               </TabsContent>
             </Tabs>
+          </TabsContent>
+
+          {/* Field Force Tab */}
+          <TabsContent value="field-force" className="space-y-6 mt-6">
+            <div className="rounded-3xl border bg-white p-6">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-emerald-50 p-3"><Users className="size-6 text-emerald-700" /></div>
+                <div><h2 className="font-display text-2xl font-bold">Ground Field Force</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Create employee accounts, assign territories and manage onboarding staff.</p></div>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link href="/admin/field-force" className="inline-flex items-center rounded-xl bg-emerald2 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald2-deep">Open Field Force Management <ArrowUpRight className="ml-2 size-4" /></Link>
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">Employees use the separate SafarCurated Field Force Android app and the existing SafarCurated authentication service.</p>
+            </div>
           </TabsContent>
 
           {/* Revenue Tab */}
