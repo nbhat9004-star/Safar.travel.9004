@@ -24,7 +24,7 @@ jobs:
         run: flutter pub get
       - name: Build release APK
         working-directory: field_force_app
-        run: flutter build apk --release --dart-define=SAFAR_API_BASE=https://safarcurated.com/api
+        run: flutter build apk --release --dart-define=SAFAR_API_BASE=https://safarcurated.com/api/
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
