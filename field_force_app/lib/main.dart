@@ -2,7 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
-const apiBase = String.fromEnvironment('SAFAR_API_BASE', defaultValue: 'https://safarcurated.com/api/');
+const _configuredApiBase = String.fromEnvironment('SAFAR_API_BASE', defaultValue: 'https://safarcurated.com/api/');
+final apiBase = _configuredApiBase.endsWith('/') ? _configuredApiBase : '$_configuredApiBase/';
 void main() => runApp(const FieldForceApp());
 
 class FieldForceApp extends StatelessWidget {
