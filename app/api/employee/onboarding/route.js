@@ -14,7 +14,7 @@ export async function POST(request){
  const b=await request.json().catch(()=>({}));
  const hostName=String(b.hostName||'').trim(),businessName=String(b.businessName||'').trim(),email=String(b.email||'').trim().toLowerCase(),phone=String(b.phone||'').trim(),businessType=String(b.businessType||'stay').trim(),address=String(b.address||'').trim(),description=String(b.description||'').trim(),notes=String(b.notes||'').trim();
  const latitude=Number(b.latitude),longitude=Number(b.longitude);
- if(hostName.length<2||businessName.length<2||phone.length<7||address.length<4||!['stay','transport','experience','tour'].includes(businessType)||!b.consentAccepted||!Number.isFinite(latitude)||!Number.isFinite(longitude))return json({ok:false,error:'Complete host name, business name, phone, address, category, GPS and host consent.'},400);
+ if(hostName.length<2||businessName.length<2||!/^\\S+@\\S+\\.\\S+$/.test(email)||phone.length<7||address.length<4||!['stay','transport','experience','tour'].includes(businessType)||!b.consentAccepted||!Number.isFinite(latitude)||!Number.isFinite(longitude))return json({ok:false,error:'Complete host name, business name, phone, address, category, GPS and host consent.'},400);
  const doc={id:uuid(),employeeId:me.id,employeeName:me.name,managerId:me.managerId||null,hostName,businessName,email,phone,businessType,address,description,notes,latitude,longitude,consentAccepted:true,consentAt:new Date(),status:'pending',createdAt:new Date(),updatedAt:new Date()};
  await (await getCollection('hostOnboardingApplications')).insertOne(doc);
  return json({ok:true,application:doc},201);
