@@ -13,6 +13,12 @@ export async function PATCH(request){const me=await getCurrentUser(request);cons
   if(!host){if(!email)return json({ok:false,error:'A host email is required before approval.'},400);const crypto=await import('crypto');const resetToken=crypto.randomBytes(32).toString('hex');host={id:uuid(),name:app.hostName,email,phone:app.phone,role:'host',emailVerified:true,hostApplicationStatus:'approved',passwordHash:await hashPassword(crypto.randomBytes(24).toString('hex')),resetToken,resetTokenExpiry:new Date(Date.now()+24*60*60*1000),createdAt:new Date(),updatedAt:new Date(),createdFromEmployeeApplication:app.id};await users.insertOne(host);hostId=host.id;
    try{const {sendPasswordResetEmail}=await import('@/lib/email');const link=`${process.env.NEXT_PUBLIC_BASE_URL}/auth/reset-password?token=${resetToken}`;await sendPasswordResetEmail(host,link);}catch(e){console.error('Host onboarding password email failed',e);}
   }else{hostId=host.id;await users.updateOne({id:host.id},{$set:{hostApplicationStatus:'approved',updatedAt:new Date()}});}
+  const listings=await getCollection('listings');
+  const existingListing=await listings.findOne({onboardingApplicationId:app.id});
+  if(!existingListing){
+   const listingNow=new Date();
+   await listings.insertOne({id:uuid(),title:app.businessName,description:app.description,category:app.businessType,subcategory:null,location:app.address,price:Number(app.price),images:[],hostId,hostName:app.hostName,hostAvatar:null,superhost:false,amenities:[],services:[],duration:null,badge:null,rating:0,reviews:0,status:'approved',featured:false,isDemo:false,inventoryTypes:[],categoryDetails:{},onboardingApplicationId:app.id,createdByEmployeeId:app.employeeId,createdAt:listingNow,updatedAt:listingNow});
+  }
  }
  const now=new Date();await apps.updateOne({id:app.id,status:'pending'},{$set:{status:b.status,reviewedBy:me.id,reviewedByName:me.name||me.email,reviewedAt:now,reviewNotes:String(b.reviewNotes||'').slice(0,1500),hostId,updatedAt:now}});
  try{await (await getCollection('notifications')).insertOne({id:uuid(),userId:app.employeeId,type:'host_onboarding_'+b.status,category:'system',title:b.status==='approved'?'Host application approved':'Host application needs changes',body:b.status==='approved'?`${app.businessName} was approved. Host account setup has been initiated.`:String(b.reviewNotes||'Please contact your manager.'),link:'/field-force',meta:{applicationId:app.id},read:false,createdAt:now});}catch(e){console.error('Employee notification failed',e);}
