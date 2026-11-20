@@ -279,7 +279,7 @@ function AppInner() {
             <div className="mt-2 md:mt-2.5 flex flex-wrap gap-1.5">
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
                 <Button asChild size="lg" className="rounded-full bg-emerald2 hover:bg-emerald2-deep text-white shadow-[0_20px_50px_-12px_rgba(15,61,46,0.55)] hover:shadow-[0_24px_60px_-12px_rgba(15,61,46,0.7)] hover:-translate-y-0.5 transition-all px-4 md:px-4.5 h-9 md:h-10 font-semibold text-[13.5px]">
-                  <Link href="/explore">Explore Stays <ArrowRight className="ml-1.5 size-3.5" /></Link>
+                  <Link href="/marketplace">Explore Stays <ArrowRight className="ml-1.5 size-3.5" /></Link>
                 </Button>
               </div>
               <div className="hover:scale-[1.02] active:scale-[0.98] transition-transform">
@@ -330,7 +330,7 @@ function AppInner() {
               <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Curated Selection</div>
               <h2 className="font-display text-3xl md:text-5xl font-bold mt-1 text-balance">Stays travelers can’t stop talking about</h2>
             </div>
-            <Link href="/explore" className="text-sm font-semibold text-charcoal inline-flex items-center gap-1 hover:gap-2 transition-all">View all <ChevronRight className="size-4" /></Link>
+            <Link href="/marketplace" className="text-sm font-semibold text-charcoal inline-flex items-center gap-1 hover:gap-2 transition-all">View all <ChevronRight className="size-4" /></Link>
           </div>
           <CategoryPills value={cat} onChange={setCat} />
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6 mt-3 md:mt-4">
@@ -354,7 +354,7 @@ function AppInner() {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {destinations.map((d, i) => (
-              <Link key={d.name} href={`/explore?location=${d.name}`}>
+              <Link key={d.name} href={`/marketplace/search?location=${encodeURIComponent(d.name)}`}>
                 <div 
                   className="group relative aspect-[4/5] rounded-3xl overflow-hidden cursor-pointer"
                   style={{animationDelay: `${i*60}ms`}}
@@ -393,7 +393,7 @@ function AppInner() {
                 <Link href="/ai-planner"><Sparkles className="size-4 mr-2" /> Try AI Planner</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="rounded-full px-7 h-12 font-semibold">
-                <Link href="/explore">Browse Listings</Link>
+                <Link href="/marketplace">Browse Listings</Link>
               </Button>
             </div>
           </div>
@@ -432,7 +432,7 @@ function AppInner() {
               <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">Local Experiences</div>
               <h2 className="font-display text-3xl md:text-5xl font-bold mt-2 text-balance">Beyond the stay — the soul of Kashmir</h2>
             </div>
-            <Link href="/explore" className="text-sm font-semibold inline-flex items-center gap-1 hover:gap-2 transition-all">View all <ChevronRight className="size-4" /></Link>
+            <Link href="/marketplace/experiences" className="text-sm font-semibold inline-flex items-center gap-1 hover:gap-2 transition-all">View all <ChevronRight className="size-4" /></Link>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {experiences.map((e, i) => (
