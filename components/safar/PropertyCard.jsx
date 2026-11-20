@@ -32,7 +32,7 @@ function PropertyCard({ item, index = 0, priority = false }) {
   // PERF: previously rendered all gallery images stacked with opacity, causing 3-5× more image
   // requests per card. Now we only render the currently visible image (the next/prev get prefetched
   // by the browser when the user clicks a dot, which is acceptable for a hover-only carousel).
-  const currentSrc = gallery[imgIdx] || gallery[0];
+  const currentSrc = gallery[imgIdx] || gallery[0] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&q=80';
 
   // Mobile swipe handlers
   const minSwipeDistance = 50;
@@ -123,7 +123,7 @@ function PropertyCard({ item, index = 0, priority = false }) {
         <div className="pt-3.5 px-1">
           <div className="flex items-start justify-between gap-3">
             <h3 className="font-display font-semibold text-[15px] leading-snug line-clamp-1 group-hover:text-emerald2 transition">{item.title}</h3>
-            <div className="text-xs text-muted-foreground whitespace-nowrap">{item.reviews} reviews</div>
+            <div className="text-xs text-muted-foreground whitespace-nowrap">{Number(item.reviews) || 0} reviews</div>
           </div>
           <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <MapPin className="size-3.5" /> <span className="line-clamp-1">{item.location}</span>
@@ -133,7 +133,7 @@ function PropertyCard({ item, index = 0, priority = false }) {
               {item.displayPrice && item.displayPrice < item.price && (
                 <span className="text-xs text-muted-foreground mr-1">From</span>
               )}
-              <span className="font-display font-bold text-charcoal text-lg">₹{(item.displayPrice || item.price).toLocaleString('en-IN')}</span>
+              <span className="font-display font-bold text-charcoal text-lg">₹{(Number(item.displayPrice ?? item.price) || 0).toLocaleString('en-IN')}</span>
               <span className="text-xs text-muted-foreground ml-1">/ {item.duration ? item.duration : 'night'}</span>
             </div>
             {isSuperhost && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald2 bg-emerald-50 px-2 py-0.5 rounded-full">Superhost</span>}
