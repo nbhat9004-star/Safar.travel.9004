@@ -436,7 +436,7 @@ function AppInner() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 md:gap-6">
             {experiences.map((e, i) => (
-              <Link key={e.title} href="/explore?cat=experience">
+              <Link key={e.title} href="/marketplace/experiences">
                 <div 
                   className="group relative aspect-[3/4] rounded-3xl overflow-hidden cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform"
                 >
