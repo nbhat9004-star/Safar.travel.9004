@@ -116,7 +116,7 @@ function PropertyCard({ item, index = 0, priority = false }) {
           )}
 
           <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-charcoal/80 text-white backdrop-blur flex items-center gap-1">
-            <Star className="size-3 fill-gold text-gold" /> {item.rating}
+            <Star className="size-3 fill-gold text-gold" /> {Number(item.rating) > 0 ? Number(item.rating).toFixed(1) : 'New'}
           </div>
         </div>
 
