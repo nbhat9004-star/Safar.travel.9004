@@ -201,7 +201,7 @@ function AppInner() {
     if (checkIn) qp.set('checkIn', checkIn);
     if (checkOut) qp.set('checkOut', checkOut);
     if (guests && guests !== 2) qp.set('guests', String(guests));
-    router.push(`/explore${qp.toString() ? '?' + qp.toString() : ''}`);
+    router.push(`/marketplace/search${qp.toString() ? '?' + qp.toString() : ''}`);
   };
 
   const featured = LISTINGS.filter(l => l.featured);
