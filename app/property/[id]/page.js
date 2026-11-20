@@ -98,7 +98,7 @@ export default async function PropertyPage({ params }) {
       buildBreadcrumbJsonLd([
         { name: 'Home',       url: '/' },
         { name: 'Marketplace', url: '/marketplace' },
-        ...(listing.category ? [{ name: listing.category, url: `/explore?cat=${listing.category}` }] : []),
+        ...(listing.category ? [{ name: listing.category, url: '/marketplace' }] : []),
         { name: listing.title || 'Listing', url: `/property/${listing.id}` },
       ]),
     );

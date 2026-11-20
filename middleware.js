@@ -59,6 +59,46 @@ async function fetchLaunchState(origin) {
 
 export async function middleware(request) {
   const { pathname, origin } = request.nextUrl;
+
+  // Apply credential-safe CORS only to API routes and only for trusted origins.
+  // Keep the allowlist configurable for additional first-party deployments.
+  const isApiRoute = pathname === '/api' || pathname.startsWith('/api/');
+  if (isApiRoute) {
+    const requestOrigin = request.headers.get('origin');
+    const configuredOrigins = (process.env.CORS_ORIGINS || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const allowedOrigins = new Set([
+      'https://safarcurated.com',
+      'https://www.safarcurated.com',
+      'https://os.safarcurated.com',
+      'https://whatsapp.safarcurated.com',
+      ...configuredOrigins,
+    ]);
+    const allowed = !!requestOrigin && allowedOrigins.has(requestOrigin);
+
+    if (request.method === 'OPTIONS') {
+      const response = new NextResponse(null, { status: 204 });
+      if (allowed) {
+        response.headers.set('Access-Control-Allow-Origin', requestOrigin);
+        response.headers.set('Access-Control-Allow-Credentials', 'true');
+        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        response.headers.set('Vary', 'Origin');
+      }
+      return response;
+    }
+
+    const response = NextResponse.next();
+    if (allowed) {
+      response.headers.set('Access-Control-Allow-Origin', requestOrigin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      response.headers.set('Vary', 'Origin');
+    }
+    return response;
+  }
+
   if (shouldBypass(pathname)) return NextResponse.next();
 
   const enabled = await fetchLaunchState(origin);
@@ -78,6 +118,6 @@ export const config = {
   // regex-based exclusion is a hard skip so we don't even invoke the fn for
   // static assets or the whitelisted routes.
   matcher: [
-    '/((?!api|admin|dashboard|auth|launch|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest).*)',
+    '/((?!admin|dashboard|auth|launch|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest).*)',
   ],
 };

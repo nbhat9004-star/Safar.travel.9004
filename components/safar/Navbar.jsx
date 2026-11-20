@@ -46,11 +46,11 @@ export default function Navbar({ transparent = false }) {
   // Marketplace categories, consolidated behind a single "Experience" entry
   // point in the desktop nav to reduce header clutter without changing routes.
   const EXPERIENCE_CATEGORIES = [
-    { href: '/explore?cat=all',        label: 'Stays' },
-    { href: '/explore?cat=experience', label: 'Experiences' },
-    { href: '/explore?cat=transport',  label: 'Bikes & Cars' },
-    { href: '/explore?cat=tour',       label: 'Tour Guides' },
-    { href: '/explore?cat=shopping',   label: 'Shopping' },
+    { href: '/marketplace/hotels',       label: 'Stays' },
+    { href: '/marketplace/experiences', label: 'Experiences' },
+    { href: '/marketplace/cars',        label: 'Bikes & Cars' },
+    { href: '/marketplace/tour-guides', label: 'Tour Guides' },
+    { href: '/marketplace/shopping-tours', label: 'Shopping' },
   ];
   
   // Module 11A — informational links, expanded to include former footer
@@ -317,7 +317,7 @@ export default function Navbar({ transparent = false }) {
   // Native-app style bottom navigation. Targets reuse existing routes only.
   const BOTTOM_NAV_ITEMS = [
     { href: '/',                            label: 'Home',    icon: Home,      match: (p) => p === '/' },
-    { href: '/explore',                     label: 'Explore', icon: Compass,   match: (p) => p.startsWith('/explore') || p.startsWith('/marketplace') },
+    { href: '/marketplace',               label: 'Marketplace', icon: Compass, match: (p) => p.startsWith('/marketplace') },
     { href: '/dashboard/traveler/bookings', label: 'Trips',   icon: Briefcase, match: (p) => p.startsWith('/dashboard/traveler/bookings') || p.startsWith('/trip') },
     { href: '/wishlist',                    label: 'Saved',   icon: Heart,     match: (p) => p.startsWith('/wishlist') || p.includes('/wishlist') },
     { href: '/dashboard/traveler',          label: 'Profile', icon: User,      match: (p) => p === '/dashboard/traveler' || p.startsWith('/dashboard/traveler/messages') },

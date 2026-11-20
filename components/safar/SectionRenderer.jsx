@@ -124,7 +124,7 @@ function SearchSection({ p }) {
     if (checkIn) qp.set('checkIn', checkIn);
     if (checkOut) qp.set('checkOut', checkOut);
     if (guests && guests !== 2) qp.set('guests', String(guests));
-    window.location.href = `/explore${qp.toString() ? '?' + qp.toString() : ''}`;
+    window.location.href = `/marketplace/search${qp.toString() ? '?' + qp.toString() : ''}`;
   };
   return (
     <section className="py-8 bg-white border-b">
@@ -185,7 +185,7 @@ function ListingsRow({ p, filter, defaultTitle }) {
           <div className="text-emerald2 text-xs uppercase tracking-[0.18em] font-semibold">{defaultTitle.split(' ')[0]}</div>
           <h2 className="font-display text-2xl md:text-4xl font-bold mt-1">{defaultTitle}</h2>
         </div>
-        <Link href="/explore" className="text-sm font-semibold text-emerald2 hover:underline">View all →</Link>
+        <Link href="/marketplace" className="text-sm font-semibold text-emerald2 hover:underline">View all →</Link>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {items.map((l, i) => <PropertyCard key={l.id} item={l} index={i} priority={i < 4} />)}
@@ -213,7 +213,7 @@ function ExperiencesSection({ p }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {list.map((e, i) => (
-          <Link key={i} href="/explore?cat=experience" className="group relative aspect-[3/4] rounded-3xl overflow-hidden">
+          <Link key={i} href="/marketplace/experiences" className="group relative aspect-[3/4] rounded-3xl overflow-hidden">
             {e.img && <Image src={e.img} alt={e.title} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover group-hover:scale-110 transition duration-700" />}
             <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/40 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-5 text-white">
@@ -241,7 +241,7 @@ function DestinationsSection({ p }) {
         <h2 className="font-display text-2xl md:text-4xl font-bold mb-6">{p.title || 'Trending destinations'}</h2>
         <div className={`grid grid-cols-2 lg:grid-cols-${p.columns || 4} gap-5`}>
           {items.map(d => (
-            <Link key={d.name} href={`/explore?location=${d.name}`} className="group relative aspect-[4/5] rounded-3xl overflow-hidden">
+            <Link key={d.name} href={`/marketplace/search?location=${encodeURIComponent(d.name)}`} className="group relative aspect-[4/5] rounded-3xl overflow-hidden">
               <Image src={d.img} alt={d.name} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover group-hover:scale-110 transition duration-700" />
               <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/40 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-5 text-white">

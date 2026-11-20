@@ -1,5 +1,5 @@
 'use client';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Star, MapPin, Heart, Share2, ShieldCheck, Wifi, Coffee, Wind, ParkingCircle, MessageCircle, ChevronRight, BadgeCheck, AlertTriangle, Loader2 } from 'lucide-react';
@@ -15,6 +15,7 @@ import { SERVICE_GROUPS, SERVICE_INDEX } from '@/lib/services';
 import WhatsAppButton from '@/components/safar/WhatsAppButton';
 import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
+import AuthModal from '@/components/safar/AuthModal';
 
 const AMENITY_ICONS = { 'Wi-Fi': Wifi, 'Heater': Wind, 'Kahwa': Coffee, 'Parking': ParkingCircle };
 
@@ -38,6 +39,7 @@ function rangeOverlaps(ciStr, coStr, ranges) {
 
 function App() {
   const { id } = useParams();
+  const router = useRouter();
   const { user } = useAuth();
   const { listing, loading, error } = useListing(id);
   const { bookedRanges } = useAvailability(id);
@@ -54,8 +56,19 @@ function App() {
   const [checkIn, setCheckIn] = useState(ymdOffset(7));
   const [checkOut, setCheckOut] = useState(ymdOffset(11));
   const [selectedTypeId, setSelectedTypeId] = useState(null);
+  const [showBookingAuth, setShowBookingAuth] = useState(false);
+  const [pendingBookingHref, setPendingBookingHref] = useState(null);
   const todayStr = ymdOffset(0);
   const conflict = useMemo(() => rangeOverlaps(checkIn, checkOut, Array.isArray(bookedRanges) ? bookedRanges : []), [checkIn, checkOut, bookedRanges]);
+
+  // After a guest signs in or creates an account, resume the exact booking they requested.
+  useEffect(() => {
+    if (!user || !pendingBookingHref) return;
+    const destination = pendingBookingHref;
+    setPendingBookingHref(null);
+    setShowBookingAuth(false);
+    router.push(destination);
+  }, [user, pendingBookingHref, router]);
 
   // Load reviews and wishlist status
   useEffect(() => {
@@ -405,8 +418,20 @@ function App() {
                 <span>These dates overlap an existing {conflict.status} booking ({new Date(conflict.checkInDate).toLocaleDateString()} → {new Date(conflict.checkOutDate).toLocaleDateString()}). Try different dates.</span>
               </div>
             )}
-            <Button asChild disabled={!!conflict || (hasTypes && !selectedTypeId)} className="w-full mt-4 h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep font-semibold disabled:opacity-60 disabled:pointer-events-none">
-              <Link href={reserveHref}>Reserve <ChevronRight className="size-4 ml-1" /></Link>
+            <Button
+              disabled={!!conflict || (hasTypes && !selectedTypeId)}
+              onClick={() => {
+                if (user) {
+                  router.push(reserveHref);
+                  return;
+                }
+                // Keep the chosen listing, inventory type, dates and guest count while the visitor signs in.
+                setPendingBookingHref(reserveHref);
+                setShowBookingAuth(true);
+              }}
+              className="w-full mt-4 h-12 rounded-2xl bg-emerald2 hover:bg-emerald2-deep font-semibold disabled:opacity-60 disabled:pointer-events-none"
+            >
+              Reserve <ChevronRight className="size-4 ml-1" />
             </Button>
             {hasTypes && !selectedTypeId && (
               <div className="mt-2 text-xs text-amber-600 text-center">Please select a type to continue</div>
@@ -501,6 +526,7 @@ function App() {
         )}
       </div>
 
+      <AuthModal open={showBookingAuth} defaultMode="login" onClose={() => setShowBookingAuth(false)} />
       <Footer />
       <AIAssistantFloating />
     </main>

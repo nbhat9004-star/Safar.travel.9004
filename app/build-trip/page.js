@@ -790,7 +790,7 @@ export default function BuildTripPage() {
               <li className="flex gap-1.5"><Check className="size-3.5 text-emerald2 mt-0.5" /> One clean summary</li>
               <li className="flex gap-1.5"><Check className="size-3.5 text-emerald2 mt-0.5" /> Ready when you are</li>
             </ul>
-            <Link href="/explore?cat=all" className="mt-3 text-emerald2 text-xs font-semibold hover:underline inline-block">Prefer to browse instead? →</Link>
+            <Link href="/marketplace" className="mt-3 text-emerald2 text-xs font-semibold hover:underline inline-block">Prefer to browse instead? →</Link>
           </div>
         </aside>
       </div>

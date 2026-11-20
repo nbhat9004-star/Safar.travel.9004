@@ -1246,7 +1246,12 @@ async function route(request, { params }) {
     const filter = {};
     if (category) filter.category = category;
     if (subcategory) filter.subcategory = subcategory;
-    if (location) filter.location = { $regex: location, $options: 'i' };
+    if (location) {
+      // Treat visitor input as literal text, not executable regular-expression syntax.
+      const regexSpecialChars = '.+*?^$()|[]{}' + String.fromCharCode(92);
+      const safeLocation = location.slice(0, 120).split('').map((char) => regexSpecialChars.includes(char) ? String.fromCharCode(92) + char : char).join('');
+      filter.location = { $regex: safeLocation, $options: 'i' };
+    }
     if (minPrice) filter.price = { ...(filter.price || {}), $gte: minPrice };
     if (maxPrice) filter.price = { ...(filter.price || {}), $lte: maxPrice };
     if (services.length) filter.services = { $all: services };
